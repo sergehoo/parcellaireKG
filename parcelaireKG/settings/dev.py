@@ -65,7 +65,9 @@ CELERY_RESULT_SERIALIZER = "json"
 # Recommandé (supprime le warning Celery 6+)
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 
-
+STATIC_URL = '/static/'
+STATIC_ROOT = Path(os.environ.get('STATIC_ROOT', BASE_DIR / 'staticfiles'))
+STATICFILES_DIRS = [BASE_DIR / 'static'] if (BASE_DIR / 'static').exists() else []
 # gdal_translate \
 #   Ortho_BR1.tif \
 #   Ortho_BR1_web.tif \

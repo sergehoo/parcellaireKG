@@ -72,7 +72,7 @@ services:
   parcelairecelery:
     build: .
     container_name: parcelairecelery
-    command: celery -A parcelaireKG.celery:app worker -l info
+    command: celery -A parcelaire.celery:app worker -l info
     volumes:
       - .:/app
       - media_volume:/app/media
@@ -116,7 +116,7 @@ services:
   parcelairebeat:
     build: .
     container_name: parcelairebeat
-    command: celery -A parcelaireKG.celery:app beat -l info
+    command: celery -A parcelaire.celery:app beat -l info
     volumes:
       - .:/app
       - media_volume:/app/media
