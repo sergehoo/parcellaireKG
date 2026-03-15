@@ -28,8 +28,17 @@ SECRET_KEY = 'django-insecure-9uzaef-rpxlqoxg!juy_7x3z*a9!y7%mhtajqaamyp9x(#0qr8
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
-
+ALLOWED_HOSTS = [
+    'datarium-dev.com',
+    'localhost',
+    '127.0.0.1'
+]
+CSRF_TRUSTED_ORIGINS=[
+    'https://datarium-dev.com',
+    'http://datarium-dev.com',
+    'localhost',
+    '127.0.0.1'
+]
 
 # Application definition
 
