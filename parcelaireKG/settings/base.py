@@ -36,8 +36,6 @@ ALLOWED_HOSTS = [
 CSRF_TRUSTED_ORIGINS=[
     'https://datarium-dev.com',
     'http://datarium-dev.com',
-    'localhost',
-    '127.0.0.1'
 ]
 
 # Application definition
