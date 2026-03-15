@@ -1,0 +1,893 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Parcellaire</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"/>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background:
+                radial-gradient(circle at 0% 0%, rgba(249,115,22,.12), transparent 30%),
+                radial-gradient(circle at 100% 0%, rgba(14,165,233,.10), transparent 25%),
+                radial-gradient(circle at 50% 100%, rgba(168,85,247,.08), transparent 28%),
+                linear-gradient(180deg, #f8fafc 0%, #fff7ed 100%);
+        }
+
+        .glass {
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+        }
+
+        .panel {
+            background: rgba(255,255,255,.78);
+            border: 1px solid rgba(255,255,255,.60);
+            box-shadow: 0 20px 55px rgba(15,23,42,.08);
+        }
+
+        .panel-soft {
+            background: rgba(255,255,255,.86);
+            border: 1px solid rgba(255,255,255,.70);
+            box-shadow: 0 12px 30px rgba(15,23,42,.06);
+        }
+
+        .sidebar-shell {
+            background: linear-gradient(180deg, rgba(255,255,255,.85) 0%, rgba(255,255,255,.72) 100%);
+            border: 1px solid rgba(255,255,255,.65);
+            box-shadow: 0 24px 70px rgba(15,23,42,.10);
+        }
+
+        .soft-ring {
+            box-shadow:
+                0 0 0 1px rgba(255,255,255,.65),
+                0 12px 28px rgba(15,23,42,.05);
+        }
+
+        .premium-gradient {
+            background: linear-gradient(135deg, #f97316 0%, #ea580c 50%, #c2410c 100%);
+        }
+
+        .slate-gradient {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        }
+
+        .sky-gradient {
+            background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%);
+        }
+
+        .emerald-gradient {
+            background: linear-gradient(135deg, #10b981 0%, #047857 100%);
+        }
+
+        .violet-gradient {
+            background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
+        }
+
+        .rose-gradient {
+            background: linear-gradient(135deg, #f43f5e 0%, #be123c 100%);
+        }
+
+        .metric-card {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .metric-card:before {
+            content: "";
+            position: absolute;
+            top: -40px;
+            right: -40px;
+            width: 110px;
+            height: 110px;
+            border-radius: 999px;
+            background: rgba(255,255,255,.10);
+        }
+
+        .menu-item {
+            transition: all .22s ease;
+        }
+
+        .menu-item:hover {
+            transform: translateY(-1px);
+            background: rgba(255,247,237,.92);
+            color: #1e1d1d;
+        }
+
+        .menu-item-active {
+            background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+            color: #fff;
+            box-shadow: 0 14px 30px rgba(234,88,12,.22);
+        }
+        
+          .menu-item-parcel {
+            background: linear-gradient(135deg, #4e4c4b 0%, #1c1c1b 100%);
+            color: #fff;
+            box-shadow: 0 14px 30px rgba(234,88,12,.22);
+        }
+
+        .submenu-item {
+            transition: all .2s ease;
+        }
+
+        .submenu-item:hover {
+            background: #fff7ed;
+            color: #9a3412;
+        }
+
+        .scrollbar-thin::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        .scrollbar-thin::-webkit-scrollbar-thumb {
+            background: rgba(148,163,184,.35);
+            border-radius: 999px;
+        }
+
+        .progress-track {
+            background: rgba(148,163,184,.15);
+        }
+
+        .floating-dot {
+            box-shadow: 0 0 0 6px rgba(249,115,22,.12);
+        }
+
+        .hero-card {
+            background:
+                radial-gradient(circle at top right, rgba(255,255,255,.16), transparent 28%),
+                linear-gradient(135deg, #111827 0%, #1f2937 40%, #7c2d12 100%);
+        }
+
+        .table-row-hover {
+            transition: all .18s ease;
+        }
+
+        .table-row-hover:hover {
+            background: rgba(255,247,237,.7);
+        }
+    </style>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        premium: {
+                            50: '#fff7ed',
+                            100: '#ffedd5',
+                            200: '#fed7aa',
+                            300: '#fdba74',
+                            400: '#fb923c',
+                            500: '#f97316',
+                            600: '#ea580c',
+                            700: '#c2410c',
+                            800: '#9a3412',
+                            900: '#7c2d12'
+                        }
+                    },
+                    borderRadius: {
+                        '4xl': '2rem',
+                        '5xl': '2.4rem'
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="min-h-screen text-slate-800">
+<div x-data="dashboardApp()" class="min-h-screen">
+    <div class="flex min-h-screen">
+
+        <!-- Sidebar desktop -->
+        <aside class="hidden xl:flex xl:w-[310px] xl:flex-col xl:p-5">
+            <div class="sidebar-shell glass scrollbar-thin flex h-[calc(100vh-40px)] flex-col overflow-y-auto rounded-[34px] p-5">
+
+                <!-- Brand -->
+                <div class="rounded-[28px] bg-white/70 px-4 py-4 soft-ring">
+                    <div class="flex items-center gap-4">
+                        <div class="floating-dot grid h-14 w-14 place-items-center rounded-2xl premium-gradient text-white shadow-lg">
+                            <i class="fa-solid fa-city text-xl"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <img src="{% static 'logo/logo_kaydanG_B.png' %}" width="150" alt="Logo" class="max-w-full">
+                            <p class="mt-1 text-xs font-medium text-slate-500">Gestion parcellaire & immobilière</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Main nav -->
+                <div class="mt-6 space-y-3">
+                    <a href="{% url 'parcelaire_dashboard' %}" class="menu-item menu-item-active flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold">
+                        <i class="fa-solid fa-chart-pie w-5"></i>
+                        <span>Dashboard exécutif</span>
+                    </a>
+                    <a href="{% url 'map' %}" class="menu-item menu-item-parcel bg-gray flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold">
+                        <i class="fa-solid fa-map-marker w-5"></i>
+                        <span>Parcellaire</span>
+                    </a>
+
+                    <!-- Référentiel -->
+                    <div class="rounded-2xl bg-white/85 soft-ring" x-data="{open:true}">
+                        <button @click="open=!open" class="flex w-full items-center justify-between px-4 py-3 text-left">
+                            <div class="flex items-center gap-3">
+                                <i class="fa-solid fa-layer-group text-slate-600"></i>
+                                <span class="text-sm font-bold text-slate-800">Référentiel foncier</span>
+                            </div>
+                            <i class="fa-solid text-xs text-slate-500" :class="open ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                        </button>
+                        <div x-show="open" x-transition class="space-y-1 px-3 pb-3">
+                            <a href="{% url 'project_list' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
+                                <i class="fa-solid fa-diagram-project w-4 text-premium-600"></i>
+                                <span>Projets immobiliers</span>
+                            </a>
+                            <a href="{% url 'program_list' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
+                                <i class="fa-solid fa-map-location-dot w-4 text-premium-600"></i>
+                                <span>Programmes</span>
+                            </a>
+                            <a href="{% url 'phase_list' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
+                                <i class="fa-solid fa-timeline w-4 text-premium-600"></i>
+                                <span>Phases</span>
+                            </a>
+                            <a href="{% url 'block_list' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
+                                <i class="fa-solid fa-border-all w-4 text-premium-600"></i>
+                                <span>Îlots</span>
+                            </a>
+                            <a href="{% url 'parcel_list' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
+                                <i class="fa-solid fa-draw-polygon w-4 text-premium-600"></i>
+                                <span>Parcelles / Lots</span>
+                            </a>
+                            <a href="#" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
+                                <i class="fa-solid fa-house w-4 text-premium-600"></i>
+                                <span>Actifs immobiliers</span>
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Commercial -->
+                    <div class="rounded-2xl bg-white/85 soft-ring" x-data="{open:true}">
+                        <button @click="open=!open" class="flex w-full items-center justify-between px-4 py-3 text-left">
+                            <div class="flex items-center gap-3">
+                                <i class="fa-solid fa-briefcase text-slate-600"></i>
+                                <span class="text-sm font-bold text-slate-800">Commercial</span>
+                            </div>
+                            <i class="fa-solid text-xs text-slate-500" :class="open ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                        </button>
+                        <div x-show="open" x-transition class="space-y-1 px-3 pb-3">
+                            <a href="{% url 'customer_list' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
+                                <i class="fa-solid fa-users w-4 text-premium-600"></i>
+                                <span>Clients</span>
+                            </a>
+                            <a href="#" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
+                                <i class="fa-solid fa-bullseye w-4 text-premium-600"></i>
+                                <span>Leads</span>
+                            </a>
+                            <a href="{% url 'reservation_list' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
+                                <i class="fa-solid fa-thumbtack w-4 text-premium-600"></i>
+                                <span>Réservations</span>
+                            </a>
+                            <a href="{% url 'sale_list' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
+                                <i class="fa-solid fa-file-signature w-4 text-premium-600"></i>
+                                <span>Ventes</span>
+                            </a>
+                            <a href="{% url 'payment_list' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
+                                <i class="fa-solid fa-credit-card w-4 text-premium-600"></i>
+                                <span>Paiements</span>
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Construction -->
+                    <div class="rounded-2xl bg-white/85 soft-ring" x-data="{open:true}">
+                        <button @click="open=!open" class="flex w-full items-center justify-between px-4 py-3 text-left">
+                            <div class="flex items-center gap-3">
+                                <i class="fa-solid fa-helmet-safety text-slate-600"></i>
+                                <span class="text-sm font-bold text-slate-800">Construction</span>
+                            </div>
+                            <i class="fa-solid text-xs text-slate-500" :class="open ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                        </button>
+                        <div x-show="open" x-transition class="space-y-1 px-3 pb-3">
+                            <a href="{% url 'construction_project_list' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
+                                <i class="fa-solid fa-building-circle-arrow-right w-4 text-premium-600"></i>
+                                <span>Chantiers</span>
+                            </a>
+                            <a href="{% url 'construction_update_add' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
+                                <i class="fa-solid fa-clipboard-list w-4 text-premium-600"></i>
+                                <span>Mises à jour</span>
+                            </a>
+                            <a href="{% url 'construction_photo_add' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
+                                <i class="fa-solid fa-camera-retro w-4 text-premium-600"></i>
+                                <span>Photos chantier</span>
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Administration -->
+                    <div class="rounded-2xl bg-white/85 soft-ring" x-data="{open:false}">
+                        <button @click="open=!open" class="flex w-full items-center justify-between px-4 py-3 text-left">
+                            <div class="flex items-center gap-3">
+                                <i class="fa-solid fa-gear text-slate-600"></i>
+                                <span class="text-sm font-bold text-slate-800">Administration</span>
+                            </div>
+                            <i class="fa-solid text-xs text-slate-500" :class="open ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                        </button>
+                        <div x-show="open" x-transition class="space-y-1 px-3 pb-3">
+                            <a href="{% url 'dataset_list' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
+                                <i class="fa-solid fa-database w-4 text-premium-600"></i>
+                                <span>Datasets</span>
+                            </a>
+                            <a href="/admin/" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
+                                <i class="fa-solid fa-screwdriver-wrench w-4 text-premium-600"></i>
+                                <span>Administration Django</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer card -->
+                <div class="mt-auto pt-8">
+                    <div class="hero-card rounded-[30px] p-5 text-white">
+                        <p class="text-xs uppercase tracking-[0.18em] text-white/60">Vue rapide</p>
+                        <div class="mt-4 flex items-end justify-between">
+                            <div>
+                                <p class="text-4xl font-black">{{ parcels_count }}</p>
+                                <p class="mt-1 text-sm text-white/70">parcelles enregistrées</p>
+                            </div>
+                            <div class="grid h-12 w-12 place-items-center rounded-2xl bg-white/10">
+                                <i class="fa-solid fa-location-dot text-lg"></i>
+                            </div>
+                        </div>
+                        <div class="mt-5">
+                            <a href="{% url 'parcel_list' %}" class="inline-flex items-center gap-2 rounded-2xl bg-white/10 px-4 py-2 text-sm font-semibold text-white">
+                                <i class="fa-solid fa-arrow-right"></i>
+                                <span>Explorer l’inventaire</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Mobile overlay -->
+        <div x-show="sidebarOpen" x-transition.opacity class="fixed inset-0 z-40 bg-slate-950/40 xl:hidden" @click="sidebarOpen = false"></div>
+
+        <!-- Mobile sidebar -->
+        <aside
+            x-show="sidebarOpen"
+            x-transition:enter="transition ease-out duration-300"
+            x-transition:enter-start="-translate-x-full opacity-0"
+            x-transition:enter-end="translate-x-0 opacity-100"
+            x-transition:leave="transition ease-in duration-200"
+            x-transition:leave-start="translate-x-0 opacity-100"
+            x-transition:leave-end="-translate-x-full opacity-0"
+            class="fixed left-0 top-0 z-50 h-full w-[88%] max-w-[320px] xl:hidden"
+        >
+            <div class="glass scrollbar-thin flex h-full flex-col overflow-y-auto bg-white/95 p-5 shadow-2xl">
+                <div class="flex items-center justify-between border-b border-slate-200 pb-4">
+                    <div>
+                        <h2 class="text-xl font-black text-slate-900">Parcellaire</h2>
+                        <p class="text-sm text-slate-500">Menu métier</p>
+                    </div>
+                    <button @click="sidebarOpen = false" class="rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <div class="mt-5 space-y-2">
+                    <a href="{% url 'parcelaire_dashboard' %}" class="menu-item-active flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold">
+                        <i class="fa-solid fa-chart-line"></i><span>Dashboard</span>
+                    </a>
+                    <a href="{% url 'project_list' %}" class="flex items-center gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
+                        <i class="fa-solid fa-diagram-project"></i><span>Projets</span>
+                    </a>
+                    <a href="{% url 'program_list' %}" class="flex items-center gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
+                        <i class="fa-solid fa-map-location-dot"></i><span>Programmes</span>
+                    </a>
+                    <a href="{% url 'parcel_list' %}" class="flex items-center gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
+                        <i class="fa-solid fa-draw-polygon"></i><span>Parcelles</span>
+                    </a>
+                    <a href="{% url 'customer_list' %}" class="flex items-center gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
+                        <i class="fa-solid fa-users"></i><span>Clients</span>
+                    </a>
+                    <a href="{% url 'construction_project_list' %}" class="flex items-center gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
+                        <i class="fa-solid fa-helmet-safety"></i><span>Chantiers</span>
+                    </a>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Content -->
+        <div class="min-w-0 flex-1">
+            <!-- Topbar -->
+            <header class="px-4 pt-5 lg:px-8">
+                <div class="panel glass mx-auto flex max-w-[calc(100vw-2rem)] flex-col gap-4 rounded-[30px] px-5 py-5 xl:max-w-none lg:flex-row lg:items-center lg:justify-between lg:px-7">
+                    <div class="flex items-center gap-4">
+                        <button @click="sidebarOpen = true" class="xl:hidden rounded-2xl bg-white px-4 py-3 text-slate-700 soft-ring">
+                            <i class="fa-solid fa-bars"></i>
+                        </button>
+
+                        <div>
+                            <p class="text-xs font-bold uppercase tracking-[0.24em] text-premium-600">Pilotage immobilier</p>
+                            <h1 class="mt-1 text-2xl font-black tracking-tight text-slate-900 md:text-3xl">
+                                Dashboard parcellaire premium
+                            </h1>
+                            <p class="mt-1 text-sm text-slate-500">
+                                Vue consolidée des projets, programmes, ventes, réservations et chantiers.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-3">
+                        <div class="panel-soft rounded-2xl px-4 py-3">
+                            <p class="text-[11px] uppercase tracking-[0.18em] text-slate-400">Date</p>
+                            <p class="mt-1 text-sm font-bold text-slate-800" x-text="todayLabel"></p>
+                        </div>
+
+                        <div class="panel-soft rounded-2xl px-4 py-3">
+                            <p class="text-[11px] uppercase tracking-[0.18em] text-slate-400">Période</p>
+                            <select x-model="period" class="mt-1 bg-transparent text-sm font-semibold text-slate-800 outline-none">
+                                <option value="today">Aujourd’hui</option>
+                                <option value="week">Cette semaine</option>
+                                <option value="month">Ce mois</option>
+                                <option value="year">Cette année</option>
+                            </select>
+                        </div>
+
+                        <div class="panel-soft rounded-2xl px-4 py-3">
+                            <p class="text-[11px] uppercase tracking-[0.18em] text-slate-400">Recherche</p>
+                            <div class="mt-1 flex items-center gap-2">
+                                <i class="fa-solid fa-magnifying-glass text-xs text-slate-400"></i>
+                                <input
+                                    type="text"
+                                    x-model="quickSearch"
+                                    placeholder="Projet, programme, lot..."
+                                    class="w-40 bg-transparent text-sm font-semibold text-slate-800 outline-none placeholder:text-slate-400"
+                                >
+                            </div>
+                        </div>
+
+                        <a href="{% url 'project_add' %}" class="inline-flex items-center gap-2 rounded-2xl slate-gradient px-5 py-3 text-sm font-bold text-white shadow-lg transition hover:opacity-95">
+                            <i class="fa-solid fa-plus"></i>
+                            <span>Nouveau projet</span>
+                        </a>
+                    </div>
+                </div>
+            </header>
+
+            <main class="mx-auto max-w-full px-4 py-6 lg:px-8">
+
+                <!-- Hero summary -->
+                <section class="mb-6">
+                    <div class="hero-card overflow-hidden rounded-[34px] p-6 text-white md:p-8">
+                        <div class="grid gap-6 xl:grid-cols-[1.4fr_.9fr]">
+                            <div>
+                                <p class="text-xs font-bold uppercase tracking-[0.24em] text-white/60">Vue stratégique</p>
+                                <h2 class="mt-3 text-3xl font-black tracking-tight md:text-4xl">
+                                    Supervisez l’ensemble du portefeuille foncier et immobilier
+                                </h2>
+                                <p class="mt-4 max-w-3xl text-sm leading-7 text-white/75 md:text-base">
+                                    Suivez vos programmes, mesurez la dynamique commerciale, analysez la disponibilité des parcelles
+                                    et pilotez l’avancement chantier depuis un tableau de bord unifié, moderne et orienté décision.
+                                </p>
+
+                                <div class="mt-6 flex flex-wrap gap-3">
+                                    <a href="{% url 'project_list' %}" class="inline-flex items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-bold text-slate-900">
+                                        <i class="fa-solid fa-diagram-project"></i>
+                                        <span>Voir les projets</span>
+                                    </a>
+                                    <a href="{% url 'parcel_list' %}" class="inline-flex items-center gap-2 rounded-2xl bg-white/10 px-5 py-3 text-sm font-bold text-white">
+                                        <i class="fa-solid fa-draw-polygon"></i>
+                                        <span>Explorer les parcelles</span>
+                                    </a>
+                                </div>
+                            </div>
+
+                            <div class="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+                                <div class="rounded-[24px] bg-white/10 p-4">
+                                    <p class="text-xs uppercase tracking-[0.18em] text-white/60">Projets</p>
+                                    <p class="mt-2 text-3xl font-black">{{ projects_count }}</p>
+                                </div>
+                                <div class="rounded-[24px] bg-white/10 p-4">
+                                    <p class="text-xs uppercase tracking-[0.18em] text-white/60">Programmes</p>
+                                    <p class="mt-2 text-3xl font-black">{{ programs_count }}</p>
+                                </div>
+                                <div class="rounded-[24px] bg-white/10 p-4">
+                                    <p class="text-xs uppercase tracking-[0.18em] text-white/60">CA potentiel</p>
+                                    <p class="mt-2 text-2xl font-black">{{ sales_total|default:"0" }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- KPI -->
+                <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <div class="metric-card rounded-[28px] slate-gradient p-5 text-white">
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <p class="text-[11px] uppercase tracking-[0.22em] text-white/60">Projets</p>
+                                <h3 class="mt-3 text-3xl font-black">{{ projects_count }}</h3>
+                                <p class="mt-1 text-sm text-white/70">Portefeuille global</p>
+                            </div>
+                            <div class="grid h-14 w-14 place-items-center rounded-2xl bg-white/10">
+                                <i class="fa-solid fa-diagram-project text-xl"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="metric-card rounded-[28px] premium-gradient p-5 text-white">
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <p class="text-[11px] uppercase tracking-[0.22em] text-white/60">Programmes</p>
+                                <h3 class="mt-3 text-3xl font-black">{{ programs_count }}</h3>
+                                <p class="mt-1 text-sm text-white/70">Opérations actives</p>
+                            </div>
+                            <div class="grid h-14 w-14 place-items-center rounded-2xl bg-white/10">
+                                <i class="fa-solid fa-map-location-dot text-xl"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="metric-card rounded-[28px] sky-gradient p-5 text-white">
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <p class="text-[11px] uppercase tracking-[0.22em] text-white/60">Parcelles</p>
+                                <h3 class="mt-3 text-3xl font-black">{{ parcels_count }}</h3>
+                                <p class="mt-1 text-sm text-white/70">Inventaire foncier</p>
+                            </div>
+                            <div class="grid h-14 w-14 place-items-center rounded-2xl bg-white/10">
+                                <i class="fa-solid fa-draw-polygon text-xl"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="metric-card rounded-[28px] violet-gradient p-5 text-white">
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <p class="text-[11px] uppercase tracking-[0.22em] text-white/60">Actifs</p>
+                                <h3 class="mt-3 text-3xl font-black">{{ assets_count }}</h3>
+                                <p class="mt-1 text-sm text-white/70">Maisons, villas, immeubles</p>
+                            </div>
+                            <div class="grid h-14 w-14 place-items-center rounded-2xl bg-white/10">
+                                <i class="fa-solid fa-house-chimney text-xl"></i>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Secondary KPIs -->
+                <section class="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+                    <div class="panel rounded-[26px] p-5">
+                        <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Clients</p>
+                        <p class="mt-2 text-2xl font-black text-slate-900">{{ customers_count }}</p>
+                    </div>
+
+                    <div class="panel rounded-[26px] p-5">
+                        <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Leads</p>
+                        <p class="mt-2 text-2xl font-black text-slate-900">{{ leads_count }}</p>
+                    </div>
+
+                    <div class="panel rounded-[26px] p-5">
+                        <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Réservations</p>
+                        <p class="mt-2 text-2xl font-black text-amber-600">{{ reservations_count }}</p>
+                    </div>
+
+                    <div class="panel rounded-[26px] p-5">
+                        <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Ventes</p>
+                        <p class="mt-2 text-2xl font-black text-emerald-600">{{ sales_count }}</p>
+                    </div>
+
+                    <div class="panel rounded-[26px] p-5">
+                        <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">CA potentiel</p>
+                        <p class="mt-2 text-2xl font-black text-slate-900">{{ sales_total|default:"0" }}</p>
+                    </div>
+                </section>
+
+                <!-- Occupation + quick actions -->
+                <section class="mt-6 grid gap-4 xl:grid-cols-3">
+                    <div class="panel rounded-[30px] p-6 xl:col-span-2">
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                                <p class="text-xs font-bold uppercase tracking-[0.22em] text-premium-600">Occupation parcellaire</p>
+                                <h2 class="mt-2 text-2xl font-black text-slate-900">Répartition commerciale</h2>
+                            </div>
+                            <a href="{% url 'parcel_list' %}" class="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-bold text-white">
+                                Voir les parcelles
+                            </a>
+                        </div>
+
+                        <div class="mt-6 grid gap-4 md:grid-cols-3">
+                            <div class="rounded-[24px] bg-sky-50 p-5 ring-1 ring-sky-100">
+                                <div class="flex items-center justify-between">
+                                    <p class="text-xs font-bold uppercase tracking-[0.18em] text-sky-500">Disponibles</p>
+                                    <i class="fa-solid fa-circle text-sky-400 text-xs"></i>
+                                </div>
+                                <p class="mt-3 text-3xl font-black text-sky-700">{{ available_parcels_count }}</p>
+                                <div class="mt-4 h-2 rounded-full progress-track overflow-hidden">
+                                    <div class="h-full rounded-full bg-sky-500" style="width: 70%;"></div>
+                                </div>
+                            </div>
+
+                            <div class="rounded-[24px] bg-amber-50 p-5 ring-1 ring-amber-100">
+                                <div class="flex items-center justify-between">
+                                    <p class="text-xs font-bold uppercase tracking-[0.18em] text-amber-500">Réservées</p>
+                                    <i class="fa-solid fa-circle text-amber-400 text-xs"></i>
+                                </div>
+                                <p class="mt-3 text-3xl font-black text-amber-700">{{ reserved_parcels_count }}</p>
+                                <div class="mt-4 h-2 rounded-full progress-track overflow-hidden">
+                                    <div class="h-full rounded-full bg-amber-500" style="width: 55%;"></div>
+                                </div>
+                            </div>
+
+                            <div class="rounded-[24px] bg-emerald-50 p-5 ring-1 ring-emerald-100">
+                                <div class="flex items-center justify-between">
+                                    <p class="text-xs font-bold uppercase tracking-[0.18em] text-emerald-500">Vendues</p>
+                                    <i class="fa-solid fa-circle text-emerald-400 text-xs"></i>
+                                </div>
+                                <p class="mt-3 text-3xl font-black text-emerald-700">{{ sold_parcels_count }}</p>
+                                <div class="mt-4 h-2 rounded-full progress-track overflow-hidden">
+                                    <div class="h-full rounded-full bg-emerald-500" style="width: 62%;"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-6 rounded-[24px] bg-slate-50 p-5 ring-1 ring-slate-200">
+                            <p class="text-sm font-semibold text-slate-700">Lecture rapide</p>
+                            <p class="mt-2 text-sm leading-6 text-slate-500">
+                                Cette vue centralise l’état du portefeuille immobilier, la disponibilité du foncier, la dynamique commerciale,
+                                ainsi que le niveau d’avancement des opérations sur vos programmes et actifs.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="panel rounded-[30px] p-6">
+                        <p class="text-xs font-bold uppercase tracking-[0.22em] text-premium-600">Accès rapides</p>
+                        <h2 class="mt-2 text-2xl font-black text-slate-900">Actions métier</h2>
+
+                        <div class="mt-6 space-y-3">
+                            <a href="{% url 'project_add' %}" class="flex items-center justify-between rounded-2xl bg-white px-4 py-4 soft-ring transition hover:-translate-y-0.5">
+                                <span class="font-semibold text-slate-800">Nouveau projet</span>
+                                <i class="fa-solid fa-arrow-right text-premium-600"></i>
+                            </a>
+
+                            <a href="{% url 'program_add' %}" class="flex items-center justify-between rounded-2xl bg-white px-4 py-4 soft-ring transition hover:-translate-y-0.5">
+                                <span class="font-semibold text-slate-800">Nouveau programme</span>
+                                <i class="fa-solid fa-arrow-right text-premium-600"></i>
+                            </a>
+
+                            <a href="{% url 'parcel_add' %}" class="flex items-center justify-between rounded-2xl bg-white px-4 py-4 soft-ring transition hover:-translate-y-0.5">
+                                <span class="font-semibold text-slate-800">Ajouter une parcelle</span>
+                                <i class="fa-solid fa-arrow-right text-premium-600"></i>
+                            </a>
+
+                            <a href="{% url 'customer_add' %}" class="flex items-center justify-between rounded-2xl bg-white px-4 py-4 soft-ring transition hover:-translate-y-0.5">
+                                <span class="font-semibold text-slate-800">Nouveau client</span>
+                                <i class="fa-solid fa-arrow-right text-premium-600"></i>
+                            </a>
+
+                            <a href="{% url 'construction_project_add' %}" class="flex items-center justify-between rounded-2xl bg-white px-4 py-4 soft-ring transition hover:-translate-y-0.5">
+                                <span class="font-semibold text-slate-800">Nouveau chantier</span>
+                                <i class="fa-solid fa-arrow-right text-premium-600"></i>
+                            </a>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Distribution -->
+                <section class="mt-6 grid gap-4 xl:grid-cols-5">
+                    <div class="panel rounded-[30px] p-6 xl:col-span-3">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-xs font-bold uppercase tracking-[0.22em] text-premium-600">Portefeuille</p>
+                                <h2 class="mt-2 text-2xl font-black text-slate-900">Répartition par projet</h2>
+                            </div>
+                            <a href="{% url 'project_list' %}" class="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-slate-700 soft-ring">
+                                Tout voir
+                            </a>
+                        </div>
+
+                        <div class="mt-6 space-y-4">
+                            {% for item in programs_by_project %}
+                                <div class="rounded-[24px] bg-white p-4 soft-ring">
+                                    <div class="flex items-center justify-between gap-3">
+                                        <div>
+                                            <p class="text-base font-bold text-slate-900">{{ item.nom }}</p>
+                                            <p class="mt-1 text-sm text-slate-500">
+                                                {{ item.programs_total }} programme{{ item.programs_total|pluralize }}
+                                            </p>
+                                        </div>
+                                        <div class="rounded-2xl bg-premium-50 px-4 py-2 text-sm font-bold text-premium-700">
+                                            {{ item.programs_total }}
+                                        </div>
+                                    </div>
+
+                                    <div class="mt-4 h-2 overflow-hidden rounded-full progress-track">
+                                        <div class="h-full rounded-full bg-gradient-to-r from-premium-500 to-orange-400"
+                                             style="width: {% widthratio item.programs_total programs_count 100 %}%;">
+                                        </div>
+                                    </div>
+                                </div>
+                            {% empty %}
+                                <div class="rounded-[24px] bg-slate-50 p-6 text-center text-slate-500 ring-1 ring-slate-200">
+                                    Aucun projet disponible.
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="panel rounded-[30px] p-6 xl:col-span-2">
+                        <p class="text-xs font-bold uppercase tracking-[0.22em] text-premium-600">Synthèse métier</p>
+                        <h2 class="mt-2 text-2xl font-black text-slate-900">Performance globale</h2>
+
+                        <div class="mt-6 space-y-4">
+                            <div class="rounded-[24px] slate-gradient p-5 text-white">
+                                <p class="text-xs uppercase tracking-[0.18em] text-white/60">Blocs</p>
+                                <p class="mt-2 text-3xl font-black">{{ blocks_count }}</p>
+                                <p class="mt-1 text-sm text-white/70">Îlots structurés</p>
+                            </div>
+
+                            <div class="rounded-[24px] sky-gradient p-5 text-white">
+                                <p class="text-xs uppercase tracking-[0.18em] text-white/60">Pipeline</p>
+                                <p class="mt-2 text-3xl font-black">{{ leads_count }}</p>
+                                <p class="mt-1 text-sm text-white/70">Prospects actifs</p>
+                            </div>
+
+                            <div class="rounded-[24px] emerald-gradient p-5 text-white">
+                                <p class="text-xs uppercase tracking-[0.18em] text-white/60">Commercial</p>
+                                <p class="mt-2 text-3xl font-black">{{ sales_count }}</p>
+                                <p class="mt-1 text-sm text-white/70">Dossiers de vente</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Table -->
+                <section class="mt-6 panel rounded-[32px] p-6">
+                    <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                        <div>
+                            <p class="text-xs font-bold uppercase tracking-[0.22em] text-premium-600">Vue tabulaire</p>
+                            <h2 class="mt-2 text-2xl font-black text-slate-900">Programmes par projet</h2>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-700 soft-ring">
+                                {{ programs_count }} programmes
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="scrollbar-thin mt-6 overflow-x-auto">
+                        <table class="min-w-full overflow-hidden rounded-3xl bg-white">
+                            <thead class="bg-slate-50">
+                            <tr>
+                                <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Projet</th>
+                                <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Nb programmes</th>
+                                <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Poids relatif</th>
+                                <th class="px-5 py-4 text-right text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Action</th>
+                            </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                            {% for item in programs_by_project %}
+                                <tr class="table-row-hover">
+                                    <td class="px-5 py-4">
+                                        <div class="font-semibold text-slate-900">{{ item.nom }}</div>
+                                    </td>
+                                    <td class="px-5 py-4">
+                                        <span class="rounded-full bg-premium-50 px-3 py-1 text-sm font-bold text-premium-700">
+                                            {{ item.programs_total }}
+                                        </span>
+                                    </td>
+                                    <td class="px-5 py-4">
+                                        <div class="flex items-center gap-3">
+                                            <div class="h-2 w-36 overflow-hidden rounded-full progress-track">
+                                                <div class="h-full rounded-full bg-gradient-to-r from-premium-500 to-orange-400"
+                                                     style="width: {% widthratio item.programs_total programs_count 100 %}%;">
+                                                </div>
+                                            </div>
+                                            <span class="text-sm font-semibold text-slate-600">
+                                                {% widthratio item.programs_total programs_count 100 %}%
+                                            </span>
+                                        </div>
+                                    </td>
+                                    <td class="px-5 py-4 text-right">
+                                        <a href="{% url 'project_list' %}" class="text-sm font-bold text-premium-600 hover:text-premium-700">
+                                            Consulter
+                                        </a>
+                                    </td>
+                                </tr>
+                            {% empty %}
+                                <tr>
+                                    <td colspan="4" class="px-5 py-10 text-center text-slate-500">
+                                        Aucune donnée disponible.
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- Feature blocks -->
+                <section class="mt-6 grid gap-4 lg:grid-cols-3">
+                    <div class="panel rounded-[28px] p-6">
+                        <div class="mb-4 grid h-12 w-12 place-items-center rounded-2xl bg-sky-50 text-sky-600">
+                            <i class="fa-solid fa-map text-lg"></i>
+                        </div>
+                        <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Fonciers</p>
+                        <h3 class="mt-2 text-xl font-black text-slate-900">Pilotage du parcellaire</h3>
+                        <p class="mt-3 text-sm leading-6 text-slate-500">
+                            Suivez la disponibilité, les réservations, les ventes et la structuration des blocs pour accélérer les arbitrages.
+                        </p>
+                    </div>
+
+                    <div class="panel rounded-[28px] p-6">
+                        <div class="mb-4 grid h-12 w-12 place-items-center rounded-2xl bg-amber-50 text-amber-600">
+                            <i class="fa-solid fa-handshake text-lg"></i>
+                        </div>
+                        <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Commercial</p>
+                        <h3 class="mt-2 text-xl font-black text-slate-900">Pipeline & transformation</h3>
+                        <p class="mt-3 text-sm leading-6 text-slate-500">
+                            Centralisez les leads, les réservations, les ventes et les paiements pour une vue consolidée de la performance.
+                        </p>
+                    </div>
+
+                    <div class="panel rounded-[28px] p-6">
+                        <div class="mb-4 grid h-12 w-12 place-items-center rounded-2xl bg-violet-50 text-violet-600">
+                            <i class="fa-solid fa-helmet-safety text-lg"></i>
+                        </div>
+                        <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Construction</p>
+                        <h3 class="mt-2 text-xl font-black text-slate-900">Suivi des chantiers</h3>
+                        <p class="mt-3 text-sm leading-6 text-slate-500">
+                            Associez parcelles, actifs, photos d’avancement et mises à jour chantier dans une seule interface métier.
+                        </p>
+                    </div>
+                </section>
+
+                <!-- Footer -->
+                <footer class="mt-8">
+                    <div class="panel rounded-[28px] px-6 py-5">
+                        <div class="flex flex-col items-center justify-between gap-4 text-center md:flex-row md:text-left">
+                            <div class="flex items-center gap-3">
+                                <img src="{% static 'logo/logo_kaydanG_B.png' %}" width="80" alt="Logo">
+                                <div>
+                                    <p class="text-sm font-semibold text-slate-700">Plateforme parcellaire et immobilière</p>
+                                    <p class="text-xs text-slate-500">Gestion premium des projets, programmes, parcelles et chantiers</p>
+                                </div>
+                            </div>
+
+                            <div class="text-sm text-slate-500">
+                                © {% now "Y" %} <span class="font-semibold text-slate-700">Kaydan Group</span>. Tous droits réservés.
+                            </div>
+                        </div>
+                    </div>
+                </footer>
+
+            </main>
+        </div>
+    </div>
+</div>
+
+<script>
+    function dashboardApp() {
+        return {
+            sidebarOpen: false,
+            period: 'month',
+            quickSearch: '',
+            todayLabel: new Date().toLocaleDateString('fr-FR', {
+                day: '2-digit',
+                month: 'long',
+                year: 'numeric'
+            }),
+        }
+    }
+</script>
+</body>
+</html>

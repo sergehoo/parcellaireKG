@@ -1,10 +1,1261 @@
+{% load static %}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <title>Title</title>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title> Kaydan Group</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <link href="https://unpkg.com/maplibre-gl@5.20.0/dist/maplibre-gl.css" rel="stylesheet">
+    <script src="https://unpkg.com/maplibre-gl@5.20.0/dist/maplibre-gl.js"></script>
+
+    <style>
+        html, body {
+            height: 100%;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #0f172a;
+        }
+
+        #map {
+            height: 100vh;
+            width: 100%;
+        }
+
+        .glass {
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+        }
+
+        .sidebar-shadow {
+            box-shadow: 0 20px 80px rgba(15, 23, 42, 0.22);
+        }
+
+        .top-fade {
+            background: linear-gradient(180deg, rgba(15, 23, 42, 0.60) 0%, rgba(15, 23, 42, 0.20) 48%, rgba(15, 23, 42, 0.00) 100%);
+            pointer-events: none;
+        }
+
+        .scrollbar-thin::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        .scrollbar-thin::-webkit-scrollbar-thumb {
+            background: rgba(251, 146, 60, .35);
+            border-radius: 999px;
+        }
+
+        .thumb-active {
+            box-shadow: 0 0 0 2px #f97316;
+        }
+
+        .maplibregl-popup-content {
+            padding: 0 !important;
+            border-radius: 18px !important;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(15, 23, 42, 0.35);
+        }
+
+        .maplibregl-popup-close-button {
+            font-size: 20px;
+            color: #334155;
+            right: 8px;
+            top: 6px;
+            z-index: 3;
+        }
+
+        .maplibregl-ctrl-group {
+            border-radius: 18px !important;
+            overflow: hidden;
+            box-shadow: 0 18px 40px rgba(15, 23, 42, 0.20) !important;
+            border: none !important;
+        }
+
+        .maplibregl-ctrl-group button {
+            width: 42px !important;
+            height: 42px !important;
+            background: rgba(255, 255, 255, 0.96) !important;
+        }
+
+        /* Marqueurs "pseudo-3D" */
+        .asset-marker {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+        }
+
+        .asset-pill {
+            min-width: 42px;
+            height: 42px;
+            padding: 0 10px;
+            border-radius: 999px;
+            color: white;
+            font-size: 11px;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 3px solid rgba(255, 255, 255, .95);
+            box-shadow: 0 12px 24px rgba(15, 23, 42, .25);
+            white-space: nowrap;
+        }
+
+        .marker-villa {
+            background: linear-gradient(135deg, #f97316, #ea580c);
+        }
+
+        .marker-duplex {
+            background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+        }
+
+        .marker-immeuble {
+            background: linear-gradient(135deg, #0ea5e9, #0369a1);
+        }
+
+        .marker-parcelle {
+            background: linear-gradient(135deg, #10b981, #047857);
+        }
+
+        .marker-shadow {
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 26px;
+            height: 10px;
+            background: rgba(15, 23, 42, .25);
+            filter: blur(6px);
+            border-radius: 999px;
+            z-index: -1;
+        }
+
+        .tree-marker {
+            width: 18px;
+            height: 18px;
+            border-radius: 999px;
+            background: radial-gradient(circle at 30% 30%, #86efac, #16a34a 70%, #166534);
+            border: 2px solid rgba(255, 255, 255, .95);
+            box-shadow: 0 8px 18px rgba(15, 23, 42, .18);
+        }
+
+        .selected-badge {
+            position: absolute;
+            transform: translate(-50%, calc(-100% - 16px));
+            background: rgba(15, 23, 42, .92);
+            color: white;
+            border-radius: 999px;
+            padding: 8px 12px;
+            font-size: 12px;
+            font-weight: 700;
+            box-shadow: 0 12px 30px rgba(15, 23, 42, .35);
+            white-space: nowrap;
+            pointer-events: none;
+        }
+    </style>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        premium: {
+                            50: '#fff7ed',
+                            100: '#ffedd5',
+                            200: '#fed7aa',
+                            300: '#fdba74',
+                            400: '#fb923c',
+                            500: '#f97316',
+                            600: '#ea580c',
+                            700: '#c2410c',
+                            800: '#9a3412',
+                            900: '#7c2d12'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
 </head>
 <body>
+<div x-data="estateMapApp()" x-init="init()" class="relative h-screen w-screen overflow-hidden">
+    <div id="map" class="absolute inset-0 z-0"></div>
+    <div class="top-fade absolute inset-x-0 top-0 z-10 h-36"></div>
 
+    <div class="pointer-events-none absolute inset-x-0 top-0 z-20 px-4 pt-4 lg:px-6">
+        <div class="pointer-events-auto flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div class="glass sidebar-shadow rounded-[28px] border border-white/20 bg-white/75 px-4 py-4 shadow-xl lg:px-5">
+                <div class="flex items-center gap-4">
+                    <div class="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-premium-500 to-premium-700 text-white">
+                        <span class="text-lg font-extrabold">3D</span>
+                    </div>
+                    <div>
+                        <img src="{% static 'logo/logo_kaydanG_B.png' %}" width="150" alt="Kaydan Group">
+                        <p class="text-sm text-slate-600">Parcellaire immobilier</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pointer-events-auto flex flex-wrap items-center gap-2">
+                <div class="glass flex items-center gap-3 rounded-2xl border border-white/20 bg-white/80 px-4 py-3 shadow-lg">
+                    <svg class="h-5 w-5 text-premium-600" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="1.8">
+                        <circle cx="11" cy="11" r="7"/>
+                        <path d="m20 20-3.5-3.5"/>
+                    </svg>
+                    <input
+                            x-model="search"
+                            @input.debounce.250ms="filterAssets()"
+                            type="text"
+                            placeholder="Rechercher un projet, programme, lot, client..."
+                            class="w-64 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
+                    />
+                </div>
+
+                <div class="glass rounded-2xl border border-white/20 bg-white/80 px-3 py-2 shadow-lg">
+                    <select x-model="projectFilter" @change="onProjectChange()"
+                            class="bg-transparent text-sm font-semibold text-slate-700 outline-none">
+                        <option value="">Tous les projets</option>
+                        <template x-for="project in projectOptions" :key="project">
+                            <option :value="project" x-text="project"></option>
+                        </template>
+                    </select>
+                </div>
+
+                <div class="glass rounded-2xl border border-white/20 bg-white/80 px-3 py-2 shadow-lg">
+                    <select x-model="programFilter" @change="filterAssets()"
+                            class="bg-transparent text-sm font-semibold text-slate-700 outline-none">
+                        <option value="">Tous les programmes</option>
+                        <template x-for="program in filteredProgramOptions" :key="program">
+                            <option :value="program" x-text="program"></option>
+                        </template>
+                    </select>
+                </div>
+
+                <template x-for="f in filters" :key="f">
+                    <button
+                            @click="activeFilter = f; refreshMapStyles();"
+                            :class="activeFilter === f ? 'bg-slate-900 text-white border-slate-900' : 'bg-white/80 text-slate-700 border-white/40 hover:bg-white'"
+                            class="glass rounded-2xl border px-4 py-3 text-sm font-semibold shadow-lg transition"
+                            x-text="f"
+                    ></button>
+                </template>
+
+                <button
+                        @click="togglePitch()"
+                        class="glass rounded-2xl border border-white/20 bg-white/80 px-4 py-3 text-sm font-semibold text-slate-700 shadow-lg transition hover:bg-white"
+                        x-text="is3D ? 'Vue 2D' : 'Vue 3D'"
+                ></button>
+
+                <button
+                        @click="resetFilters()"
+                        class="glass rounded-2xl border border-white/20 bg-white/80 px-4 py-3 text-sm font-semibold text-slate-700 shadow-lg transition hover:bg-white"
+                >
+                    Réinitialiser
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="pointer-events-none absolute inset-y-0 right-0 z-20 flex w-full justify-end p-4 lg:p-12">
+        <aside class="pointer-events-auto mt-10 flex h-full w-full max-w-[420px] flex-col overflow-hidden rounded-[32px] border border-white/20 bg-white/78 shadow-2xl glass sidebar-shadow">
+            <div class="border-b border-slate-200/70 px-5 py-5 lg:px-6">
+                <div class="flex items-start justify-between gap-3">
+                    <div>
+                        <p class="text-xs font-bold uppercase tracking-[0.28em] text-premium-600">Actif sélectionné</p>
+                        <h2 class="mt-2 text-2xl font-extrabold tracking-tight text-slate-900"
+                            x-text="selectedAsset.name || '—'"></h2>
+                        <p class="mt-1 text-sm text-slate-500" x-text="selectedAsset.program || '—'"></p>
+                    </div>
+                    <span
+                            class="rounded-full px-3 py-1 text-xs font-bold"
+                            :class="selectedAsset.statusBadge || 'bg-slate-100 text-slate-700'"
+                            x-text="selectedAsset.status || '—'"
+                    ></span>
+                </div>
+            </div>
+
+            <div class="scrollbar-thin flex-1 overflow-y-auto px-5 py-5 lg:px-6">
+                <div class="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-lg">
+                    <div class="relative aspect-[16/10] overflow-hidden bg-slate-100">
+                        <template x-if="selectedAsset.images && selectedAsset.images.length">
+                            <img
+                                    :src="currentSidebarImage"
+                                    :alt="selectedAsset.name"
+                                    class="h-full w-full object-cover cursor-zoom-in transition duration-300 hover:scale-[1.02]"
+                                    @click="openLightbox(currentSidebarImage)"
+                            />
+                        </template>
+
+                        <template x-if="!selectedAsset.images || !selectedAsset.images.length">
+                            <div class="flex h-full w-full items-center justify-center bg-slate-100 text-sm font-medium text-slate-400">
+                                Aucune image disponible
+                            </div>
+                        </template>
+
+                        <button x-show="selectedAsset.images && selectedAsset.images.length > 1"
+                                @click="prevSidebarImage()"
+                                class="absolute left-3 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-slate-900/65 text-white shadow-lg">
+                            ‹
+                        </button>
+                        <button x-show="selectedAsset.images && selectedAsset.images.length > 1"
+                                @click="nextSidebarImage()"
+                                class="absolute right-3 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-slate-900/65 text-white shadow-lg">
+                            ›
+                        </button>
+
+                        <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/70 to-transparent p-4 text-white">
+                            <div class="flex items-center justify-between gap-3">
+                                <div>
+                                    <p class="text-xs uppercase tracking-[0.22em] text-white/70">Galerie actif</p>
+                                    <p class="mt-1 text-sm font-semibold" x-text="selectedAsset.type || '—'"></p>
+                                </div>
+                                <div x-show="selectedAsset.images && selectedAsset.images.length"
+                                     class="rounded-full bg-white/15 px-3 py-1 text-xs font-bold">
+                                    <span x-text="(sidebarImageIndex + 1)"></span>/<span
+                                        x-text="selectedAsset.images ? selectedAsset.images.length : 0"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="p-3">
+                        <div x-show="selectedAsset.images && selectedAsset.images.length"
+                             class="grid grid-cols-4 gap-2">
+                            <template x-for="(img, index) in (selectedAsset.images || [])" :key="img + index">
+                                <button @click="setSidebarImage(index)"
+                                        class="overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 transition"
+                                        :class="sidebarImageIndex === index ? 'thumb-active' : ''">
+                                    <img :src="img" :alt="selectedAsset.name + ' ' + (index + 1)"
+                                         class="h-16 w-full object-cover"/>
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-5 rounded-[28px] bg-gradient-to-br from-slate-950 via-slate-900 to-premium-900 p-5 text-white shadow-xl">
+                    <div class="flex items-center justify-between gap-4">
+                        <div>
+                            <p class="text-xs uppercase tracking-[0.24em] text-white/50">Type d’actif</p>
+                            <h3 class="mt-2 text-xl font-extrabold" x-text="selectedAsset.type || '—'"></h3>
+                        </div>
+                        <div class="rounded-2xl bg-white/10 px-4 py-2 text-right">
+                            <p class="text-[11px] uppercase tracking-[0.20em] text-white/50">Prix</p>
+                            <p class="mt-1 text-base font-bold" x-text="selectedAsset.price || '—'"></p>
+                        </div>
+                    </div>
+
+                    <div class="mt-5 grid grid-cols-2 gap-3 text-sm">
+                        <div class="rounded-2xl bg-white/8 p-4">
+                            <p class="text-white/50">Surface</p>
+                            <p class="mt-1 font-semibold" x-text="selectedAsset.surface || '—'"></p>
+                        </div>
+                        <div class="rounded-2xl bg-white/8 p-4">
+                            <p class="text-white/50">Paiement</p>
+                            <p class="mt-1 font-semibold" x-text="selectedAsset.payment || '0%'"></p>
+                        </div>
+                        <div class="rounded-2xl bg-white/8 p-4">
+                            <p class="text-white/50">Client</p>
+                            <p class="mt-1 font-semibold" x-text="selectedAsset.client || '—'"></p>
+                        </div>
+                        <div class="rounded-2xl bg-white/8 p-4">
+                            <p class="text-white/50">Phase</p>
+                            <p class="mt-1 font-semibold" x-text="selectedAsset.phase || '—'"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-5 grid grid-cols-3 gap-3">
+                    <template x-for="metric in (selectedAsset.metrics || [])" :key="metric.label">
+                        <div class="rounded-3xl border border-slate-200 bg-white p-4 text-center shadow-lg">
+                            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400"
+                               x-text="metric.label"></p>
+                            <p class="mt-2 text-lg font-extrabold text-slate-900" x-text="metric.value"></p>
+                        </div>
+                    </template>
+                </div>
+
+                <div class="mt-6">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-sm font-extrabold uppercase tracking-[0.22em] text-slate-500">Détails</h3>
+                        <button @click="flyToSelected()"
+                                class="rounded-2xl bg-premium-500 px-4 py-2 text-xs font-bold text-white transition hover:bg-premium-600">
+                            Centrer sur la carte
+                        </button>
+                    </div>
+                    <div class="mt-3 space-y-3">
+                        <template x-for="item in (selectedAsset.details || [])" :key="item.label">
+                            <div class="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-lg">
+                                <span class="text-sm text-slate-500" x-text="item.label"></span>
+                                <span class="text-sm font-semibold text-slate-800" x-text="item.value"></span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <div class="mt-6">
+                    <h3 class="text-sm font-extrabold uppercase tracking-[0.22em] text-slate-500">Timeline
+                        commerciale</h3>
+                    <div class="mt-4 space-y-3">
+                        <template x-for="step in (selectedAsset.timeline || [])" :key="step.label + step.date">
+                            <div class="flex gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-lg">
+                                <div class="mt-0.5 h-10 w-10 rounded-2xl" :class="step.iconBg"></div>
+                                <div class="min-w-0 flex-1">
+                                    <div class="flex items-center justify-between gap-3">
+                                        <p class="font-semibold text-slate-900" x-text="step.label"></p>
+                                        <span class="text-xs font-bold text-slate-400" x-text="step.date"></span>
+                                    </div>
+                                    <p class="mt-1 text-sm text-slate-500" x-text="step.text"></p>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <div x-show="loading"
+                     class="mt-6 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500 shadow-lg">
+                    Chargement des données cartographiques...
+                </div>
+
+                <div x-show="!loading && apiError"
+                     class="mt-6 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 shadow-lg"
+                     x-text="apiError"></div>
+
+                <div x-show="!loading && !visibleAssets.length"
+                     class="mt-6 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500 shadow-lg">
+                    Aucun actif ne correspond aux filtres sélectionnés.
+                </div>
+
+                <div class="mt-6">
+                    <h3 class="text-sm font-extrabold uppercase tracking-[0.22em] text-slate-500">Actifs du
+                        programme</h3>
+                    <div class="mt-3 space-y-2">
+                        <template x-for="asset in visibleAssets" :key="asset.id">
+                            <button
+                                    @click="selectAsset(asset.id, true)"
+                                    class="flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left transition"
+                                    :class="selectedAsset.id === asset.id ? 'border-premium-300 bg-premium-50 shadow-lg' : 'border-slate-200 bg-white hover:border-premium-200 hover:bg-premium-50/40'"
+                            >
+                                <div>
+                                    <p class="font-semibold text-slate-900" x-text="asset.name"></p>
+                                    <p class="mt-1 text-xs text-slate-500"
+                                       x-text="asset.type + ' • ' + asset.surface"></p>
+                                </div>
+                                <span class="rounded-full px-3 py-1 text-[11px] font-bold" :class="asset.statusBadge"
+                                      x-text="asset.status"></span>
+                            </button>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 border-t border-slate-200/70 p-5 lg:px-6">
+                <button class="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white transition hover:opacity-95">
+                    Ouvrir dossier
+                </button>
+                <button class="rounded-2xl bg-premium-500 px-4 py-3 text-sm font-bold text-white transition hover:bg-premium-600">
+                    Créer réservation
+                </button>
+                <button class="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-lg">Planifier
+                    visite
+                </button>
+                <button class="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-lg">Exporter
+                    fiche
+                </button>
+            </div>
+        </aside>
+    </div>
+
+    <div class="pointer-events-none absolute bottom-4 left-4 z-20 lg:bottom-5 lg:left-4">
+        <div class="pointer-events-auto grid gap-3 lg:grid-cols-3">
+            <div class="glass rounded-[26px] border border-white/20 bg-white/78 p-4 shadow-xl">
+                <p class="text-xs font-extrabold uppercase tracking-[0.22em] text-premium-600">Légende</p>
+                <div class="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-slate-700">
+                    <span class="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 shadow-lg"><span
+                            class="h-3 w-3 rounded-full bg-sky-400"></span> Disponible</span>
+                    <span class="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 shadow-lg"><span
+                            class="h-3 w-3 rounded-full bg-amber-400"></span> Réservé</span>
+                    <span class="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 shadow-lg"><span
+                            class="h-3 w-3 rounded-full bg-emerald-500"></span> Vendu</span>
+                    <span class="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 shadow-lg"><span
+                            class="h-3 w-3 rounded-full bg-violet-500"></span> En construction</span>
+                </div>
+            </div>
+
+            <div class="glass rounded-[26px] border border-white/20 bg-white/78 p-4 shadow-xl">
+                <p class="text-xs font-extrabold uppercase tracking-[0.22em] text-premium-600">Vue programme</p>
+                <div class="mt-2 grid grid-cols-3 gap-2 text-center">
+                    <template x-for="summary in summaries" :key="summary.label">
+                        <div class="rounded-2xl bg-white p-3 shadow-lg">
+                            <p class="text-[11px] uppercase tracking-[0.16em] text-slate-400"
+                               x-text="summary.label"></p>
+                            <p class="mt-1 text-base font-extrabold text-slate-900" x-text="summary.value"></p>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div x-show="lightboxOpen" x-transition.opacity
+         class="absolute inset-0 z-50 flex items-center justify-center bg-slate-950/88 p-6"
+         @click.self="closeLightbox()">
+        <button @click="closeLightbox()"
+                class="absolute right-6 top-6 grid h-12 w-12 place-items-center rounded-full bg-white/10 text-white">✕
+        </button>
+        <button @click.stop="prevLightboxImage()"
+                class="absolute left-6 top-1/2 grid h-12 w-12 -translate-y-1/2 place-items-center rounded-full bg-white/10 text-white">
+            ‹
+        </button>
+        <img :src="lightboxImage" alt="Aperçu" class="max-h-[88vh] max-w-[92vw] rounded-3xl object-contain shadow-2xl"/>
+        <button @click.stop="nextLightboxImage()"
+                class="absolute right-6 top-1/2 grid h-12 w-12 -translate-y-1/2 place-items-center rounded-full bg-white/10 text-white">
+            ›
+        </button>
+    </div>
+</div>
+
+<script>
+    function estateMapApp() {
+        return {
+            map: null,
+            search: '',
+            activeFilter: 'Tous',
+            filters: ['Tous', 'Disponibles', 'Réservés', 'Vendus', 'En construction'],
+
+            projectFilter: '',
+            programFilter: '',
+            projectOptions: [],
+            programOptions: [],
+
+            selectedAsset: {},
+            visibleAssets: [],
+            assets: [],
+            geojsonFeatureMap: {},
+            currentPopup: null,
+            is3D: true,
+
+            assetMarkers: [],
+            treeMarkers: [],
+            selectedBadgeMarker: null,
+
+            sidebarImageIndex: 0,
+            lightboxOpen: false,
+            lightboxImage: '',
+            lightboxIndex: 0,
+
+            loading: false,
+            apiError: '',
+
+            summaries: [
+                {label: 'Actifs', value: '0'},
+                {label: 'Réservés/Vendus', value: '0'},
+                {label: 'CA potentiel', value: '0 FCFA'},
+            ],
+
+            get filteredProgramOptions() {
+                if (!this.projectFilter) return this.programOptions;
+                const options = new Set(
+                    this.assets
+                        .filter(a => (a.project || '') === this.projectFilter)
+                        .map(a => a.program)
+                        .filter(Boolean)
+                );
+                return Array.from(options).sort((a, b) => a.localeCompare(b));
+            },
+
+            get currentSidebarImage() {
+                const imgs = this.selectedAsset?.images || [];
+                return imgs[this.sidebarImageIndex] || '';
+            },
+
+            async init() {
+                this.loading = true;
+                this.apiError = '';
+
+                this.map = new maplibregl.Map({
+                    container: 'map',
+                    style: {
+                        version: 8,
+                        sources: {
+                            satellite: {
+                                type: 'raster',
+                                tiles: [
+                                    'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}'
+                                ],
+                                tileSize: 256,
+                                attribution: 'Satellite'
+                            },
+                            roads: {
+                                type: 'raster',
+                                tiles: [
+                                    'https://mt1.google.com/vt/lyrs=h&x={x}&y={y}&z={z}'
+                                ],
+                                tileSize: 256,
+                                attribution: 'Hybrid'
+                            },
+                            terrainSource: {
+                                type: 'raster-dem',
+                                tiles: [
+                                    'https://demotiles.maplibre.org/terrain-tiles/tiles.json'
+                                ],
+                                tileSize: 256
+                            }
+                        },
+                        layers: [
+                            {
+                                id: 'satellite',
+                                type: 'raster',
+                                source: 'satellite'
+                            },
+                            {
+                                id: 'roads',
+                                type: 'raster',
+                                source: 'roads',
+                                paint: {
+                                    'raster-opacity': 0.95
+                                }
+                            }
+                        ],
+                        terrain: {
+                            source: 'terrainSource',
+                            exaggeration: 1.2
+                        }
+                    },
+                    center: [-3.97168, 5.42403],
+                    zoom: 17.2,
+                    pitch: 64,
+                    bearing: -24,
+                    antialias: true,
+                    maxPitch: 85
+                });
+
+                this.map.addControl(new maplibregl.NavigationControl(), 'bottom-right');
+
+                this.map.on('load', async () => {
+                    try {
+                        const response = await fetch("{% url 'api-map-assets' %}", {
+                            headers: {"X-Requested-With": "XMLHttpRequest"}
+                        });
+
+                        if (!response.ok) {
+                            throw new Error("Impossible de charger les données de la carte.");
+                        }
+
+                        const data = await response.json();
+
+                        this.assets = (data.assets || []).map(asset => {
+                            let project = asset.project || '—';
+
+                            if ((!project || project === '—') && Array.isArray(asset.details)) {
+                                const detailProject = asset.details.find(d => d.label === 'Projet');
+                                if (detailProject && detailProject.value) {
+                                    project = detailProject.value;
+                                }
+                            }
+
+                            return {
+                                ...asset,
+                                project,
+                                images: Array.isArray(asset.images) ? asset.images : [],
+                                details: Array.isArray(asset.details) ? asset.details : [],
+                                metrics: Array.isArray(asset.metrics) ? asset.metrics : [],
+                                timeline: Array.isArray(asset.timeline) ? asset.timeline : [],
+                                height: Number(asset.height || 1),
+                                base_height: Number(asset.base_height || 0),
+                                building_type: asset.building_type || asset.type || 'Parcelle'
+                            };
+                        });
+
+                        this.summaries = data.summaries || this.summaries;
+                        this.filters = data.filters || this.filters;
+
+                        this.projectOptions = Array.from(new Set(this.assets.map(a => a.project).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+                        this.programOptions = Array.from(new Set(this.assets.map(a => a.program).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+
+                        this.visibleAssets = [...this.assets];
+                        this.selectedAsset = this.assets.length ? this.assets[0] : {};
+                        this.sidebarImageIndex = 0;
+
+                        this.drawAssets();
+                    } catch (error) {
+                        this.apiError = error.message || "Erreur de chargement.";
+                        this.assets = [];
+                        this.visibleAssets = [];
+                        this.selectedAsset = {};
+                    } finally {
+                        this.loading = false;
+                    }
+                });
+            },
+
+            normalizeBuildingType(asset) {
+                const val = (asset.building_type || asset.type || '').toLowerCase();
+
+                if (val.includes('immeuble')) return 'immeuble';
+                if (val.includes('appartement')) return 'immeuble';
+                if (val.includes('duplex')) return 'duplex';
+                if (val.includes('villa')) return 'villa';
+                if (val.includes('maison')) return 'villa';
+                return 'parcelle';
+            },
+
+            markerClassForAsset(asset) {
+                const kind = this.normalizeBuildingType(asset);
+                if (kind === 'immeuble') return 'marker-immeuble';
+                if (kind === 'duplex') return 'marker-duplex';
+                if (kind === 'villa') return 'marker-villa';
+                return 'marker-parcelle';
+            },
+
+            markerLabelForAsset(asset) {
+                const kind = this.normalizeBuildingType(asset);
+                if (kind === 'immeuble') return 'IMM';
+                if (kind === 'duplex') return 'DPX';
+                if (kind === 'villa') return 'VIL';
+                return 'LOT';
+            },
+
+            buildFeatureCollection() {
+                this.geojsonFeatureMap = {};
+
+                const features = this.visibleAssets
+                    .filter(asset => asset.geometry)
+                    .map(asset => {
+                        this.geojsonFeatureMap[String(asset.id)] = asset;
+                        return {
+                            type: 'Feature',
+                            geometry: asset.geometry,
+                            properties: {
+                                id: asset.id,
+                                name: asset.name || '—',
+                                project: asset.project || '—',
+                                program: asset.program || '—',
+                                type: asset.type || '—',
+                                status: asset.status || '—',
+                                color: asset.color || '#38bdf8',
+                                fillOpacity: Number(asset.fillOpacity || 0.78),
+                                price: asset.price || '—',
+                                surface: asset.surface || '—',
+                                payment: asset.payment || '0%',
+                                client: asset.client || '—',
+                                phase: asset.phase || '—',
+                                height: Number(asset.height || 1),
+                                base_height: Number(asset.base_height || 0)
+                            }
+                        };
+                    });
+
+                return {
+                    type: 'FeatureCollection',
+                    features
+                };
+            },
+
+            removeMapLayers() {
+                ['parcels-extrusion', 'parcels-fill', 'parcels-outline', 'parcels-highlight', 'internal-roads', 'green-areas']
+                    .forEach(layerId => {
+                        if (this.map.getLayer(layerId)) this.map.removeLayer(layerId);
+                    });
+
+                ['parcels-source', 'internal-roads-source', 'green-areas-source']
+                    .forEach(sourceId => {
+                        if (this.map.getSource(sourceId)) this.map.removeSource(sourceId);
+                    });
+
+                this.assetMarkers.forEach(marker => marker.remove());
+                this.assetMarkers = [];
+
+                this.treeMarkers.forEach(marker => marker.remove());
+                this.treeMarkers = [];
+
+                if (this.selectedBadgeMarker) {
+                    this.selectedBadgeMarker.remove();
+                    this.selectedBadgeMarker = null;
+                }
+            },
+
+            buildInternalRoadsFeatureCollection() {
+                const lines = [];
+
+                this.visibleAssets.forEach(asset => {
+                    if (!asset.center) return;
+
+                    const [lat, lng] = asset.center;
+                    lines.push({
+                        type: 'Feature',
+                        geometry: {
+                            type: 'LineString',
+                            coordinates: [
+                                [lng - 0.00015, lat],
+                                [lng + 0.00015, lat]
+                            ]
+                        },
+                        properties: {}
+                    });
+                });
+
+                return {
+                    type: 'FeatureCollection',
+                    features: lines
+                };
+            },
+
+            buildGreenAreasFeatureCollection() {
+                const polys = [];
+
+                this.visibleAssets.slice(0, 8).forEach(asset => {
+                    if (!asset.center) return;
+
+                    const [lat, lng] = asset.center;
+                    polys.push({
+                        type: 'Feature',
+                        geometry: {
+                            type: 'Polygon',
+                            coordinates: [[
+                                [lng - 0.00003, lat - 0.00003],
+                                [lng + 0.00003, lat - 0.00003],
+                                [lng + 0.00003, lat + 0.00003],
+                                [lng - 0.00003, lat + 0.00003],
+                                [lng - 0.00003, lat - 0.00003]
+                            ]]
+                        },
+                        properties: {}
+                    });
+                });
+
+                return {
+                    type: 'FeatureCollection',
+                    features: polys
+                };
+            },
+
+            drawAssets() {
+                if (!this.map || !this.map.isStyleLoaded()) return;
+
+                this.removeMapLayers();
+
+                const featureCollection = this.buildFeatureCollection();
+
+                this.map.addSource('parcels-source', {
+                    type: 'geojson',
+                    data: featureCollection
+                });
+
+                this.map.addSource('internal-roads-source', {
+                    type: 'geojson',
+                    data: this.buildInternalRoadsFeatureCollection()
+                });
+
+                this.map.addSource('green-areas-source', {
+                    type: 'geojson',
+                    data: this.buildGreenAreasFeatureCollection()
+                });
+
+                this.map.addLayer({
+                    id: 'green-areas',
+                    type: 'fill',
+                    source: 'green-areas-source',
+                    paint: {
+                        'fill-color': '#16a34a',
+                        'fill-opacity': 0.22
+                    }
+                });
+
+                this.map.addLayer({
+                    id: 'internal-roads',
+                    type: 'line',
+                    source: 'internal-roads-source',
+                    paint: {
+                        'line-color': '#f8fafc',
+                        'line-width': 3,
+                        'line-opacity': 0.8
+                    }
+                });
+
+                if (this.is3D) {
+                    this.map.addLayer({
+                        id: 'parcels-extrusion',
+                        type: 'fill-extrusion',
+                        source: 'parcels-source',
+                        paint: {
+                            'fill-extrusion-color': ['get', 'color'],
+                            'fill-extrusion-height': ['get', 'height'],
+                            'fill-extrusion-base': ['get', 'base_height'],
+                            'fill-extrusion-opacity': 0.72
+                        }
+                    });
+                } else {
+                    this.map.addLayer({
+                        id: 'parcels-fill',
+                        type: 'fill',
+                        source: 'parcels-source',
+                        paint: {
+                            'fill-color': ['get', 'color'],
+                            'fill-opacity': 0.62
+                        }
+                    });
+                }
+
+                this.map.addLayer({
+                    id: 'parcels-outline',
+                    type: 'line',
+                    source: 'parcels-source',
+                    paint: {
+                        'line-color': '#ffffff',
+                        'line-width': 1.4,
+                        'line-opacity': 0.95
+                    }
+                });
+
+                this.map.addLayer({
+                    id: 'parcels-highlight',
+                    type: 'line',
+                    source: 'parcels-source',
+                    paint: {
+                        'line-color': '#7c2d12',
+                        'line-width': 4
+                    },
+                    filter: ['==', ['get', 'id'], -1]
+                });
+
+                this.drawAssetMarkers();
+                this.drawTreeMarkers();
+
+                const clickableLayer = this.is3D ? 'parcels-extrusion' : 'parcels-fill';
+
+                this.map.on('mouseenter', clickableLayer, () => {
+                    this.map.getCanvas().style.cursor = 'pointer';
+                });
+
+                this.map.on('mouseleave', clickableLayer, () => {
+                    this.map.getCanvas().style.cursor = '';
+                });
+
+                this.map.on('click', clickableLayer, (e) => {
+                    const feature = e.features && e.features[0];
+                    if (!feature) return;
+
+                    const assetId = String(feature.properties.id);
+                    const asset = this.geojsonFeatureMap[assetId];
+                    if (!asset) return;
+
+                    this.selectAsset(asset.id, false);
+                    this.showPopup(e.lngLat, asset);
+                });
+
+                this.applySelectedStyle();
+                this.fitToVisibleAssets();
+            },
+
+            drawAssetMarkers() {
+                this.visibleAssets
+                    .filter(asset => asset.center && Array.isArray(asset.center))
+                    .forEach(asset => {
+                        const el = document.createElement('div');
+                        el.className = 'asset-marker';
+                        el.innerHTML = `
+            <div class="marker-shadow"></div>
+            <div class="asset-pill ${this.markerClassForAsset(asset)}">${this.markerLabelForAsset(asset)}</div>
+          `;
+
+                        el.addEventListener('click', (evt) => {
+                            evt.stopPropagation();
+                            this.selectAsset(asset.id, true);
+                        });
+
+                        const marker = new maplibregl.Marker({
+                            element: el,
+                            anchor: 'center'
+                        })
+                            .setLngLat([asset.center[1], asset.center[0]])
+                            .addTo(this.map);
+
+                        this.assetMarkers.push(marker);
+                    });
+            },
+
+            drawTreeMarkers() {
+                this.visibleAssets.slice(0, 25).forEach(asset => {
+                    if (!asset.center) return;
+
+                    const [lat, lng] = asset.center;
+                    const offsets = [
+                        [-0.00006, 0.00004],
+                        [0.00005, -0.00005]
+                    ];
+
+                    offsets.forEach(([dy, dx]) => {
+                        const el = document.createElement('div');
+                        el.className = 'tree-marker';
+
+                        const marker = new maplibregl.Marker({
+                            element: el,
+                            anchor: 'center'
+                        })
+                            .setLngLat([lng + dx, lat + dy])
+                            .addTo(this.map);
+
+                        this.treeMarkers.push(marker);
+                    });
+                });
+            },
+
+            showPopup(lngLat, asset) {
+                if (this.currentPopup) {
+                    this.currentPopup.remove();
+                    this.currentPopup = null;
+                }
+
+                const firstImg = asset.images?.[0] || '';
+
+                const html = `
+        <div style="width:300px;background:white;">
+          ${firstImg ? `<img src="${firstImg}" alt="${asset.name}" style="width:100%;height:160px;object-fit:cover;">` : `<div style="width:100%;height:120px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-weight:600;">Aucune image</div>`}
+          <div style="padding:14px 14px 16px 14px;">
+            <div style="font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#f97316;font-weight:800;">${asset.project || '—'}</div>
+            <div style="margin-top:3px;font-size:12px;color:#64748b;">${asset.program || '—'}</div>
+            <div style="margin-top:6px;font-size:18px;font-weight:800;color:#0f172a;">${asset.name || '—'}</div>
+            <div style="margin-top:6px;font-size:13px;color:#475569;">${asset.type || '—'}</div>
+            <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px;">
+              <div><span style="color:#94a3b8;">Prix</span><br><strong>${asset.price || '—'}</strong></div>
+              <div><span style="color:#94a3b8;">Surface</span><br><strong>${asset.surface || '—'}</strong></div>
+            </div>
+            <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center;font-size:12px;">
+              <span style="color:#94a3b8;">Client</span>
+              <strong>${asset.client || '—'}</strong>
+            </div>
+            <div style="margin-top:10px;font-size:11px;color:#64748b;">Statut : <b>${asset.status || '—'}</b></div>
+          </div>
+        </div>
+      `;
+
+                this.currentPopup = new maplibregl.Popup({
+                    closeButton: true,
+                    closeOnClick: true,
+                    offset: 18
+                })
+                    .setLngLat(lngLat)
+                    .setHTML(html)
+                    .addTo(this.map);
+            },
+
+            fitToVisibleAssets() {
+                const bounds = new maplibregl.LngLatBounds();
+                let hasBounds = false;
+
+                this.visibleAssets.forEach(asset => {
+                    const geom = asset.geometry;
+                    if (!geom) return;
+
+                    if (geom.type === 'Polygon') {
+                        (geom.coordinates[0] || []).forEach(coord => {
+                            bounds.extend(coord);
+                            hasBounds = true;
+                        });
+                    } else if (geom.type === 'MultiPolygon') {
+                        (geom.coordinates || []).forEach(poly => {
+                            (poly[0] || []).forEach(coord => {
+                                bounds.extend(coord);
+                                hasBounds = true;
+                            });
+                        });
+                    }
+                });
+
+                if (hasBounds) {
+                    this.map.fitBounds(bounds, {
+                        padding: 80,
+                        duration: 1000
+                    });
+                }
+            },
+
+            togglePitch() {
+                this.is3D = !this.is3D;
+
+                if (this.is3D) {
+                    this.map.easeTo({
+                        pitch: 64,
+                        bearing: -24,
+                        duration: 900
+                    });
+                } else {
+                    this.map.easeTo({
+                        pitch: 0,
+                        bearing: 0,
+                        duration: 900
+                    });
+                }
+
+                this.drawAssets();
+            },
+
+            resetFilters() {
+                this.search = '';
+                this.activeFilter = 'Tous';
+                this.projectFilter = '';
+                this.programFilter = '';
+                this.filterAssets();
+            },
+
+            onProjectChange() {
+                if (this.programFilter && !this.filteredProgramOptions.includes(this.programFilter)) {
+                    this.programFilter = '';
+                }
+                this.filterAssets();
+            },
+
+            setSidebarImage(index) {
+                this.sidebarImageIndex = index;
+            },
+
+            nextSidebarImage() {
+                const imgs = this.selectedAsset?.images || [];
+                if (!imgs.length) return;
+                this.sidebarImageIndex = (this.sidebarImageIndex + 1) % imgs.length;
+            },
+
+            prevSidebarImage() {
+                const imgs = this.selectedAsset?.images || [];
+                if (!imgs.length) return;
+                this.sidebarImageIndex = (this.sidebarImageIndex - 1 + imgs.length) % imgs.length;
+            },
+
+            openLightbox(img) {
+                const imgs = this.selectedAsset?.images || [];
+                this.lightboxImage = img;
+                this.lightboxIndex = this.sidebarImageIndex;
+                if (!imgs.length && img) this.lightboxIndex = 0;
+                this.lightboxOpen = true;
+            },
+
+            closeLightbox() {
+                this.lightboxOpen = false;
+            },
+
+            nextLightboxImage() {
+                const imgs = this.selectedAsset?.images || [];
+                if (!imgs.length) return;
+                this.lightboxIndex = (this.lightboxIndex + 1) % imgs.length;
+                this.sidebarImageIndex = this.lightboxIndex;
+                this.lightboxImage = imgs[this.lightboxIndex];
+            },
+
+            prevLightboxImage() {
+                const imgs = this.selectedAsset?.images || [];
+                if (!imgs.length) return;
+                this.lightboxIndex = (this.lightboxIndex - 1 + imgs.length) % imgs.length;
+                this.sidebarImageIndex = this.lightboxIndex;
+                this.lightboxImage = imgs[this.lightboxIndex];
+            },
+
+            applySelectedStyle() {
+                if (!this.map || !this.map.getLayer('parcels-highlight')) return;
+
+                const selectedId = this.selectedAsset && this.selectedAsset.id ? this.selectedAsset.id : -1;
+                this.map.setFilter('parcels-highlight', ['==', ['get', 'id'], selectedId]);
+
+                if (this.selectedBadgeMarker) {
+                    this.selectedBadgeMarker.remove();
+                    this.selectedBadgeMarker = null;
+                }
+
+                if (this.selectedAsset && this.selectedAsset.center) {
+                    const el = document.createElement('div');
+                    el.className = 'selected-badge';
+                    el.textContent = this.selectedAsset.name || 'Sélection';
+
+                    this.selectedBadgeMarker = new maplibregl.Marker({
+                        element: el,
+                        anchor: 'bottom'
+                    })
+                        .setLngLat([this.selectedAsset.center[1], this.selectedAsset.center[0]])
+                        .addTo(this.map);
+                }
+            },
+
+            selectAsset(id, recenter = true) {
+                const found = this.assets.find(a => a.id === id);
+                if (!found) return;
+
+                this.selectedAsset = found;
+                this.sidebarImageIndex = 0;
+                this.applySelectedStyle();
+
+                if (recenter) {
+                    this.flyToSelected();
+                }
+            },
+
+            flyToSelected() {
+                if (!this.selectedAsset || !this.selectedAsset.center) return;
+
+                this.map.flyTo({
+                    center: [this.selectedAsset.center[1], this.selectedAsset.center[0]],
+                    zoom: 18.2,
+                    pitch: this.is3D ? 64 : 0,
+                    bearing: this.is3D ? -24 : 0,
+                    duration: 1000
+                });
+
+                this.showPopup([this.selectedAsset.center[1], this.selectedAsset.center[0]], this.selectedAsset);
+            },
+
+            filterAssets() {
+                const q = this.search.trim().toLowerCase();
+
+                this.visibleAssets = this.assets.filter(asset => {
+                    const matchesSearch =
+                        !q ||
+                        [
+                            asset.name,
+                            asset.project,
+                            asset.program,
+                            asset.type,
+                            asset.client,
+                            asset.status
+                        ].join(' ').toLowerCase().includes(q);
+
+                    const matchesFilter =
+                        this.activeFilter === 'Tous' || asset.statusKey === this.activeFilter;
+
+                    const matchesProject =
+                        !this.projectFilter || asset.project === this.projectFilter;
+
+                    const matchesProgram =
+                        !this.programFilter || asset.program === this.programFilter;
+
+                    return matchesSearch && matchesFilter && matchesProject && matchesProgram;
+                });
+
+                this.drawAssets();
+
+                if (!this.visibleAssets.find(a => a.id === this.selectedAsset.id)) {
+                    this.selectedAsset = this.visibleAssets.length ? this.visibleAssets[0] : {};
+                    this.sidebarImageIndex = 0;
+                    this.applySelectedStyle();
+                }
+            },
+
+            refreshMapStyles() {
+                this.filterAssets();
+            }
+        }
+    }
+</script>
 </body>
 </html>

@@ -63,3 +63,15 @@ CELERY_RESULT_SERIALIZER = "json"
 
 # Recommandé (supprime le warning Celery 6+)
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+
+
+# gdal_translate \
+#   Ortho_BR1.tif \
+#   Ortho_BR1_web.tif \
+#   -b 1 -b 2 -b 3 \
+#   -ot Byte \
+#   -co TILED=YES \
+#   -co COMPRESS=JPEG \
+#   -co PHOTOMETRIC=YCBCR \
+#   -co BIGTIFF=YES\
+#   -co resolution =highest

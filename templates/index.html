@@ -1,10 +1,953 @@
+{#<!DOCTYPE html>#}
+{#<html lang="fr">#}
+{#<head>#}
+{#    <meta charset="UTF-8">#}
+{#    <meta name="viewport" content="width=device-width, initial-scale=1.0">#}
+{#    <title>ImmoParcelle - Gestion de programmes immobiliers</title>#}
+{#    <script src="https://cdn.tailwindcss.com"></script>#}
+{#    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">#}
+{#    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">#}
+{#    <style>#}
+{#        * { font-family: 'Inter', sans-serif; }#}
+{#        .gradient-bg { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); }#}
+{#        .card-hover { transition: all 0.3s ease; }#}
+{#        .card-hover:hover { transform: translateY(-5px); box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); }#}
+{#    </style>#}
+{#</head>#}
+{#<body class="bg-gray-50">#}
+{##}
+{#    <!-- Navigation premium -->#}
+{#    <nav class="bg-white shadow-lg border-b border-gray-200 fixed w-full z-50">#}
+{#        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">#}
+{#            <div class="flex justify-between h-16">#}
+{#                <div class="flex items-center">#}
+{#                    <i class="fas fa-building text-3xl text-blue-800 mr-3"></i>#}
+{#                    <span class="text-2xl font-bold bg-gradient-to-r from-blue-800 to-indigo-800 bg-clip-text text-transparent">ImmoParcelle</span>#}
+{#                </div>#}
+{#                #}
+{#                <!-- Menu desktop -->#}
+{#                <div class="hidden md:flex items-center space-x-8">#}
+{#                    <a href="#" class="text-gray-700 hover:text-blue-800 font-medium transition">Tableau de bord</a>#}
+{#                    <a href="#" class="text-gray-700 hover:text-blue-800 font-medium transition">Programmes</a>#}
+{#                    <a href="#" class="text-gray-700 hover:text-blue-800 font-medium transition">Parcelles</a>#}
+{#                    <a href="#" class="text-gray-700 hover:text-blue-800 font-medium transition">Promoteurs</a>#}
+{#                    <a href="#" class="text-gray-700 hover:text-blue-800 font-medium transition">Documents</a>#}
+{#                </div>#}
+{##}
+{#                <!-- Profil -->#}
+{#                <div class="flex items-center space-x-4">#}
+{#                    <button class="relative p-2 text-gray-400 hover:text-gray-500">#}
+{#                        <i class="fas fa-bell text-xl"></i>#}
+{#                        <span class="absolute top-0 right-0 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>#}
+{#                    </button>#}
+{#                    <div class="flex items-center space-x-3">#}
+{#                        <img class="h-9 w-9 rounded-full object-cover ring-2 ring-blue-500" src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="Profil">#}
+{#                        <div class="hidden md:block">#}
+{#                            <p class="text-sm font-medium text-gray-700">Pierre Martin</p>#}
+{#                            <p class="text-xs text-gray-500">Directeur de programme</p>#}
+{#                        </div>#}
+{#                    </div>#}
+{#                </div>#}
+{#            </div>#}
+{#        </div>#}
+{#    </nav>#}
+{##}
+{#    <!-- Main content -->#}
+{#    <div class="pt-20 pb-10">#}
+{#        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">#}
+{##}
+{#            <!-- En-tête avec recherche rapide -->#}
+{#            <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">#}
+{#                <div>#}
+{#                    <h1 class="text-3xl font-bold text-gray-900">Gestion parcellaire</h1>#}
+{#                    <p class="text-gray-600 mt-1">Programmes immobiliers • Permis de construire • Lots</p>#}
+{#                </div>#}
+{#                <div class="mt-4 md:mt-0 flex items-center space-x-4">#}
+{#                    <div class="relative">#}
+{#                        <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>#}
+{#                        <input type="text" placeholder="Rechercher une parcelle..." class="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-64">#}
+{#                    </div>#}
+{#                    <button class="bg-blue-800 text-white px-4 py-2 rounded-lg hover:bg-blue-900 transition flex items-center">#}
+{#                        <i class="fas fa-plus mr-2"></i>Nouveau programme#}
+{#                    </button>#}
+{#                </div>#}
+{#            </div>#}
+{##}
+{#            <!-- KPIs immobiliers -->#}
+{#            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">#}
+{#                <div class="bg-white rounded-xl shadow-sm p-6 card-hover border border-gray-100">#}
+{#                    <div class="flex items-center justify-between">#}
+{#                        <div>#}
+{#                            <p class="text-sm font-medium text-gray-600">Programmes actifs</p>#}
+{#                            <p class="text-3xl font-bold text-gray-900">24</p>#}
+{#                            <p class="text-sm text-green-600 mt-2"><i class="fas fa-arrow-up mr-1"></i> +3 ce mois</p>#}
+{#                        </div>#}
+{#                        <div class="bg-blue-100 rounded-full p-3">#}
+{#                            <i class="fas fa-city text-2xl text-blue-800"></i>#}
+{#                        </div>#}
+{#                    </div>#}
+{#                </div>#}
+{##}
+{#                <div class="bg-white rounded-xl shadow-sm p-6 card-hover border border-gray-100">#}
+{#                    <div class="flex items-center justify-between">#}
+{#                        <div>#}
+{#                            <p class="text-sm font-medium text-gray-600">Surface totale</p>#}
+{#                            <p class="text-3xl font-bold text-gray-900">45.8 ha</p>#}
+{#                            <p class="text-sm text-gray-600 mt-2">458 000 m²</p>#}
+{#                        </div>#}
+{#                        <div class="bg-green-100 rounded-full p-3">#}
+{#                            <i class="fas fa-draw-polygon text-2xl text-green-600"></i>#}
+{#                        </div>#}
+{#                    </div>#}
+{#                </div>#}
+{##}
+{#                <div class="bg-white rounded-xl shadow-sm p-6 card-hover border border-gray-100">#}
+{#                    <div class="flex items-center justify-between">#}
+{#                        <div>#}
+{#                            <p class="text-sm font-medium text-gray-600">Lots créés</p>#}
+{#                            <p class="text-3xl font-bold text-gray-900">1 247</p>#}
+{#                            <p class="text-sm text-blue-600 mt-2">823 disponibles</p>#}
+{#                        </div>#}
+{#                        <div class="bg-purple-100 rounded-full p-3">#}
+{#                            <i class="fas fa-cubes text-2xl text-purple-600"></i>#}
+{#                        </div>#}
+{#                    </div>#}
+{#                </div>#}
+{##}
+{#                <div class="bg-white rounded-xl shadow-sm p-6 card-hover border border-gray-100">#}
+{#                    <div class="flex items-center justify-between">#}
+{#                        <div>#}
+{#                            <p class="text-sm font-medium text-gray-600">Permis obtenus</p>#}
+{#                            <p class="text-3xl font-bold text-gray-900">18</p>#}
+{#                            <p class="text-sm text-yellow-600 mt-2">6 en instruction</p>#}
+{#                        </div>#}
+{#                        <div class="bg-yellow-100 rounded-full p-3">#}
+{#                            <i class="fas fa-file-signature text-2xl text-yellow-600"></i>#}
+{#                        </div>#}
+{#                    </div>#}
+{#                </div>#}
+{##}
+{#                <div class="bg-white rounded-xl shadow-sm p-6 card-hover border border-gray-100">#}
+{#                    <div class="flex items-center justify-between">#}
+{#                        <div>#}
+{#                            <p class="text-sm font-medium text-gray-600">Promoteurs</p>#}
+{#                            <p class="text-3xl font-bold text-gray-900">15</p>#}
+{#                            <p class="text-sm text-gray-600 mt-2">partenaires actifs</p>#}
+{#                        </div>#}
+{#                        <div class="bg-indigo-100 rounded-full p-3">#}
+{#                            <i class="fas fa-handshake text-2xl text-indigo-600"></i>#}
+{#                        </div>#}
+{#                    </div>#}
+{#                </div>#}
+{#            </div>#}
+{##}
+{#            <!-- Section principale : Carte et programmes récents -->#}
+{#            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">#}
+{#                <!-- Carte interactive -->#}
+{#                <div class="lg:col-span-2 bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">#}
+{#                    <div class="p-6 border-b border-gray-100">#}
+{#                        <div class="flex justify-between items-center">#}
+{#                            <h2 class="text-lg font-semibold text-gray-900">Visualisation du foncier</h2>#}
+{#                            <div class="flex space-x-2">#}
+{#                                <button class="px-3 py-1 text-sm bg-blue-50 text-blue-700 rounded-full hover:bg-blue-100 transition">Cadastre</button>#}
+{#                                <button class="px-3 py-1 text-sm bg-gray-50 text-gray-600 rounded-full hover:bg-gray-100 transition">Satellite</button>#}
+{#                                <button class="px-3 py-1 text-sm bg-gray-50 text-gray-600 rounded-full hover:bg-gray-100 transition">Plan masse</button>#}
+{#                            </div>#}
+{#                        </div>#}
+{#                    </div>#}
+{#                    <div class="relative h-96 bg-gray-100">#}
+{#                        <!-- Image de fond avec overlay -->#}
+{#                        <div class="absolute inset-0 gradient-bg opacity-10"></div>#}
+{#                        <img src="https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?ixlib=rb-1.2.1&auto=format&fit=crop&w=1935&q=80" #}
+{#                             class="w-full h-full object-cover opacity-80" alt="Plan cadastral">#}
+{#                        #}
+{#                        <!-- Overlay avec informations -->#}
+{#                        <div class="absolute inset-0 flex items-center justify-center">#}
+{#                            <div class="bg-white/95 backdrop-blur-sm p-4 rounded-xl shadow-xl max-w-sm">#}
+{#                                <i class="fas fa-map text-4xl text-blue-800 block text-center mb-2"></i>#}
+{#                                <p class="text-gray-700 font-medium text-center">Visualisation interactive</p>#}
+{#                                <p class="text-sm text-gray-500 text-center">24 programmes • 156 parcelles</p>#}
+{#                                <div class="mt-3 grid grid-cols-2 gap-2">#}
+{#                                    <div class="text-center p-2 bg-blue-50 rounded">#}
+{#                                        <span class="block text-sm font-bold text-blue-800">12</span>#}
+{#                                        <span class="text-xs text-gray-600">En développement</span>#}
+{#                                    </div>#}
+{#                                    <div class="text-center p-2 bg-green-50 rounded">#}
+{#                                        <span class="block text-sm font-bold text-green-800">8</span>#}
+{#                                        <span class="text-xs text-gray-600">Livrés</span>#}
+{#                                    </div>#}
+{#                                </div>#}
+{#                                <button class="mt-3 w-full bg-blue-800 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-900 transition">#}
+{#                                    Ouvrir le visualiseur#}
+{#                                </button>#}
+{#                            </div>#}
+{#                        </div>#}
+{##}
+{#                        <!-- Légende des zones -->#}
+{#                        <div class="absolute bottom-4 left-4 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg p-3">#}
+{#                            <div class="flex items-center space-x-4">#}
+{#                                <div class="flex items-center"><span class="w-3 h-3 bg-blue-500 rounded-full mr-2"></span><span class="text-xs">Résidentiel</span></div>#}
+{#                                <div class="flex items-center"><span class="w-3 h-3 bg-green-500 rounded-full mr-2"></span><span class="text-xs">Commercial</span></div>#}
+{#                                <div class="flex items-center"><span class="w-3 h-3 bg-orange-500 rounded-full mr-2"></span><span class="text-xs">Mixte</span></div>#}
+{#                                <div class="flex items-center"><span class="w-3 h-3 bg-purple-500 rounded-full mr-2"></span><span class="text-xs">Équipement</span></div>#}
+{#                            </div>#}
+{#                        </div>#}
+{#                    </div>#}
+{#                </div>#}
+{##}
+{#                <!-- Programmes récents -->#}
+{#                <div class="bg-white rounded-xl shadow-sm border border-gray-100">#}
+{#                    <div class="p-6 border-b border-gray-100">#}
+{#                        <div class="flex justify-between items-center">#}
+{#                            <h2 class="text-lg font-semibold text-gray-900">Programmes en cours</h2>#}
+{#                            <a href="#" class="text-sm text-blue-800 hover:text-blue-900">Voir tout <i class="fas fa-arrow-right ml-1"></i></a>#}
+{#                        </div>#}
+{#                    </div>#}
+{#                    <div class="divide-y divide-gray-100 max-h-96 overflow-y-auto">#}
+{#                        <!-- Programme 1 -->#}
+{#                        <div class="p-4 hover:bg-gray-50 transition cursor-pointer">#}
+{#                            <div class="flex items-start space-x-3">#}
+{#                                <div class="w-1 h-12 bg-blue-500 rounded-full mt-1"></div>#}
+{#                                <div class="flex-1">#}
+{#                                    <div class="flex justify-between items-start">#}
+{#                                        <div>#}
+{#                                            <h3 class="font-medium text-gray-900">Résidence Les Jardins</h3>#}
+{#                                            <p class="text-xs text-gray-500">Boulogne-Billancourt • 92</p>#}
+{#                                        </div>#}
+{#                                        <span class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">PC obtenu</span>#}
+{#                                    </div>#}
+{#                                    <div class="grid grid-cols-3 gap-2 mt-3 text-xs">#}
+{#                                        <div><span class="text-gray-500">Surface</span><br><span class="font-medium">12 500 m²</span></div>#}
+{#                                        <div><span class="text-gray-500">Lots</span><br><span class="font-medium">86</span></div>#}
+{#                                        <div><span class="text-gray-500">Avancement</span><br><span class="text-green-600 font-medium">65%</span></div>#}
+{#                                    </div>#}
+{#                                    <div class="flex items-center mt-2 text-xs text-gray-500">#}
+{#                                        <i class="fas fa-calendar mr-1"></i> Livraison T4 2026#}
+{#                                        <i class="fas fa-user ml-3 mr-1"></i> Nexity#}
+{#                                    </div>#}
+{#                                </div>#}
+{#                            </div>#}
+{#                        </div>#}
+{##}
+{#                        <!-- Programme 2 -->#}
+{#                        <div class="p-4 hover:bg-gray-50 transition cursor-pointer">#}
+{#                            <div class="flex items-start space-x-3">#}
+{#                                <div class="w-1 h-12 bg-green-500 rounded-full mt-1"></div>#}
+{#                                <div class="flex-1">#}
+{#                                    <div class="flex justify-between items-start">#}
+{#                                        <div>#}
+{#                                            <h3 class="font-medium text-gray-900">Ecoquartier Seine</h3>#}
+{#                                            <p class="text-xs text-gray-500">Issy-les-Moulineaux • 92</p>#}
+{#                                        </div>#}
+{#                                        <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">Chantier</span>#}
+{#                                    </div>#}
+{#                                    <div class="grid grid-cols-3 gap-2 mt-3 text-xs">#}
+{#                                        <div><span class="text-gray-500">Surface</span><br><span class="font-medium">25 000 m²</span></div>#}
+{#                                        <div><span class="text-gray-500">Lots</span><br><span class="font-medium">156</span></div>#}
+{#                                        <div><span class="text-gray-500">Avancement</span><br><span class="text-green-600 font-medium">35%</span></div>#}
+{#                                    </div>#}
+{#                                    <div class="flex items-center mt-2 text-xs text-gray-500">#}
+{#                                        <i class="fas fa-calendar mr-1"></i> Livraison T2 2027#}
+{#                                        <i class="fas fa-user ml-3 mr-1"></i> Bouygues Immobilier#}
+{#                                    </div>#}
+{#                                </div>#}
+{#                            </div>#}
+{#                        </div>#}
+{##}
+{#                        <!-- Programme 3 -->#}
+{#                        <div class="p-4 hover:bg-gray-50 transition cursor-pointer">#}
+{#                            <div class="flex items-start space-x-3">#}
+{#                                <div class="w-1 h-12 bg-orange-500 rounded-full mt-1"></div>#}
+{#                                <div class="flex-1">#}
+{#                                    <div class="flex justify-between items-start">#}
+{#                                        <div>#}
+{#                                            <h3 class="font-medium text-gray-900">Le Domaine vert</h3>#}
+{#                                            <p class="text-xs text-gray-500">Versailles • 78</p>#}
+{#                                        </div>#}
+{#                                        <span class="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded-full">En instruction</span>#}
+{#                                    </div>#}
+{#                                    <div class="grid grid-cols-3 gap-2 mt-3 text-xs">#}
+{#                                        <div><span class="text-gray-500">Surface</span><br><span class="font-medium">8 400 m²</span></div>#}
+{#                                        <div><span class="text-gray-500">Lots</span><br><span class="font-medium">42</span></div>#}
+{#                                        <div><span class="text-gray-500">Avancement</span><br><span class="text-yellow-600 font-medium">15%</span></div>#}
+{#                                    </div>#}
+{#                                    <div class="flex items-center mt-2 text-xs text-gray-500">#}
+{#                                        <i class="fas fa-calendar mr-1"></i> Dépôt PC: 15/03/2026#}
+{#                                        <i class="fas fa-user ml-3 mr-1"></i> Eiffage#}
+{#                                    </div>#}
+{#                                </div>#}
+{#                            </div>#}
+{#                        </div>#}
+{##}
+{#                        <!-- Programme 4 -->#}
+{#                        <div class="p-4 hover:bg-gray-50 transition cursor-pointer">#}
+{#                            <div class="flex items-start space-x-3">#}
+{#                                <div class="w-1 h-12 bg-purple-500 rounded-full mt-1"></div>#}
+{#                                <div class="flex-1">#}
+{#                                    <div class="flex justify-between items-start">#}
+{#                                        <div>#}
+{#                                            <h3 class="font-medium text-gray-900">Cœur de ville</h3>#}
+{#                                            <p class="text-xs text-gray-500">Saint-Germain • 78</p>#}
+{#                                        </div>#}
+{#                                        <span class="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded-full">Mixte</span>#}
+{#                                    </div>#}
+{#                                    <div class="grid grid-cols-3 gap-2 mt-3 text-xs">#}
+{#                                        <div><span class="text-gray-500">Surface</span><br><span class="font-medium">15 200 m²</span></div>#}
+{#                                        <div><span class="text-gray-500">Lots</span><br><span class="font-medium">94</span></div>#}
+{#                                        <div><span class="text-gray-500">Avancement</span><br><span class="text-green-600 font-medium">80%</span></div>#}
+{#                                    </div>#}
+{#                                    <div class="flex items-center mt-2 text-xs text-gray-500">#}
+{#                                        <i class="fas fa-calendar mr-1"></i> Livraison T3 2026#}
+{#                                        <i class="fas fa-user ml-3 mr-1"></i> Vinci#}
+{#                                    </div>#}
+{#                                </div>#}
+{#                            </div>#}
+{#                        </div>#}
+{#                    </div>#}
+{##}
+{#                    <!-- Actions rapides -->#}
+{#                    <div class="p-4 bg-gray-50 border-t border-gray-100">#}
+{#                        <button class="w-full bg-white border-2 border-dashed border-gray-300 rounded-lg py-3 text-gray-500 hover:border-blue-500 hover:text-blue-800 transition flex items-center justify-center">#}
+{#                            <i class="fas fa-plus mr-2"></i> Ajouter une parcelle au programme#}
+{#                        </button>#}
+{#                    </div>#}
+{#                </div>#}
+{#            </div>#}
+{##}
+{#            <!-- Section détails parcellaires -->#}
+{#            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">#}
+{#                <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100 card-hover">#}
+{#                    <h3 class="text-sm font-medium text-gray-600 mb-4">Répartition par type</h3>#}
+{#                    <div class="space-y-3">#}
+{#                        <div><div class="flex justify-between text-sm"><span>Résidentiel</span><span>58%</span></div><div class="w-full bg-gray-200 rounded-full h-2"><div class="bg-blue-600 h-2 rounded-full" style="width:58%"></div></div></div>#}
+{#                        <div><div class="flex justify-between text-sm"><span>Commercial</span><span>22%</span></div><div class="w-full bg-gray-200 rounded-full h-2"><div class="bg-green-600 h-2 rounded-full" style="width:22%"></div></div></div>#}
+{#                        <div><div class="flex justify-between text-sm"><span>Bureaux</span><span>15%</span></div><div class="w-full bg-gray-200 rounded-full h-2"><div class="bg-purple-600 h-2 rounded-full" style="width:15%"></div></div></div>#}
+{#                        <div><div class="flex justify-between text-sm"><span>Équipements</span><span>5%</span></div><div class="w-full bg-gray-200 rounded-full h-2"><div class="bg-orange-600 h-2 rounded-full" style="width:5%"></div></div></div>#}
+{#                    </div>#}
+{#                </div>#}
+{##}
+{#                <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100 card-hover">#}
+{#                    <h3 class="text-sm font-medium text-gray-600 mb-4">Documents récents</h3>#}
+{#                    <div class="space-y-3">#}
+{#                        <div class="flex items-center p-2 hover:bg-gray-50 rounded">#}
+{#                            <i class="fas fa-file-pdf text-red-500 mr-3"></i>#}
+{#                            <div class="flex-1">#}
+{#                                <p class="text-sm font-medium">PC Résidence Jardins</p>#}
+{#                                <p class="text-xs text-gray-500">Il y a 2h • 2.4 MB</p>#}
+{#                            </div>#}
+{#                        </div>#}
+{#                        <div class="flex items-center p-2 hover:bg-gray-50 rounded">#}
+{#                            <i class="fas fa-file-excel text-green-500 mr-3"></i>#}
+{#                            <div class="flex-1">#}
+{#                                <p class="text-sm font-medium">Tableau surfaces</p>#}
+{#                                <p class="text-xs text-gray-500">Il y a 1j • 845 KB</p>#}
+{#                            </div>#}
+{#                        </div>#}
+{#                        <div class="flex items-center p-2 hover:bg-gray-50 rounded">#}
+{#                            <i class="fas fa-file-image text-blue-500 mr-3"></i>#}
+{#                            <div class="flex-1">#}
+{#                                <p class="text-sm font-medium">Plan masse</p>#}
+{#                                <p class="text-xs text-gray-500">Il y a 3j • 5.1 MB</p>#}
+{#                            </div>#}
+{#                        </div>#}
+{#                    </div>#}
+{#                </div>#}
+{##}
+{#                <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100 card-hover">#}
+{#                    <h3 class="text-sm font-medium text-gray-600 mb-4">Prochaines échéances</h3>#}
+{#                    <div class="space-y-4">#}
+{#                        <div class="flex items-center">#}
+{#                            <div class="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center"><i class="fas fa-gavel text-red-600 text-sm"></i></div>#}
+{#                            <div class="ml-3 flex-1">#}
+{#                                <p class="text-sm font-medium">Commission PC</p>#}
+{#                                <p class="text-xs text-gray-500">15 mars 2026 • 14h</p>#}
+{#                            </div>#}
+{#                            <span class="text-xs bg-red-100 text-red-800 px-2 py-1 rounded-full">J-5</span>#}
+{#                        </div>#}
+{#                        <div class="flex items-center">#}
+{#                            <div class="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center"><i class="fas fa-hand-holding-usd text-yellow-600 text-sm"></i></div>#}
+{#                            <div class="ml-3 flex-1">#}
+{#                                <p class="text-sm font-medium">Clôture VEFA</p>#}
+{#                                <p class="text-xs text-gray-500">20 mars 2026</p>#}
+{#                            </div>#}
+{#                        </div>#}
+{#                        <div class="flex items-center">#}
+{#                            <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center"><i class="fas fa-hard-hat text-green-600 text-sm"></i></div>#}
+{#                            <div class="ml-3 flex-1">#}
+{#                                <p class="text-sm font-medium">Début chantier</p>#}
+{#                                <p class="text-xs text-gray-500">1er avril 2026</p>#}
+{#                            </div>#}
+{#                        </div>#}
+{#                    </div>#}
+{#                </div>#}
+{##}
+{#                <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100 card-hover">#}
+{#                    <h3 class="text-sm font-medium text-gray-600 mb-4">Alertes & tâches</h3>#}
+{#                    <div class="space-y-3">#}
+{#                        <div class="bg-yellow-50 p-3 rounded-lg border-l-4 border-yellow-400">#}
+{#                            <p class="text-sm font-medium text-yellow-800">PC à déposer</p>#}
+{#                            <p class="text-xs text-yellow-700">Ecoquartier - J-7</p>#}
+{#                        </div>#}
+{#                        <div class="bg-blue-50 p-3 rounded-lg border-l-4 border-blue-400">#}
+{#                            <p class="text-sm font-medium text-blue-800">Bornage à planifier</p>#}
+{#                            <p class="text-xs text-blue-700">Parcelle AZ-145</p>#}
+{#                        </div>#}
+{#                        <div class="bg-green-50 p-3 rounded-lg border-l-4 border-green-400">#}
+{#                            <p class="text-sm font-medium text-green-800">Réunion promoteurs</p>#}
+{#                            <p class="text-xs text-green-700">Demain 10h</p>#}
+{#                        </div>#}
+{#                    </div>#}
+{#                </div>#}
+{#            </div>#}
+{##}
+{#            <!-- Tableau détaillé des parcelles -->#}
+{#            <div class="bg-white rounded-xl shadow-sm border border-gray-100">#}
+{#                <div class="p-6 border-b border-gray-100">#}
+{#                    <div class="flex justify-between items-center">#}
+{#                        <h2 class="text-lg font-semibold text-gray-900">Registre parcellaire détaillé</h2>#}
+{#                        <div class="flex space-x-2">#}
+{#                            <button class="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition">#}
+{#                                <i class="fas fa-download mr-2"></i>Exporter#}
+{#                            </button>#}
+{#                            <button class="px-3 py-1 text-sm bg-blue-800 text-white rounded-lg hover:bg-blue-900 transition">#}
+{#                                <i class="fas fa-plus mr-2"></i>Nouvelle parcelle#}
+{#                            </button>#}
+{#                        </div>#}
+{#                    </div>#}
+{#                </div>#}
+{#                <div class="overflow-x-auto">#}
+{#                    <table class="min-w-full divide-y divide-gray-200">#}
+{#                        <thead class="bg-gray-50">#}
+{#                            <tr>#}
+{#                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Référence</th>#}
+{#                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Programme</th>#}
+{#                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Surface</th>#}
+{#                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Destination</th>#}
+{#                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Statut</th>#}
+{#                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Promoteur</th>#}
+{#                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>#}
+{#                            </tr>#}
+{#                        </thead>#}
+{#                        <tbody class="bg-white divide-y divide-gray-200">#}
+{#                            <tr class="hover:bg-gray-50">#}
+{#                                <td class="px-6 py-4 whitespace-nowrap">#}
+{#                                    <div class="text-sm font-medium text-gray-900">AZ-145</div>#}
+{#                                    <div class="text-xs text-gray-500">Section A • 45</div>#}
+{#                                </td>#}
+{#                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">Résidence Les Jardins</td>#}
+{#                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">3 450 m²</td>#}
+{#                                <td class="px-6 py-4 whitespace-nowrap"><span class="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">Résidentiel</span></td>#}
+{#                                <td class="px-6 py-4 whitespace-nowrap"><span class="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">PC obtenu</span></td>#}
+{#                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">Nexity</td>#}
+{#                                <td class="px-6 py-4 whitespace-nowrap text-right text-sm">#}
+{#                                    <button class="text-gray-400 hover:text-gray-600 mr-3"><i class="fas fa-edit"></i></button>#}
+{#                                    <button class="text-gray-400 hover:text-gray-600"><i class="fas fa-map-marked-alt"></i></button>#}
+{#                                </td>#}
+{#                            </tr>#}
+{#                            <tr class="hover:bg-gray-50">#}
+{#                                <td class="px-6 py-4 whitespace-nowrap">#}
+{#                                    <div class="text-sm font-medium text-gray-900">BQ-208</div>#}
+{#                                    <div class="text-xs text-gray-500">Section B • 12</div>#}
+{#                                </td>#}
+{#                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">Ecoquartier Seine</td>#}
+{#                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">5 200 m²</td>#}
+{#                                <td class="px-6 py-4 whitespace-nowrap"><span class="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">Mixte</span></td>#}
+{#                                <td class="px-6 py-4 whitespace-nowrap"><span class="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded-full">Instruction</span></td>#}
+{#                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">Bouygues</td>#}
+{#                                <td class="px-6 py-4 whitespace-nowrap text-right text-sm">#}
+{#                                    <button class="text-gray-400 hover:text-gray-600 mr-3"><i class="fas fa-edit"></i></button>#}
+{#                                    <button class="text-gray-400 hover:text-gray-600"><i class="fas fa-map-marked-alt"></i></button>#}
+{#                                </td>#}
+{#                            </tr>#}
+{#                            <tr class="hover:bg-gray-50">#}
+{#                                <td class="px-6 py-4 whitespace-nowrap">#}
+{#                                    <div class="text-sm font-medium text-gray-900">CT-312</div>#}
+{#                                    <div class="text-xs text-gray-500">Section C • 78</div>#}
+{#                                </td>#}
+{#                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">Le Domaine vert</td>#}
+{#                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">2 800 m²</td>#}
+{#                                <td class="px-6 py-4 whitespace-nowrap"><span class="px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded-full">Équipement</span></td>#}
+{#                                <td class="px-6 py-4 whitespace-nowrap"><span class="px-2 py-1 text-xs bg-orange-100 text-orange-800 rounded-full">En projet</span></td>#}
+{#                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">Eiffage</td>#}
+{#                                <td class="px-6 py-4 whitespace-nowrap text-right text-sm">#}
+{#                                    <button class="text-gray-400 hover:text-gray-600 mr-3"><i class="fas fa-edit"></i></button>#}
+{#                                    <button class="text-gray-400 hover:text-gray-600"><i class="fas fa-map-marked-alt"></i></button>#}
+{#                                </td>#}
+{#                            </tr>#}
+{#                        </tbody>#}
+{#                    </table>#}
+{#                </div>#}
+{#                <div class="p-4 border-t border-gray-100 bg-gray-50 flex justify-between items-center">#}
+{#                    <p class="text-sm text-gray-500">Affichage de 3 parcelles sur 156</p>#}
+{#                    <div class="flex space-x-2">#}
+{#                        <button class="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition">Précédent</button>#}
+{#                        <button class="px-3 py-1 text-sm bg-blue-800 text-white rounded-lg hover:bg-blue-900 transition">1</button>#}
+{#                        <button class="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition">2</button>#}
+{#                        <button class="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition">3</button>#}
+{#                        <button class="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition">Suivant</button>#}
+{#                    </div>#}
+{#                </div>#}
+{#            </div>#}
+{#        </div>#}
+{#    </div>#}
+{##}
+{#    <!-- Footer -->#}
+{#    <footer class="bg-white border-t border-gray-200 mt-10">#}
+{#        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">#}
+{#            <div class="flex flex-col md:flex-row justify-between items-center">#}
+{#                <div class="flex items-center mb-4 md:mb-0">#}
+{#                    <i class="fas fa-building text-2xl text-blue-800 mr-2"></i>#}
+{#                    <span class="text-lg font-semibold text-gray-800">ImmoParcelle</span>#}
+{#                </div>#}
+{#                <div class="text-sm text-gray-500">#}
+{#                    © 2026 ImmoParcelle. Solution de gestion parcellaire pour programmes immobiliers.#}
+{#                </div>#}
+{#                <div class="flex space-x-4 mt-4 md:mt-0">#}
+{#                    <a href="#" class="text-gray-400 hover:text-gray-600"><i class="fab fa-linkedin"></i></a>#}
+{#                    <a href="#" class="text-gray-400 hover:text-gray-600"><i class="fab fa-twitter"></i></a>#}
+{#                    <a href="#" class="text-gray-400 hover:text-gray-600"><i class="fab fa-facebook"></i></a>#}
+{#                </div>#}
+{#            </div>#}
+{#        </div>#}
+{#    </footer>#}
+{##}
+{#</body>#}
+{#</html>#}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <title>Title</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Programmes Immobiliers Premium</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .glass { backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
+    .scrollbar-thin::-webkit-scrollbar { width: 8px; height: 8px; }
+    .scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(148,163,184,.35); border-radius: 999px; }
+    .master-grid {
+      background-image:
+        linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+      background-size: 28px 28px;
+    }
+  </style>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eefbf7', 100: '#d5f7e9', 200: '#acefd2', 300: '#73dfb2',
+              400: '#39c88f', 500: '#1eae76', 600: '#148f61', 700: '#12724f',
+              800: '#125b42', 900: '#114c39'
+            },
+            navy: { 950: '#08111e' }
+          },
+          boxShadow: {
+            soft: '0 18px 50px rgba(2, 6, 23, 0.14)',
+            glow: '0 0 0 1px rgba(255,255,255,0.04), 0 24px 60px rgba(16,24,40,0.26)'
+          },
+          borderRadius: {
+            '4xl': '2rem'
+          }
+        }
+      }
+    }
+  </script>
 </head>
-<body>
+<body class="bg-slate-100 text-slate-800 antialiased">
+  <div x-data="estateApp()" class="min-h-screen">
+    <div class="fixed inset-0 -z-10 overflow-hidden">
+      <div class="absolute -top-20 left-1/2 h-96 w-96 -translate-x-1/2 rounded-full bg-brand-300/30 blur-3xl"></div>
+      <div class="absolute top-32 right-10 h-80 w-80 rounded-full bg-emerald-200/40 blur-3xl"></div>
+      <div class="absolute bottom-0 left-0 h-96 w-96 rounded-full bg-sky-200/40 blur-3xl"></div>
+    </div>
 
+    <div class="flex min-h-screen">
+      <aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'" class="fixed lg:static inset-y-0 left-0 z-40 w-80 transform transition-transform duration-300">
+        <div class="h-full bg-navy-950 text-white shadow-soft glass border-r border-white/10">
+          <div class="flex h-20 items-center justify-between border-b border-white/10 px-6">
+            <div class="flex items-center gap-3">
+              <div class="grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-brand-400 to-emerald-600 shadow-glow">
+                <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/></svg>
+              </div>
+              <div>
+                <h1 class="text-lg font-extrabold tracking-tight">Immo Programs</h1>
+                <p class="text-xs text-slate-400">Sales & Parcel Control</p>
+              </div>
+            </div>
+            <button @click="sidebarOpen=false" class="rounded-xl p-2 text-slate-400 hover:bg-white/10 lg:hidden">
+              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+
+          <div class="px-5 py-5">
+            <div class="rounded-3xl border border-white/10 bg-white/5 p-4 shadow-glow">
+              <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Recherche transverse</p>
+              <div class="mt-3 flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                <svg class="h-5 w-5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                <input x-model="search" type="text" placeholder="Programme, lot, client, villa..." class="w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-500" />
+              </div>
+            </div>
+          </div>
+
+          <nav class="px-4 pb-6">
+            <template x-for="item in navItems" :key="item.name">
+              <button @click="activeSection=item.name" :class="activeSection===item.name ? 'bg-white text-slate-900 shadow-soft' : 'text-slate-300 hover:bg-white/10 hover:text-white'" class="mb-2 flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-medium transition">
+                <span x-html="item.icon" class="h-5 w-5"></span>
+                <span x-text="item.label"></span>
+                <span x-show="item.badge" class="ml-auto rounded-full bg-brand-500/15 px-2.5 py-1 text-[11px] font-semibold text-brand-300" x-text="item.badge"></span>
+              </button>
+            </template>
+          </nav>
+
+          <div class="mx-4 mt-auto rounded-3xl border border-brand-400/20 bg-gradient-to-br from-brand-500/15 to-emerald-500/10 p-4">
+            <p class="text-xs uppercase tracking-[0.25em] text-brand-200">Pilotage commercial</p>
+            <h3 class="mt-2 text-lg font-bold">Vision programme</h3>
+            <p class="mt-2 text-sm leading-6 text-slate-300">Suivi consolidé des lots, réservations, actes, paiements clients, avancement chantier et disponibilité commerciale.</p>
+            <button class="mt-4 w-full rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 transition hover:scale-[1.01]">Exporter le reporting promoteur</button>
+          </div>
+        </div>
+      </aside>
+
+      <main class="min-w-0 flex-1">
+        <header class="sticky top-0 z-30 border-b border-white/60 bg-white/70 px-4 py-4 backdrop-blur-xl lg:px-8">
+          <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+            <div class="flex items-center gap-3">
+              <button @click="sidebarOpen=true" class="grid h-11 w-11 place-items-center rounded-2xl bg-white shadow-soft lg:hidden">
+                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+              </button>
+              <div>
+                <h2 class="text-2xl font-extrabold tracking-tight text-slate-900">Gestion des Programmes Immobiliers</h2>
+                <p class="text-sm text-slate-500">Commercialisation, unités immobilières, parcelles, clients, contrats et suivi d’exécution.</p>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-3">
+              <div class="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+                <svg class="h-4 w-4 text-brand-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 6v6l4 2"/><circle cx="12" cy="12" r="9"/></svg>
+                <span class="text-sm font-medium text-slate-700">Disponibilités en direct</span>
+              </div>
+              <button class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5">Importer plan masse</button>
+              <button class="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-soft transition hover:-translate-y-0.5">Nouveau programme</button>
+            </div>
+          </div>
+        </header>
+
+        <section class="px-4 py-6 lg:px-8">
+          <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <template x-for="card in stats" :key="card.label">
+              <div class="rounded-4xl border border-white/70 bg-white/80 p-5 shadow-soft glass">
+                <div class="flex items-start justify-between">
+                  <div>
+                    <p class="text-sm font-medium text-slate-500" x-text="card.label"></p>
+                    <h3 class="mt-3 text-3xl font-extrabold tracking-tight text-slate-900" x-text="card.value"></h3>
+                    <p class="mt-2 text-xs font-semibold" :class="card.trend.startsWith('+') ? 'text-emerald-600' : 'text-rose-600'" x-text="card.trend + ' ce mois'"></p>
+                  </div>
+                  <div class="grid h-12 w-12 place-items-center rounded-2xl" :class="card.iconBg" x-html="card.icon"></div>
+                </div>
+              </div>
+            </template>
+          </div>
+        </section>
+
+        <section class="px-4 pb-8 lg:px-8">
+          <div class="grid grid-cols-1 gap-6 2xl:grid-cols-[1.45fr_0.95fr]">
+            <div class="space-y-6">
+              <div class="rounded-[2rem] border border-white/70 bg-white/80 p-5 shadow-soft glass">
+                <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                  <div>
+                    <h3 class="text-xl font-bold text-slate-900">Plan masse interactif</h3>
+                    <p class="mt-1 text-sm text-slate-500">Vue des programmes, îlots, villas, appartements, réservations et statuts de vente.</p>
+                  </div>
+                  <div class="flex flex-wrap gap-2">
+                    <template x-for="filter in mapFilters" :key="filter">
+                      <button @click="selectedMapFilter = filter" :class="selectedMapFilter===filter ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'" class="rounded-2xl px-4 py-2 text-sm font-semibold transition" x-text="filter"></button>
+                    </template>
+                  </div>
+                </div>
+
+                <div class="mt-5 overflow-hidden rounded-[2rem] border border-slate-200 bg-slate-950">
+                  <div class="master-grid relative h-[460px]">
+                    <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(52,211,153,0.18),transparent_35%),radial-gradient(circle_at_bottom_right,rgba(56,189,248,0.15),transparent_40%)]"></div>
+                    <div class="absolute left-[5%] top-[8%] text-[11px] font-bold uppercase tracking-[0.3em] text-white/30">Programme Riviera Green Park</div>
+                    <template x-for="lot in lots" :key="lot.id">
+                      <button @click="selectedLot = lot" class="absolute rounded-2xl border text-left shadow-lg transition hover:scale-105"
+                        :style="`left:${lot.x}%; top:${lot.y}%; width:${lot.w}%; height:${lot.h}%; background:${lot.color}; border-color:${lot.border};`">
+                        <div class="flex h-full flex-col justify-between p-3">
+                          <div class="flex items-start justify-between gap-2">
+                            <span class="rounded-full bg-black/20 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-white" x-text="lot.code"></span>
+                            <span class="rounded-full bg-white/20 px-2 py-1 text-[10px] font-semibold text-white" x-text="lot.status"></span>
+                          </div>
+                          <div>
+                            <p class="text-xs font-semibold text-white/85" x-text="lot.client"></p>
+                            <p class="text-[11px] text-white/65" x-text="lot.product"></p>
+                          </div>
+                        </div>
+                      </button>
+                    </template>
+
+                    <div class="absolute bottom-4 left-4 flex flex-wrap gap-2 rounded-2xl border border-white/10 bg-black/25 px-3 py-2 text-xs text-white backdrop-blur-md">
+                      <span class="inline-flex items-center gap-2"><span class="h-3 w-3 rounded-full bg-sky-400"></span> Disponible</span>
+                      <span class="inline-flex items-center gap-2"><span class="h-3 w-3 rounded-full bg-amber-400"></span> Réservé</span>
+                      <span class="inline-flex items-center gap-2"><span class="h-3 w-3 rounded-full bg-emerald-400"></span> Vendu</span>
+                      <span class="inline-flex items-center gap-2"><span class="h-3 w-3 rounded-full bg-violet-400"></span> En construction</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="rounded-[2rem] border border-white/70 bg-white/80 p-5 shadow-soft glass">
+                <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <h3 class="text-xl font-bold text-slate-900">Catalogue des lots et unités</h3>
+                    <p class="text-sm text-slate-500">Commercialisation par programme, typologie, client, budget, statut et niveau de paiement.</p>
+                  </div>
+                  <div class="flex flex-wrap gap-2">
+                    <button class="rounded-2xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700">Filtres avancés</button>
+                    <button class="rounded-2xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white">Exporter pipeline</button>
+                  </div>
+                </div>
+
+                <div class="mt-5 overflow-hidden rounded-[1.75rem] border border-slate-200">
+                  <div class="overflow-x-auto scrollbar-thin">
+                    <table class="min-w-full divide-y divide-slate-200">
+                      <thead class="bg-slate-50/80 text-left text-xs uppercase tracking-[0.2em] text-slate-500">
+                        <tr>
+                          <th class="px-5 py-4">Lot / Unité</th>
+                          <th class="px-5 py-4">Programme</th>
+                          <th class="px-5 py-4">Client</th>
+                          <th class="px-5 py-4">Produit</th>
+                          <th class="px-5 py-4">Prix</th>
+                          <th class="px-5 py-4">Statut</th>
+                          <th class="px-5 py-4">Paiement</th>
+                          <th class="px-5 py-4"></th>
+                        </tr>
+                      </thead>
+                      <tbody class="divide-y divide-slate-100 bg-white">
+                        <template x-for="row in filteredRows" :key="row.id">
+                          <tr class="group hover:bg-slate-50/70">
+                            <td class="px-5 py-4">
+                              <div>
+                                <p class="font-bold text-slate-900" x-text="row.code"></p>
+                                <p class="text-xs text-slate-500" x-text="row.surface"></p>
+                              </div>
+                            </td>
+                            <td class="px-5 py-4 text-sm text-slate-700" x-text="row.program"></td>
+                            <td class="px-5 py-4 text-sm text-slate-700" x-text="row.client"></td>
+                            <td class="px-5 py-4"><span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600" x-text="row.product"></span></td>
+                            <td class="px-5 py-4 text-sm font-semibold text-slate-800" x-text="row.price"></td>
+                            <td class="px-5 py-4"><span class="rounded-full px-3 py-1 text-xs font-bold" :class="row.statusClass" x-text="row.status"></span></td>
+                            <td class="px-5 py-4 text-sm text-slate-500" x-text="row.payment"></td>
+                            <td class="px-5 py-4 text-right">
+                              <button @click="selectedLot = lots.find(l => l.code === row.code)" class="rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white opacity-90 transition hover:opacity-100">Voir fiche</button>
+                            </td>
+                          </tr>
+                        </template>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="space-y-6">
+              <div class="rounded-[2rem] border border-white/70 bg-white/80 p-5 shadow-soft glass">
+                <div class="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 class="text-xl font-bold text-slate-900">Fiche lot / unité</h3>
+                    <p class="text-sm text-slate-500">Vue 360° commerciale, juridique et chantier.</p>
+                  </div>
+                  <button class="rounded-2xl bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700">Contrat</button>
+                </div>
+
+                <div class="mt-5 rounded-[1.75rem] bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 p-5 text-white shadow-glow">
+                  <div class="flex items-center justify-between gap-3">
+                    <div>
+                      <p class="text-xs uppercase tracking-[0.2em] text-white/50">Lot / unité sélectionné</p>
+                      <h4 class="mt-2 text-2xl font-extrabold" x-text="selectedLot.code"></h4>
+                    </div>
+                    <span class="rounded-full bg-white/10 px-3 py-1 text-xs font-bold" x-text="selectedLot.status"></span>
+                  </div>
+                  <div class="mt-5 grid grid-cols-2 gap-4 text-sm">
+                    <div class="rounded-2xl bg-white/5 p-4">
+                      <p class="text-white/50">Client</p>
+                      <p class="mt-1 font-semibold" x-text="selectedLot.client"></p>
+                    </div>
+                    <div class="rounded-2xl bg-white/5 p-4">
+                      <p class="text-white/50">Produit</p>
+                      <p class="mt-1 font-semibold" x-text="selectedLot.product"></p>
+                    </div>
+                    <div class="rounded-2xl bg-white/5 p-4">
+                      <p class="text-white/50">Prix de vente</p>
+                      <p class="mt-1 font-semibold" x-text="selectedLot.price"></p>
+                    </div>
+                    <div class="rounded-2xl bg-white/5 p-4">
+                      <p class="text-white/50">Paiement</p>
+                      <p class="mt-1 font-semibold" x-text="selectedLot.payment"></p>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="mt-5 space-y-3">
+                  <template x-for="detail in lotDetails" :key="detail.label">
+                    <div class="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
+                      <span class="text-sm text-slate-500" x-text="detail.label"></span>
+                      <span class="text-sm font-semibold text-slate-800" x-text="detail.value"></span>
+                    </div>
+                  </template>
+                </div>
+
+                <div class="mt-5 grid grid-cols-2 gap-3">
+                  <button class="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white">Ouvrir dossier client</button>
+                  <button class="rounded-2xl bg-brand-600 px-4 py-3 text-sm font-semibold text-white">Créer réservation</button>
+                  <button class="rounded-2xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">Planifier acte</button>
+                  <button class="rounded-2xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">Suivi paiement</button>
+                </div>
+              </div>
+
+              <div class="rounded-[2rem] border border-white/70 bg-white/80 p-5 shadow-soft glass">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <h3 class="text-xl font-bold text-slate-900">Pipeline commercial</h3>
+                    <p class="text-sm text-slate-500">Cycle client : lead, option, réservation, contrat, encaissement, livraison.</p>
+                  </div>
+                  <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700">9 signatures en attente</span>
+                </div>
+                <div class="mt-5 space-y-4">
+                  <template x-for="wf in workflows" :key="wf.ref">
+                    <div class="rounded-[1.5rem] border border-slate-200 p-4">
+                      <div class="flex items-start justify-between gap-3">
+                        <div>
+                          <p class="text-xs uppercase tracking-[0.2em] text-slate-400" x-text="wf.type"></p>
+                          <h4 class="mt-1 font-bold text-slate-900" x-text="wf.ref"></h4>
+                          <p class="mt-1 text-sm text-slate-500" x-text="wf.client"></p>
+                        </div>
+                        <span class="rounded-full px-3 py-1 text-xs font-bold" :class="wf.badgeClass" x-text="wf.status"></span>
+                      </div>
+                      <div class="mt-4 h-2 overflow-hidden rounded-full bg-slate-100">
+                        <div class="h-full rounded-full bg-gradient-to-r from-brand-500 to-emerald-500" :style="`width:${wf.progress}%`"></div>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </div>
+
+              <div class="rounded-[2rem] border border-white/70 bg-white/80 p-5 shadow-soft glass">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <h3 class="text-xl font-bold text-slate-900">Alertes programme</h3>
+                    <p class="text-sm text-slate-500">Retards de paiement, unités bloquées, actes non signés, livraison à risque.</p>
+                  </div>
+                  <span class="rounded-full bg-rose-100 px-3 py-1 text-xs font-bold text-rose-700">Surveillance active</span>
+                </div>
+                <div class="mt-4 space-y-3">
+                  <template x-for="alert in alerts" :key="alert.title">
+                    <div class="rounded-[1.5rem] border border-slate-200 p-4 transition hover:border-slate-300 hover:bg-slate-50">
+                      <div class="flex items-start gap-3">
+                        <div class="mt-0.5 grid h-10 w-10 place-items-center rounded-2xl" :class="alert.iconBg" x-html="alert.icon"></div>
+                        <div class="min-w-0 flex-1">
+                          <div class="flex items-center justify-between gap-3">
+                            <h4 class="font-semibold text-slate-900" x-text="alert.title"></h4>
+                            <span class="text-xs font-bold text-slate-400" x-text="alert.time"></span>
+                          </div>
+                          <p class="mt-1 text-sm text-slate-500" x-text="alert.text"></p>
+                        </div>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    function estateApp() {
+      return {
+        sidebarOpen: false,
+        activeSection: 'dashboard',
+        search: '',
+        selectedMapFilter: 'Tous',
+        navItems: [
+          { name: 'dashboard', label: 'Dashboard', badge: '', icon: svg('M3 13h8V3H3v10Zm10 8h8V11h-8v10ZM3 21h8v-6H3v6Zm10-10h8V3h-8v8Z') },
+          { name: 'programs', label: 'Programmes', badge: '06', icon: svg('M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6') },
+          { name: 'inventory', label: 'Lots & unités', badge: '248', icon: svg('M3 9.5 12 4l9 5.5v9L12 20l-9-1.5v-9Z') },
+          { name: 'clients', label: 'Clients', badge: '132', icon: svg('M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm10 8v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75') },
+          { name: 'sales', label: 'Réservations & ventes', badge: '41', icon: svg('M20 6 9 17l-5-5') },
+          { name: 'payments', label: 'Paiements', badge: '18', icon: svg('M2 7h20M4 11h16M6 15h6') },
+          { name: 'construction', label: 'Chantier', badge: '', icon: svg('M2 21h20M5 21V8h14v13M9 8V4h6v4') },
+        ],
+        stats: [
+          { label: 'Programmes actifs', value: '06', trend: '+1', iconBg: 'bg-emerald-100 text-emerald-700', icon: svg('M3 21h18M5 21V7l7-4 7 4v14') },
+          { label: 'Lots / unités', value: '248', trend: '+12', iconBg: 'bg-sky-100 text-sky-700', icon: svg('M3 9.5 12 4l9 5.5v9L12 20l-9-1.5v-9Z') },
+          { label: 'Réservés / vendus', value: '173', trend: '+9.6%', iconBg: 'bg-violet-100 text-violet-700', icon: svg('M20 6 9 17l-5-5') },
+          { label: 'Encaissements', value: '1.84 Md', trend: '+6.8%', iconBg: 'bg-amber-100 text-amber-700', icon: svg('M2 7h20M4 11h16M6 15h6') },
+        ],
+        mapFilters: ['Tous', 'Disponibles', 'Réservés', 'Vendus', 'En construction'],
+        lots: [
+          { id: 1, code: 'V-A01', status: 'Vendu', client: 'Mme Kouadio L.', product: 'Villa 4 pièces', price: '125 M FCFA', payment: '92%', surface: '520 m²', color: 'rgba(16,185,129,.82)', border: 'rgba(255,255,255,.22)', x: 9, y: 16, w: 18, h: 18 },
+          { id: 2, code: 'V-A02', status: 'Réservé', client: 'M. Traoré M.', product: 'Villa 5 pièces', price: '148 M FCFA', payment: '35%', surface: '610 m²', color: 'rgba(245,158,11,.82)', border: 'rgba(255,255,255,.22)', x: 31, y: 15, w: 16, h: 18 },
+          { id: 3, code: 'R-B08', status: 'Disponible', client: '—', product: 'Résidence T4', price: '68 M FCFA', payment: '0%', surface: '148 m²', color: 'rgba(56,189,248,.82)', border: 'rgba(255,255,255,.22)', x: 53, y: 10, w: 20, h: 20 },
+          { id: 4, code: 'V-C02', status: 'En construction', client: 'SCI Baobab', product: 'Villa duplex', price: '176 M FCFA', payment: '61%', surface: '700 m²', color: 'rgba(139,92,246,.82)', border: 'rgba(255,255,255,.22)', x: 18, y: 42, w: 18, h: 16 },
+          { id: 5, code: 'R-C03', status: 'Vendu', client: 'M. OGAH S.', product: 'Appartement T3', price: '54 M FCFA', payment: '100%', surface: '112 m²', color: 'rgba(16,185,129,.82)', border: 'rgba(255,255,255,.22)', x: 42, y: 43, w: 22, h: 19 },
+          { id: 6, code: 'V-D01', status: 'Disponible', client: '—', product: 'Villa 4 pièces', price: '118 M FCFA', payment: '0%', surface: '500 m²', color: 'rgba(56,189,248,.82)', border: 'rgba(255,255,255,.22)', x: 68, y: 44, w: 16, h: 18 },
+        ],
+        selectedLot: { code: 'V-A01', status: 'Vendu', client: 'Mme Kouadio L.', product: 'Villa 4 pièces', price: '125 M FCFA', payment: '92%', surface: '520 m²' },
+        rows: [
+          { id: 1, code: 'V-A01', surface: '520 m²', program: 'Riviera Green Park', client: 'Mme Kouadio L.', product: 'Villa 4 pièces', price: '125 M FCFA', status: 'Vendu', statusClass: 'bg-emerald-100 text-emerald-700', payment: '92%' },
+          { id: 2, code: 'V-A02', surface: '610 m²', program: 'Riviera Green Park', client: 'M. Traoré M.', product: 'Villa 5 pièces', price: '148 M FCFA', status: 'Réservé', statusClass: 'bg-amber-100 text-amber-700', payment: '35%' },
+          { id: 3, code: 'R-B08', surface: '148 m²', program: 'Émeraude Résidences', client: 'Disponible', product: 'Appartement T4', price: '68 M FCFA', status: 'Disponible', statusClass: 'bg-sky-100 text-sky-700', payment: '0%' },
+          { id: 4, code: 'V-C02', surface: '700 m²', program: 'Lagune Prestige', client: 'SCI Baobab', product: 'Villa duplex', price: '176 M FCFA', status: 'En construction', statusClass: 'bg-violet-100 text-violet-700', payment: '61%' },
+          { id: 5, code: 'R-C03', surface: '112 m²', program: 'Émeraude Résidences', client: 'M. OGAH S.', product: 'Appartement T3', price: '54 M FCFA', status: 'Vendu', statusClass: 'bg-emerald-100 text-emerald-700', payment: '100%' },
+          { id: 6, code: 'V-D01', surface: '500 m²', program: 'Lagune Prestige', client: 'Disponible', product: 'Villa 4 pièces', price: '118 M FCFA', status: 'Disponible', statusClass: 'bg-sky-100 text-sky-700', payment: '0%' },
+        ],
+        workflows: [
+          { ref: 'RSV-2026-018', type: 'Réservation', client: 'Client: M. Traoré M. / V-A02', status: 'Acompte attendu', progress: 42, badgeClass: 'bg-amber-100 text-amber-700' },
+          { ref: 'VTE-2026-011', type: 'Contrat de vente', client: 'Client: Mme Kouadio L. / V-A01', status: 'Signature notariale', progress: 78, badgeClass: 'bg-sky-100 text-sky-700' },
+          { ref: 'LIV-2026-004', type: 'Livraison', client: 'Client: SCI Baobab / V-C02', status: 'Travaux en cours', progress: 61, badgeClass: 'bg-violet-100 text-violet-700' },
+        ],
+        alerts: [
+          { title: 'Retard d’échéance client', text: 'Le client du lot V-A02 a un solde d’acompte en retard de 9 jours.', time: 'il y a 1h', iconBg: 'bg-rose-100 text-rose-700', icon: svg('M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z') },
+          { title: 'Unité à forte demande', text: 'Le lot R-B08 a généré 14 leads cette semaine, action commerciale conseillée.', time: 'aujourd’hui', iconBg: 'bg-emerald-100 text-emerald-700', icon: svg('M3 3v18h18M7 14l3-3 3 2 5-6') },
+          { title: 'Risque délai chantier', text: 'Le programme Lagune Prestige dépasse le planning prévu de 11 jours.', time: 'hier', iconBg: 'bg-amber-100 text-amber-700', icon: svg('M12 8v4l3 3M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z') },
+        ],
+        get filteredRows() {
+          if (!this.search) return this.rows;
+          const q = this.search.toLowerCase();
+          return this.rows.filter(r =>
+            r.code.toLowerCase().includes(q) ||
+            r.client.toLowerCase().includes(q) ||
+            r.program.toLowerCase().includes(q) ||
+            r.product.toLowerCase().includes(q) ||
+            r.status.toLowerCase().includes(q)
+          );
+        },
+        get lotDetails() {
+          return [
+            { label: 'Programme', value: 'Riviera Green Park' },
+            { label: 'Typologie', value: this.selectedLot.product },
+            { label: 'Surface', value: this.selectedLot.surface },
+            { label: 'Statut commercial', value: this.selectedLot.status },
+            { label: 'Avancement paiement', value: this.selectedLot.payment },
+            { label: 'Étape projet', value: this.selectedLot.status === 'En construction' ? 'Gros œuvre' : 'Dossier commercial actif' },
+          ];
+        }
+      }
+    }
+
+    function svg(path) {
+      return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-5 w-5"><path d="${path}" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+    }
+  </script>
 </body>
 </html>
+
