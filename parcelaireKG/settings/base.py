@@ -154,8 +154,7 @@ STATICFILES_DIRS = [BASE_DIR / 'static'] if (BASE_DIR / 'static').exists() else 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / "media"
 
-GDAL_LIBRARY_PATH = "/opt/homebrew/lib/libgdal.dylib"
-GEOS_LIBRARY_PATH = "/opt/homebrew/lib/libgeos_c.dylib"
+
 
 
 # Default primary key field type
