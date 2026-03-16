@@ -1,0 +1,225 @@
+{% extends "layouts/base.html" %}
+{% load static %}
+
+{% block content %}
+<main class="mx-auto max-w-full px-4 py-6 lg:px-8">
+
+    <section class="mb-6">
+        <div class="hero-card overflow-hidden rounded-[34px] p-6 text-white md:p-8">
+            <div class="grid gap-6 xl:grid-cols-[1.4fr_.9fr]">
+                <div>
+                    <p class="text-xs font-bold uppercase tracking-[0.24em] text-white/60">Fiche programme</p>
+                    <h1 class="mt-3 text-3xl font-black tracking-tight md:text-4xl">
+                        {{ program.name }}
+                    </h1>
+                    <p class="mt-4 max-w-3xl text-sm leading-7 text-white/75 md:text-base">
+                        {{ program.marketing_title|default:program.description|default:"Aucune présentation renseignée pour ce programme." }}
+                    </p>
+
+                    <div class="mt-6 flex flex-wrap gap-3">
+                        <a href="{% url 'program_edit' program.pk %}"
+                           class="inline-flex items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-bold text-slate-900">
+                            <i class="fa-solid fa-pen"></i>
+                            <span>Modifier</span>
+                        </a>
+                        <a href="{% url 'program_delete' program.pk %}"
+                           class="inline-flex items-center gap-2 rounded-2xl bg-white/10 px-5 py-3 text-sm font-bold text-white">
+                            <i class="fa-solid fa-trash"></i>
+                            <span>Supprimer</span>
+                        </a>
+                    </div>
+                </div>
+
+                <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                    <div class="rounded-[24px] bg-white/10 p-4">
+                        <p class="text-xs uppercase tracking-[0.18em] text-white/60">Projet parent</p>
+                        <p class="mt-2 text-2xl font-black">{{ program.project.nom|default:"—" }}</p>
+                    </div>
+                    <div class="rounded-[24px] bg-white/10 p-4">
+                        <p class="text-xs uppercase tracking-[0.18em] text-white/60">Code</p>
+                        <p class="mt-2 text-2xl font-black">{{ program.code|default:"—" }}</p>
+                    </div>
+                    <div class="rounded-[24px] bg-white/10 p-4">
+                        <p class="text-xs uppercase tracking-[0.18em] text-white/60">Parcelles</p>
+                        <p class="mt-2 text-2xl font-black">{{ parcels_count }}</p>
+                    </div>
+                    <div class="rounded-[24px] bg-white/10 p-4">
+                        <p class="text-xs uppercase tracking-[0.18em] text-white/60">Actifs</p>
+                        <p class="mt-2 text-2xl font-black">{{ assets_count }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="grid gap-6 xl:grid-cols-3">
+        <div class="panel rounded-[32px] p-6 xl:col-span-2">
+            <div>
+                <p class="text-xs font-bold uppercase tracking-[0.22em] text-premium-600">Vue d’ensemble</p>
+                <h2 class="mt-2 text-2xl font-black text-slate-900">Informations principales</h2>
+            </div>
+
+            <div class="mt-6 grid gap-4 md:grid-cols-2">
+                <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-soft">
+                    <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Nom</p>
+                    <p class="mt-2 text-lg font-bold text-slate-900">{{ program.name }}</p>
+                </div>
+
+                <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-soft">
+                    <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Code</p>
+                    <p class="mt-2 text-lg font-bold text-slate-900">{{ program.code|default:"—" }}</p>
+                </div>
+
+                <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-soft">
+                    <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Projet</p>
+                    <p class="mt-2 text-lg font-bold text-slate-900">{{ program.project.nom|default:"—" }}</p>
+                </div>
+
+                <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-soft">
+                    <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Statut</p>
+                    <p class="mt-2 text-lg font-bold text-slate-900">{{ program.get_status_display|default:program.status }}</p>
+                </div>
+
+                <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-soft">
+                    <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Pays</p>
+                    <p class="mt-2 text-lg font-bold text-slate-900">{{ program.country|default:"—" }}</p>
+                </div>
+
+                <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-soft">
+                    <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Localisation</p>
+                    <p class="mt-2 text-lg font-bold text-slate-900">{{ program.place|default:"—" }}</p>
+                </div>
+            </div>
+
+            <div class="mt-6 rounded-[28px] border border-slate-200 bg-white p-6 shadow-soft">
+                <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Titre marketing</p>
+                <p class="mt-3 text-base font-semibold text-slate-900">
+                    {{ program.marketing_title|default:"—" }}
+                </p>
+            </div>
+
+            <div class="mt-6 rounded-[28px] border border-slate-200 bg-white p-6 shadow-soft">
+                <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Description</p>
+                <div class="mt-3 text-sm leading-7 text-slate-600">
+                    {{ program.description|default:"Aucune description disponible."|linebreaks }}
+                </div>
+            </div>
+        </div>
+
+        <div class="space-y-6">
+            <div class="panel rounded-[32px] p-6">
+                <p class="text-xs font-bold uppercase tracking-[0.22em] text-premium-600">Indicateurs</p>
+                <h2 class="mt-2 text-2xl font-black text-slate-900">Synthèse</h2>
+
+                <div class="mt-6 space-y-4">
+                    <div class="rounded-[24px] bg-slate-900 p-5 text-white">
+                        <p class="text-xs uppercase tracking-[0.18em] text-white/60">Parcelles totales</p>
+                        <p class="mt-2 text-3xl font-black">{{ parcels_count }}</p>
+                    </div>
+
+                    <div class="rounded-[24px] bg-premium-500 p-5 text-white">
+                        <p class="text-xs uppercase tracking-[0.18em] text-white/60">Actifs immobiliers</p>
+                        <p class="mt-2 text-3xl font-black">{{ assets_count }}</p>
+                    </div>
+
+                    <div class="rounded-[24px] bg-emerald-600 p-5 text-white">
+                        <p class="text-xs uppercase tracking-[0.18em] text-white/60">Parcelles disponibles</p>
+                        <p class="mt-2 text-3xl font-black">{{ available_parcels_count }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel rounded-[32px] p-6">
+                <p class="text-xs font-bold uppercase tracking-[0.22em] text-premium-600">Actions</p>
+                <h2 class="mt-2 text-2xl font-black text-slate-900">Navigation</h2>
+
+                <div class="mt-6 space-y-3">
+                    <a href="{% url 'program_edit' program.pk %}"
+                       class="flex items-center justify-between rounded-2xl bg-white px-4 py-4 soft-ring transition hover:-translate-y-0.5">
+                        <span class="font-semibold text-slate-800">Modifier le programme</span>
+                        <i class="fa-solid fa-arrow-right text-premium-600"></i>
+                    </a>
+
+                    <a href="{% url 'parcel_list' %}"
+                       class="flex items-center justify-between rounded-2xl bg-white px-4 py-4 soft-ring transition hover:-translate-y-0.5">
+                        <span class="font-semibold text-slate-800">Voir les parcelles</span>
+                        <i class="fa-solid fa-arrow-right text-premium-600"></i>
+                    </a>
+
+                    <a href="{% url 'project_detail' program.project.pk %}"
+                       class="flex items-center justify-between rounded-2xl bg-white px-4 py-4 soft-ring transition hover:-translate-y-0.5">
+                        <span class="font-semibold text-slate-800">Retour au projet</span>
+                        <i class="fa-solid fa-arrow-right text-premium-600"></i>
+                    </a>
+
+                    <a href="{% url 'program_delete' program.pk %}"
+                       class="flex items-center justify-between rounded-2xl bg-rose-50 px-4 py-4 ring-1 ring-rose-100 transition hover:-translate-y-0.5">
+                        <span class="font-semibold text-rose-700">Supprimer le programme</span>
+                        <i class="fa-solid fa-trash text-rose-600"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="mt-6 grid gap-6 xl:grid-cols-3">
+        <div class="panel rounded-[32px] p-6">
+            <p class="text-xs font-bold uppercase tracking-[0.22em] text-premium-600">Phases</p>
+            <h2 class="mt-2 text-2xl font-black text-slate-900">Phases du programme</h2>
+
+            <div class="mt-6 space-y-3">
+                {% for phase in phases %}
+                    <div class="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-soft">
+                        <div class="font-bold text-slate-900">{{ phase.name }}</div>
+                        <div class="mt-1 text-sm text-slate-500">
+                            Ordre : {{ phase.order|default:"—" }}
+                        </div>
+                    </div>
+                {% empty %}
+                    <div class="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500 ring-1 ring-slate-200">
+                        Aucune phase active.
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="panel rounded-[32px] p-6">
+            <p class="text-xs font-bold uppercase tracking-[0.22em] text-premium-600">Datasets</p>
+            <h2 class="mt-2 text-2xl font-black text-slate-900">Jeux de données</h2>
+
+            <div class="mt-6 space-y-3">
+                {% for dataset in datasets %}
+                    <div class="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-soft">
+                        <div class="font-bold text-slate-900">{{ dataset.name|default:dataset }}</div>
+                        <div class="mt-1 text-sm text-slate-500">
+                            Créé le {{ dataset.created_at|date:"d/m/Y H:i" }}
+                        </div>
+                    </div>
+                {% empty %}
+                    <div class="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500 ring-1 ring-slate-200">
+                        Aucun dataset actif.
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="panel rounded-[32px] p-6">
+            <p class="text-xs font-bold uppercase tracking-[0.22em] text-premium-600">Îlots</p>
+            <h2 class="mt-2 text-2xl font-black text-slate-900">Blocs associés</h2>
+
+            <div class="mt-6 space-y-3">
+                {% for block in blocks %}
+                    <div class="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-soft">
+                        <div class="font-bold text-slate-900">{{ block.code }}</div>
+                    </div>
+                {% empty %}
+                    <div class="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500 ring-1 ring-slate-200">
+                        Aucun bloc actif.
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    </section>
+
+</main>
+{% endblock %}

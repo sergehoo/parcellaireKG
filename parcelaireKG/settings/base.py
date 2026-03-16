@@ -1,4 +1,3 @@
-
 """
 Django settings for parcelaireKG project.
 
@@ -18,13 +17,11 @@ from celery.schedules import crontab
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
-
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-9uzaef-rpxlqoxg!juy_7x3z*a9!y7%mhtajqaamyp9x(#0qr8'
 
+SECRET_KEY = 'django-insecure-9uzaef-rpxlqoxg!juy_7x3z*a9!y7%mhtajqaamyp9x(#0qr8'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
@@ -60,14 +57,11 @@ INSTALLED_APPS = [
     'django_select2',
     'widget_tweaks',
     'djmoney',
-
     # 'autocomplete_light',
     # 'import_export_extensions',
     'tinymce',
     'simple_history',
-
     'num2words',
-
     'django_filters',
     'qr_code',
     'notifications',
@@ -76,7 +70,6 @@ INSTALLED_APPS = [
     'drf_spectacular',
     'corsheaders',
     'parcelaire'
-
 ]
 
 MIDDLEWARE = [
@@ -89,7 +82,6 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'simple_history.middleware.HistoryRequestMiddleware',
     "allauth.account.middleware.AccountMiddleware",
-
 ]
 
 ROOT_URLCONF = 'parcelaireKG.urls'
@@ -112,13 +104,8 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'parcelaireKG.wsgi.application'
-
-
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
-
-
-
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
@@ -159,8 +146,6 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / "media"
 
 
-
-
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
@@ -176,7 +161,6 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": crontab(hour=2, minute=0),
     },
 }
-
 
 CELERY_BROKER_URL = "redis://127.0.0.1:6379/0"
 CELERY_RESULT_BACKEND = "redis://127.0.0.1:6379/0"

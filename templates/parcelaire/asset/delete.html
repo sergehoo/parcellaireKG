@@ -1,0 +1,37 @@
+{% extends "layouts/base.html" %}
+
+{% block content %}
+<main class="mx-auto max-w-3xl px-4 py-10 lg:px-8">
+
+    <section class="panel rounded-[32px] p-8 text-center">
+        <div class="mx-auto grid h-20 w-20 place-items-center rounded-[28px] bg-rose-50 text-rose-600">
+            <i class="fa-solid fa-trash text-3xl"></i>
+        </div>
+
+        <h1 class="mt-6 text-3xl font-black text-slate-900">
+            Supprimer cet actif immobilier ?
+        </h1>
+
+        <p class="mx-auto mt-4 max-w-2xl text-sm leading-7 text-slate-500">
+            Vous êtes sur le point de supprimer définitivement l’actif
+            <strong>{{ object.label|default:"—" }}</strong>.
+            Cette action est irréversible.
+        </p>
+
+        <form method="post" class="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            {% csrf_token %}
+
+            <a href="{% url 'asset_detail' object.pk %}"
+               class="rounded-2xl bg-white px-5 py-3 text-sm font-bold text-slate-700 soft-ring">
+                Annuler
+            </a>
+
+            <button type="submit"
+                    class="rounded-2xl bg-rose-600 px-5 py-3 text-sm font-bold text-white shadow-lg">
+                Confirmer la suppression
+            </button>
+        </form>
+    </section>
+
+</main>
+{% endblock %}

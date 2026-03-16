@@ -1,0 +1,39 @@
+{% extends "layouts/base.html" %}
+{% load static %}
+
+{% block content %}
+<main class="mx-auto max-w-3xl px-4 py-8 lg:px-8">
+    <section class="panel rounded-[32px] p-8 text-center">
+        <div class="mx-auto grid h-20 w-20 place-items-center rounded-[28px] bg-rose-50 text-rose-600">
+            <i class="fa-solid fa-trash text-3xl"></i>
+        </div>
+
+        <p class="mt-6 text-xs font-bold uppercase tracking-[0.24em] text-rose-500">Suppression</p>
+        <h1 class="mt-3 text-3xl font-black tracking-tight text-slate-900">
+            Supprimer ce client ?
+        </h1>
+
+        <p class="mx-auto mt-4 max-w-xl text-sm leading-7 text-slate-500">
+            Vous êtes sur le point de supprimer
+            <span class="font-bold text-slate-800">
+                {% if object.customer_type == "COMPANY" %}
+                    {{ object.company_name|default:"ce client" }}
+                {% else %}
+                    {{ object.first_name }} {{ object.last_name }}
+                {% endif %}
+            </span>.
+            Cette action est sensible.
+        </p>
+
+        <form method="post" class="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            {% csrf_token %}
+            <a href="{% url 'customer_detail' object.pk %}" class="inline-flex items-center justify-center rounded-2xl bg-white px-5 py-3 text-sm font-bold text-slate-700 soft-ring">
+                Annuler
+            </a>
+            <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-rose-500 px-5 py-3 text-sm font-bold text-white shadow-lg">
+                Confirmer la suppression
+            </button>
+        </form>
+    </section>
+</main>
+{% endblock %}

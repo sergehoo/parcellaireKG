@@ -9,7 +9,7 @@ from django.views.generic import TemplateView, DeleteView, UpdateView, CreateVie
 
 from parcelaire.forms import ProgramPhaseForm, ParcelDatasetForm, ProgramBlockForm, ParcelForm, CustomerForm, \
     ReservationForm, SaleFileForm, PaymentForm, ConstructionProjectForm, ConstructionUpdateForm, ConstructionPhotoForm, \
-    ConstructionMediaForm, RealEstateProgramForm, ProjetImmobilierForm
+    ConstructionMediaForm, RealEstateProgramForm, ProjetImmobilierForm, LeadForm, PropertyAssetForm
 from parcelaire.models import ProgramBlock, ProjetImmobilier, RealEstateProgram, Parcel, PropertyAsset, Customer, Lead, \
     Reservation, SaleFile, ProgramPhase, ParcelDataset, Payment, ConstructionProject, ConstructionUpdate, \
     ConstructionPhoto, ConstructionMedia
@@ -329,6 +329,11 @@ class ParcelDatasetListView(LoginRequiredMixin, SearchFilterMixin, ListView):
     context_object_name = "datasets"
     paginate_by = 20
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["programs"] = RealEstateProgram.objects.filter(is_active=True).order_by("name")
+        context["selected_program"] = self.request.GET.get("program", "")
+        return context
     def apply_filters(self, queryset):
         queryset = queryset.filter(is_active=True).select_related("program", "phase")
         program_id = self.request.GET.get("program")
@@ -423,6 +428,13 @@ class ProgramBlockListView(LoginRequiredMixin, SearchFilterMixin, ListView):
 
         return queryset.order_by("code")
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["programs"] = RealEstateProgram.objects.filter(is_active=True).order_by("name")
+        context["phases"] = ProgramPhase.objects.filter(is_active=True).select_related("program").order_by("program__name", "order", "name")
+        context["selected_program"] = self.request.GET.get("program", "")
+        context["selected_phase"] = self.request.GET.get("phase", "")
+        return context
 
 class ProgramBlockDetailView(LoginRequiredMixin, DetailView):
     model = ProgramBlock
@@ -663,7 +675,215 @@ class ReservationUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView)
     success_message = "Réservation mise à jour avec succès."
     success_url = reverse_lazy("reservation_list")
 
+# =========================================================
+# PROPERTY ASSET
+# =========================================================
 
+class PropertyAssetListView(LoginRequiredMixin, SearchFilterMixin, ListView):
+    model = PropertyAsset
+    template_name = "parcelaire/asset/list.html"
+    context_object_name = "assets"
+    paginate_by = 30
+
+    def apply_filters(self, queryset):
+        queryset = queryset.filter(is_active=True).select_related(
+            "program",
+            "program__project",
+            "phase",
+            "parcel",
+            "property_type",
+        )
+
+        project_id = self.request.GET.get("project")
+        program_id = self.request.GET.get("program")
+        phase_id = self.request.GET.get("phase")
+        status = self.request.GET.get("status")
+        q = self.get_search_query()
+
+        if project_id:
+            queryset = queryset.filter(program__project_id=project_id)
+
+        if program_id:
+            queryset = queryset.filter(program_id=program_id)
+
+        if phase_id:
+            queryset = queryset.filter(phase_id=phase_id)
+
+        if status:
+            queryset = queryset.filter(status=status)
+
+        if q:
+            queryset = queryset.filter(
+                Q(label__icontains=q)
+                | Q(code__icontains=q)
+                | Q(program__name__icontains=q)
+                | Q(program__project__nom__icontains=q)
+                | Q(parcel__lot_number__icontains=q)
+                | Q(parcel__parcel_code__icontains=q)
+                | Q(property_type__label__icontains=q)
+            )
+
+        return queryset.order_by("program__name", "code", "label")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["projects"] = ProjetImmobilier.objects.filter(is_active=True).order_by("nom")
+        context["programs"] = RealEstateProgram.objects.filter(is_active=True).order_by("name")
+        context["phases"] = ProgramPhase.objects.filter(is_active=True).order_by("program__name", "order", "name")
+        context["status_choices"] = getattr(PropertyAsset, "STATUS_CHOICES", [])
+        context["selected_project"] = self.request.GET.get("project", "")
+        context["selected_program"] = self.request.GET.get("program", "")
+        context["selected_phase"] = self.request.GET.get("phase", "")
+        context["selected_status"] = self.request.GET.get("status", "")
+        return context
+
+
+class PropertyAssetDetailView(LoginRequiredMixin, DetailView):
+    model = PropertyAsset
+    template_name = "parcelaire/asset/detail.html"
+    context_object_name = "asset"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        asset = self.object
+        parcel = getattr(asset, "parcel", None)
+
+        context["documents"] = getattr(asset, "documents", None).all().order_by("-created_at") if hasattr(asset, "documents") else []
+        context["photos"] = getattr(asset, "photos", None).all().order_by("-created_at") if hasattr(asset, "photos") else []
+        context["updates"] = getattr(asset, "updates", None).all().order_by("-created_at") if hasattr(asset, "updates") else []
+        context["parcel"] = parcel
+        context["program"] = asset.program
+        context["project"] = asset.program.project if asset.program and getattr(asset.program, "project", None) else None
+        return context
+
+
+class PropertyAssetCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView):
+    model = PropertyAsset
+    form_class = PropertyAssetForm
+    template_name = "parcelaire/asset/form.html"
+    success_message = "Actif immobilier créé avec succès."
+
+    def get_initial(self):
+        initial = super().get_initial()
+        program_id = self.request.GET.get("program")
+        phase_id = self.request.GET.get("phase")
+        parcel_id = self.request.GET.get("parcel")
+
+        if program_id:
+            initial["program"] = program_id
+        if phase_id:
+            initial["phase"] = phase_id
+        if parcel_id:
+            initial["parcel"] = parcel_id
+
+        return initial
+
+    def get_success_url(self):
+        return reverse("asset_detail", kwargs={"pk": self.object.pk})
+
+
+class PropertyAssetUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
+    model = PropertyAsset
+    form_class = PropertyAssetForm
+    template_name = "parcelaire/asset/form.html"
+    success_message = "Actif immobilier mis à jour avec succès."
+
+    def get_success_url(self):
+        return reverse("asset_detail", kwargs={"pk": self.object.pk})
+
+
+class PropertyAssetDeleteView(LoginRequiredMixin, DeleteView):
+    model = PropertyAsset
+    template_name = "parcelaire/asset/delete.html"
+
+    def get_success_url(self):
+        return reverse("asset_list")
+
+
+# =========================================================
+# LEAD
+# =========================================================
+
+class LeadListView(LoginRequiredMixin, SearchFilterMixin, ListView):
+    model = Lead
+    template_name = "parcelaire/lead/list.html"
+    context_object_name = "leads"
+    paginate_by = 30
+
+    def apply_filters(self, queryset):
+        queryset = queryset.filter(is_active=True).select_related(
+            "program",
+            "parcel",
+            "customer",
+        )
+
+        status = self.request.GET.get("status")
+        program_id = self.request.GET.get("program")
+        q = self.get_search_query()
+
+        if status:
+            queryset = queryset.filter(status=status)
+
+        if program_id:
+            queryset = queryset.filter(program_id=program_id)
+
+        if q:
+            queryset = queryset.filter(
+                Q(first_name__icontains=q)
+                | Q(last_name__icontains=q)
+                | Q(email__icontains=q)
+                | Q(phone__icontains=q)
+                | Q(company_name__icontains=q)
+                | Q(reference__icontains=q)
+                | Q(program__name__icontains=q)
+                | Q(parcel__lot_number__icontains=q)
+                | Q(parcel__parcel_code__icontains=q)
+            )
+
+        return queryset.order_by("-created_at")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["programs"] = RealEstateProgram.objects.filter(is_active=True).order_by("name")
+        context["status_choices"] = getattr(Lead, "STATUS_CHOICES", [])
+        context["selected_program"] = self.request.GET.get("program", "")
+        context["selected_status"] = self.request.GET.get("status", "")
+        return context
+
+
+class LeadCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView):
+    model = Lead
+    form_class = LeadForm
+    template_name = "parcelaire/lead/form.html"
+    success_message = "Lead créé avec succès."
+
+    def get_initial(self):
+        initial = super().get_initial()
+        program_id = self.request.GET.get("program")
+        parcel_id = self.request.GET.get("parcel")
+        customer_id = self.request.GET.get("customer")
+
+        if program_id:
+            initial["program"] = program_id
+        if parcel_id:
+            initial["parcel"] = parcel_id
+        if customer_id:
+            initial["customer"] = customer_id
+
+        return initial
+
+    def get_success_url(self):
+        return reverse("lead_list")
+
+
+class LeadUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
+    model = Lead
+    form_class = LeadForm
+    template_name = "parcelaire/lead/form.html"
+    success_message = "Lead mis à jour avec succès."
+
+    def get_success_url(self):
+        return reverse("lead_list")
 class SaleFileListView(LoginRequiredMixin, SearchFilterMixin, ListView):
     model = SaleFile
     template_name = "parcelaire/sale/list.html"

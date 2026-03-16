@@ -1,0 +1,194 @@
+{% extends "layouts/base.html" %}
+{% load static %}
+
+{% block content %}
+<main class="mx-auto max-w-full px-4 py-6 lg:px-8">
+
+    <section class="mb-6">
+        <div class="hero-card overflow-hidden rounded-[34px] p-6 text-white md:p-8">
+            <div class="grid gap-6 xl:grid-cols-[1.4fr_.9fr]">
+                <div>
+                    <p class="text-xs font-bold uppercase tracking-[0.24em] text-white/60">Fiche parcelle</p>
+                    <h2 class="mt-3 text-3xl font-black tracking-tight md:text-4xl">
+                        Lot {{ parcel.lot_number|default:"—" }}
+                    </h2>
+                    <p class="mt-4 max-w-3xl text-sm leading-7 text-white/75 md:text-base">
+                        Consultez les informations foncières, commerciales et documentaires de cette parcelle,
+                        ainsi que les actifs, réservations, ventes et éléments techniques qui lui sont associés.
+                    </p>
+                </div>
+
+                <div class="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+                    <div class="rounded-[24px] bg-white/10 p-4">
+                        <p class="text-xs uppercase tracking-[0.18em] text-white/60">Code</p>
+                        <p class="mt-2 text-2xl font-black">{{ parcel.parcel_code|default:"—" }}</p>
+                    </div>
+                    <div class="rounded-[24px] bg-white/10 p-4">
+                        <p class="text-xs uppercase tracking-[0.18em] text-white/60">Statut</p>
+                        <p class="mt-2 text-lg font-black">{{ parcel.get_commercial_status_display|default:parcel.commercial_status }}</p>
+                    </div>
+                    <div class="rounded-[24px] bg-white/10 p-4">
+                        <p class="text-xs uppercase tracking-[0.18em] text-white/60">Surface</p>
+                        <p class="mt-2 text-2xl font-black">
+                            {% if parcel.official_area_m2 %}{{ parcel.official_area_m2 }} m²{% else %}—{% endif %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="grid gap-6 xl:grid-cols-3">
+        <div class="panel rounded-[30px] p-6">
+            <p class="text-xs font-bold uppercase tracking-[0.22em] text-premium-600">Informations</p>
+            <h2 class="mt-2 text-2xl font-black text-slate-900">Données générales</h2>
+
+            <div class="mt-6 space-y-3">
+                <div class="rounded-2xl bg-white p-4 soft-ring">
+                    <p class="text-xs uppercase tracking-[0.16em] text-slate-400">Lot</p>
+                    <p class="mt-2 text-base font-bold text-slate-900">{{ parcel.lot_number|default:"—" }}</p>
+                </div>
+
+                <div class="rounded-2xl bg-white p-4 soft-ring">
+                    <p class="text-xs uppercase tracking-[0.16em] text-slate-400">Code parcelle</p>
+                    <p class="mt-2 text-base font-bold text-slate-900">{{ parcel.parcel_code|default:"—" }}</p>
+                </div>
+
+                <div class="rounded-2xl bg-white p-4 soft-ring">
+                    <p class="text-xs uppercase tracking-[0.16em] text-slate-400">Référence externe</p>
+                    <p class="mt-2 text-base font-bold text-slate-900">{{ parcel.external_reference|default:"—" }}</p>
+                </div>
+
+                <div class="rounded-2xl bg-white p-4 soft-ring">
+                    <p class="text-xs uppercase tracking-[0.16em] text-slate-400">Programme</p>
+                    <p class="mt-2 text-base font-bold text-slate-900">{{ parcel.program.name|default:"—" }}</p>
+                </div>
+
+                <div class="rounded-2xl bg-white p-4 soft-ring">
+                    <p class="text-xs uppercase tracking-[0.16em] text-slate-400">Phase</p>
+                    <p class="mt-2 text-base font-bold text-slate-900">{{ parcel.phase.name|default:"—" }}</p>
+                </div>
+
+                <div class="rounded-2xl bg-white p-4 soft-ring">
+                    <p class="text-xs uppercase tracking-[0.16em] text-slate-400">Îlot</p>
+                    <p class="mt-2 text-base font-bold text-slate-900">{{ parcel.block.code|default:"—" }}</p>
+                </div>
+            </div>
+
+            <div class="mt-6 flex flex-col gap-3">
+                <a href="{% url 'parcel_edit' parcel.pk %}" class="inline-flex items-center justify-center gap-2 rounded-2xl bg-premium-500 px-5 py-3 text-sm font-bold text-white">
+                    <i class="fa-solid fa-pen"></i>
+                    <span>Modifier</span>
+                </a>
+                <a href="{% url 'parcel_delete' parcel.pk %}" class="inline-flex items-center justify-center gap-2 rounded-2xl bg-rose-50 px-5 py-3 text-sm font-bold text-rose-700 ring-1 ring-rose-100">
+                    <i class="fa-solid fa-trash"></i>
+                    <span>Supprimer</span>
+                </a>
+            </div>
+        </div>
+
+        <div class="xl:col-span-2 space-y-6">
+
+            <div class="panel rounded-[30px] p-6">
+                <p class="text-xs font-bold uppercase tracking-[0.22em] text-premium-600">Actifs immobiliers</p>
+                <h2 class="mt-2 text-2xl font-black text-slate-900">Actifs liés à la parcelle</h2>
+
+                <div class="mt-6 space-y-3">
+                    {% for asset in assets %}
+                        <div class="rounded-2xl bg-white p-4 soft-ring">
+                            <p class="font-bold text-slate-900">{{ asset.label|default:asset.code }}</p>
+                            <p class="mt-1 text-sm text-slate-500">{{ asset.property_type.label|default:"Actif immobilier" }}</p>
+                        </div>
+                    {% empty %}
+                        <p class="text-sm text-slate-500">Aucun actif lié à cette parcelle.</p>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="grid gap-6 lg:grid-cols-2">
+                <div class="panel rounded-[30px] p-6">
+                    <p class="text-xs font-bold uppercase tracking-[0.22em] text-premium-600">Documents</p>
+                    <h2 class="mt-2 text-2xl font-black text-slate-900">Pièces associées</h2>
+
+                    <div class="mt-6 space-y-3">
+                        {% for document in documents %}
+                            <div class="rounded-2xl bg-white p-4 soft-ring">
+                                <p class="font-bold text-slate-900">{{ document.title|default:"Document" }}</p>
+                                <p class="mt-1 text-sm text-slate-500">{{ document.created_at|date:"d/m/Y H:i" }}</p>
+                            </div>
+                        {% empty %}
+                            <p class="text-sm text-slate-500">Aucun document disponible.</p>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="panel rounded-[30px] p-6">
+                    <p class="text-xs font-bold uppercase tracking-[0.22em] text-premium-600">Construction</p>
+                    <h2 class="mt-2 text-2xl font-black text-slate-900">Chantiers associés</h2>
+
+                    <div class="mt-6 space-y-3">
+                        {% for project in construction_projects %}
+                            <div class="rounded-2xl bg-white p-4 soft-ring">
+                                <p class="font-bold text-slate-900">{{ project.name|default:"Projet de construction" }}</p>
+                                <p class="mt-1 text-sm text-slate-500">{{ project.created_at|date:"d/m/Y H:i" }}</p>
+                            </div>
+                        {% empty %}
+                            <p class="text-sm text-slate-500">Aucun chantier associé.</p>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="panel rounded-[30px] p-6">
+                    <p class="text-xs font-bold uppercase tracking-[0.22em] text-premium-600">Réservations</p>
+                    <h2 class="mt-2 text-2xl font-black text-slate-900">Historique réservation</h2>
+
+                    <div class="mt-6 space-y-3">
+                        {% for reservation in reservations %}
+                            <div class="rounded-2xl bg-white p-4 soft-ring">
+                                <p class="font-bold text-slate-900">{{ reservation.customer|default:"Client" }}</p>
+                                <p class="mt-1 text-sm text-slate-500">{{ reservation.created_at|date:"d/m/Y H:i" }}</p>
+                            </div>
+                        {% empty %}
+                            <p class="text-sm text-slate-500">Aucune réservation enregistrée.</p>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="panel rounded-[30px] p-6">
+                    <p class="text-xs font-bold uppercase tracking-[0.22em] text-premium-600">Ventes</p>
+                    <h2 class="mt-2 text-2xl font-black text-slate-900">Historique vente</h2>
+
+                    <div class="mt-6 space-y-3">
+                        {% for sale in sales %}
+                            <div class="rounded-2xl bg-white p-4 soft-ring">
+                                <p class="font-bold text-slate-900">{{ sale.customer|default:"Client" }}</p>
+                                <p class="mt-1 text-sm text-slate-500">{{ sale.created_at|date:"d/m/Y H:i" }}</p>
+                            </div>
+                        {% empty %}
+                            <p class="text-sm text-slate-500">Aucune vente enregistrée.</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel rounded-[30px] p-6">
+                <p class="text-xs font-bold uppercase tracking-[0.22em] text-premium-600">Historique géométrique</p>
+                <h2 class="mt-2 text-2xl font-black text-slate-900">Évolution du contour</h2>
+
+                <div class="mt-6 space-y-3">
+                    {% for history in geometry_history %}
+                        <div class="rounded-2xl bg-white p-4 soft-ring">
+                            <p class="font-bold text-slate-900">{{ history.created_at|date:"d/m/Y H:i" }}</p>
+                            <p class="mt-1 text-sm text-slate-500">{{ history }}</p>
+                        </div>
+                    {% empty %}
+                        <p class="text-sm text-slate-500">Aucun historique géométrique disponible.</p>
+                    {% endfor %}
+                </div>
+            </div>
+
+        </div>
+    </section>
+
+</main>
+{% endblock %}

@@ -1,0 +1,202 @@
+{% extends "layouts/base.html" %}
+{% load static %}
+
+{% block  content %}
+	<main class="mx-auto max-w-full px-4 py-6 lg:px-8">
+
+                <!-- Hero -->
+                <section class="mb-6">
+    <div class="hero-card overflow-hidden rounded-[34px] p-6 text-white md:p-8">
+        <div class="grid gap-6 xl:grid-cols-[1.35fr_.95fr]">
+            <div>
+                <p class="text-xs font-bold uppercase tracking-[0.24em] text-white/60">
+                    Référentiel projets
+                </p>
+                <h2 class="mt-3 text-3xl font-black tracking-tight md:text-4xl">
+                    Structurez et pilotez vos projets immobiliers
+                </h2>
+                <p class="mt-4 max-w-3xl text-sm leading-7 text-white/75 md:text-base">
+                    Cette vue centralise l’ensemble des projets immobiliers actifs de votre portefeuille.
+                    Elle vous permet d’identifier rapidement chaque opération, sa localisation, son code
+                    de référence et de naviguer vers les programmes, parcelles et activités associées.
+                </p>
+
+                <div class="mt-6 flex flex-wrap gap-3">
+                    <a href="{% url 'project_add' %}"
+                       class="inline-flex items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-bold text-slate-900">
+                        <i class="fa-solid fa-plus"></i>
+                        <span>Nouveau projet</span>
+                    </a>
+
+                    <a href="{% url 'program_list' %}"
+                       class="inline-flex items-center gap-2 rounded-2xl bg-white/10 px-5 py-3 text-sm font-bold text-white">
+                        <i class="fa-solid fa-map-location-dot"></i>
+                        <span>Voir les programmes</span>
+                    </a>
+                </div>
+            </div>
+
+            <div class="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+                <div class="rounded-[24px] bg-white/10 p-4">
+                    <p class="text-xs uppercase tracking-[0.18em] text-white/60">Total projets</p>
+                    <p class="mt-2 text-3xl font-black">{{ page_obj.paginator.count }}</p>
+                </div>
+                <div class="rounded-[24px] bg-white/10 p-4">
+                    <p class="text-xs uppercase tracking-[0.18em] text-white/60">Page courante</p>
+                    <p class="mt-2 text-3xl font-black">{{ page_obj.number }}</p>
+                </div>
+                <div class="rounded-[24px] bg-white/10 p-4">
+                    <p class="text-xs uppercase tracking-[0.18em] text-white/60">Pagination</p>
+                    <p class="mt-2 text-3xl font-black">{{ page_obj.paginator.per_page }} /page</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+                <!-- Table -->
+                <section class="panel rounded-[32px] p-6">
+                    <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                        <div>
+                            <p class="text-xs font-bold uppercase tracking-[0.22em] text-premium-600">Vue tabulaire</p>
+                            <h2 class="mt-2 text-2xl font-black text-slate-900">Projets immobiliers</h2>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-700 soft-ring">
+                                {{ page_obj.paginator.count }} projet{{ page_obj.paginator.count|pluralize }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="scrollbar-thin mt-6 overflow-x-auto">
+                        <table class="min-w-full overflow-hidden rounded-3xl bg-white">
+                            <thead class="bg-slate-50">
+                            <tr>
+                                <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Projet</th>
+                                <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Code</th>
+                                <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Pays</th>
+                                <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Localisation</th>
+                                <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Description</th>
+                                <th class="px-5 py-4 text-right text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Actions</th>
+                            </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                            {% for project in projects %}
+                                <tr class="table-row-hover">
+                                    <td class="px-5 py-4">
+                                        <div class="flex items-start gap-3">
+                                            <div class="grid h-11 w-11 place-items-center rounded-2xl bg-premium-50 text-premium-600">
+                                                <i class="fa-solid fa-diagram-project"></i>
+                                            </div>
+                                            <div>
+                                                <div class="font-bold text-slate-900">{{ project.nom }}</div>
+                                                <div class="mt-1 text-xs text-slate-500">
+                                                    Projet immobilier actif
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    <td class="px-5 py-4">
+                                        <span class="rounded-full bg-slate-100 px-3 py-1 text-sm font-bold text-slate-700">
+                                            {{ project.code|default:"—" }}
+                                        </span>
+                                    </td>
+
+                                    <td class="px-5 py-4">
+                                        <div class="text-sm font-semibold text-slate-700">
+                                            {{ project.country|default:"—" }}
+                                        </div>
+                                    </td>
+
+                                    <td class="px-5 py-4">
+                                        <div class="text-sm text-slate-700">
+                                            {{ project.place|default:"—" }}
+                                        </div>
+                                    </td>
+
+                                    <td class="px-5 py-4">
+                                        <div class="max-w-md text-sm leading-6 text-slate-500">
+                                            {{ project.description|default:"Aucune description"|truncatechars:120 }}
+                                        </div>
+                                    </td>
+
+                                    <td class="px-5 py-4">
+                                        <div class="flex items-center justify-end gap-2">
+                                            <a href="{% url 'project_detail' project.pk %}" class="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-3 py-2 text-xs font-bold text-white transition hover:opacity-95">
+                                                <i class="fa-solid fa-eye"></i>
+                                                <span>Voir</span>
+                                            </a>
+                                            <a href="{% url 'project_edit' project.pk %}" class="inline-flex items-center gap-2 rounded-2xl bg-premium-500 px-3 py-2 text-xs font-bold text-white transition hover:bg-premium-600">
+                                                <i class="fa-solid fa-pen"></i>
+                                                <span>Modifier</span>
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% empty %}
+                                <tr>
+                                    <td colspan="6" class="px-5 py-14 text-center">
+                                        <div class="mx-auto max-w-lg">
+                                            <div class="mx-auto grid h-16 w-16 place-items-center rounded-3xl bg-slate-100 text-slate-400">
+                                                <i class="fa-solid fa-folder-open text-2xl"></i>
+                                            </div>
+                                            <h3 class="mt-4 text-lg font-bold text-slate-900">Aucun projet trouvé</h3>
+                                            <p class="mt-2 text-sm leading-6 text-slate-500">
+                                                Aucun projet immobilier actif ne correspond à votre recherche actuelle.
+                                            </p>
+                                            <div class="mt-5">
+                                                <a href="{% url 'project_add' %}" class="inline-flex items-center gap-2 rounded-2xl premium-gradient px-5 py-3 text-sm font-bold text-white shadow-lg">
+                                                    <i class="fa-solid fa-plus"></i>
+                                                    <span>Créer un projet</span>
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Pagination -->
+                    {% if is_paginated %}
+                        <div class="mt-6 flex flex-col items-center justify-between gap-4 border-t border-slate-200 pt-5 md:flex-row">
+                            <p class="text-sm text-slate-500">
+                                Page <span class="font-bold text-slate-800">{{ page_obj.number }}</span>
+                                sur <span class="font-bold text-slate-800">{{ page_obj.paginator.num_pages }}</span>
+                            </p>
+
+                            <div class="flex flex-wrap items-center gap-2">
+                                {% if page_obj.has_previous %}
+                                    <a href="?{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}page=1"
+                                       class="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-slate-700 soft-ring">
+                                        Début
+                                    </a>
+                                    <a href="?{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}page={{ page_obj.previous_page_number }}"
+                                       class="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-slate-700 soft-ring">
+                                        Précédent
+                                    </a>
+                                {% endif %}
+
+                                <span class="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-bold text-white">
+                                    {{ page_obj.number }}
+                                </span>
+
+                                {% if page_obj.has_next %}
+                                    <a href="?{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}page={{ page_obj.next_page_number }}"
+                                       class="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-slate-700 soft-ring">
+                                        Suivant
+                                    </a>
+                                    <a href="?{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}page={{ page_obj.paginator.num_pages }}"
+                                       class="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-slate-700 soft-ring">
+                                        Fin
+                                    </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endif %}
+                </section>
+
+            </main>
+{% endblock %}

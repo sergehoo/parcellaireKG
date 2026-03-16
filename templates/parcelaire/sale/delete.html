@@ -1,0 +1,37 @@
+{% extends "layouts/base.html" %}
+
+{% block content %}
+
+    <main class="mx-auto max-w-3xl px-4 py-10">
+
+        <section class="panel rounded-3xl p-8 text-center">
+
+            <h1 class="text-3xl font-black text-slate-900 mb-4">
+                Supprimer ce dossier de vente ?
+            </h1>
+
+            <p class="text-slate-500 mb-6">
+                Vente : <strong>{{ object.sale_number }}</strong>
+            </p>
+
+            <form method="post">
+
+                {% csrf_token %}
+
+                <a href="{% url 'sale_detail' object.pk %}"
+                   class="px-6 py-3 rounded-xl bg-white soft-ring font-bold mr-2">
+                    Annuler
+                </a>
+
+                <button type="submit"
+                        class="px-6 py-3 rounded-xl bg-red-500 text-white font-bold">
+                    Supprimer
+                </button>
+
+            </form>
+
+        </section>
+
+    </main>
+
+{% endblock %}

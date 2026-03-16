@@ -32,7 +32,9 @@ from parcelaire.views import HomeView, MapView, ParcellaireDashboardView, Projet
     ConstructionProjectListView, ConstructionProjectCreateView, ConstructionProjectDetailView, \
     ConstructionProjectUpdateView, ConstructionUpdateCreateView, ConstructionUpdateUpdateView, \
     ConstructionPhotoCreateView, ConstructionPhotoUpdateView, ConstructionMediaCreateView, ProgramByProjectAjaxView, \
-    PhaseByProgramAjaxView, BlockByProgramAjaxView, ParcelByBlockAjaxView, ProgramStatsAjaxView
+    PhaseByProgramAjaxView, BlockByProgramAjaxView, ParcelByBlockAjaxView, ProgramStatsAjaxView, LeadListView, \
+    LeadUpdateView, LeadCreateView, PropertyAssetDeleteView, PropertyAssetListView, PropertyAssetCreateView, \
+    PropertyAssetDetailView, PropertyAssetUpdateView
 
 urlpatterns = [
                   path('admin/', admin.site.urls),
@@ -69,7 +71,7 @@ urlpatterns = [
                   path("blocks/", ProgramBlockListView.as_view(), name="block_list"),
                   path("blocks/add/", ProgramBlockCreateView.as_view(), name="block_add"),
                   path("blocks/<int:pk>/", ProgramBlockDetailView.as_view(), name="block_detail"),
-                  path("blocks/<int:pk>/edit/", ProgramBlockUpdateView.as_view(), name="block_edit"),
+                  path("blocks/edit/<int:pk>", ProgramBlockUpdateView.as_view(), name="block_edit"),
                   path("blocks/<int:pk>/delete/", ProgramBlockDeleteView.as_view(), name="block_delete"),
 
                   path("parcels/", ParcelListView.as_view(), name="parcel_list"),
@@ -78,19 +80,19 @@ urlpatterns = [
                   path("parcels/<int:pk>/edit/", ParcelUpdateView.as_view(), name="parcel_edit"),
                   path("parcels/<int:pk>/delete/", ParcelDeleteView.as_view(), name="parcel_delete"),
 
-                  # path("assets/", PropertyAssetListView.as_view(), name="asset_list"),
-                  # path("assets/add/", PropertyAssetCreateView.as_view(), name="asset_add"),
-                  # path("assets/<int:pk>/", PropertyAssetDetailView.as_view(), name="asset_detail"),
-                  # path("assets/<int:pk>/edit/", PropertyAssetUpdateView.as_view(), name="asset_edit"),
-                  # path("assets/<int:pk>/delete/", PropertyAssetDeleteView.as_view(), name="asset_delete"),
+                  path("assets/", PropertyAssetListView.as_view(), name="asset_list"),
+                  path("assets/add/", PropertyAssetCreateView.as_view(), name="asset_add"),
+                  path("assets/<int:pk>/", PropertyAssetDetailView.as_view(), name="asset_detail"),
+                  path("assets/<int:pk>/edit/", PropertyAssetUpdateView.as_view(), name="asset_edit"),
+                  path("assets/<int:pk>/delete/", PropertyAssetDeleteView.as_view(), name="asset_delete"),
 
                   path("customers/", CustomerListView.as_view(), name="customer_list"),
                   path("customers/add/", CustomerCreateView.as_view(), name="customer_add"),
                   path("customers/<int:pk>/edit/", CustomerUpdateView.as_view(), name="customer_edit"),
 
-                  # path("leads/", LeadListView.as_view(), name="lead_list"),
-                  # path("leads/add/", LeadCreateView.as_view(), name="lead_add"),
-                  # path("leads/<int:pk>/edit/", LeadUpdateView.as_view(), name="lead_edit"),
+                  path("leads/", LeadListView.as_view(), name="lead_list"),
+                  path("leads/add/", LeadCreateView.as_view(), name="lead_add"),
+                  path("leads/<int:pk>/edit/", LeadUpdateView.as_view(), name="lead_edit"),
 
                   path("reservations/", ReservationListView.as_view(), name="reservation_list"),
                   path("reservations/add/", ReservationCreateView.as_view(), name="reservation_add"),

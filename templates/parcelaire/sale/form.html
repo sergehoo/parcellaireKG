@@ -1,0 +1,76 @@
+{% extends "layouts/base.html" %}
+{% load widget_tweaks %}
+
+{% block content %}
+
+    <main class="mx-auto max-w-4xl px-4 py-6 lg:px-8">
+
+        <section class="hero-card rounded-[34px] p-8 text-white mb-6">
+
+            <p class="text-xs uppercase tracking-[0.22em] text-white/60">
+                Gestion des ventes
+            </p>
+
+            <h1 class="text-3xl font-black mt-3">
+                {% if object %}
+                    Modifier la vente
+                {% else %}
+                    Créer une vente
+                {% endif %}
+            </h1>
+
+        </section>
+
+
+        <section class="panel rounded-3xl p-6">
+
+            <form method="post">
+
+                {% csrf_token %}
+
+                <div class="grid md:grid-cols-2 gap-6">
+
+                    {% for field in form %}
+
+                        <div class="{% if field.name == 'notes' %}md:col-span-2{% endif %}">
+
+                            <label class="text-sm font-bold text-slate-700">
+                                {{ field.label }}
+                            </label>
+
+                            {{ field|add_class:"w-full rounded-xl border border-slate-200 px-4 py-2 mt-2" }}
+
+                            {% if field.errors %}
+                                <p class="text-red-500 text-xs mt-1">
+                                    {{ field.errors }}
+                                </p>
+                            {% endif %}
+
+                        </div>
+
+                    {% endfor %}
+
+                </div>
+
+
+                <div class="flex justify-end gap-3 mt-6">
+
+                    <a href="{% url 'sale_list' %}"
+                       class="px-5 py-3 rounded-xl bg-white soft-ring font-bold">
+                        Annuler
+                    </a>
+
+                    <button type="submit"
+                            class="premium-gradient px-6 py-3 rounded-xl text-white font-bold">
+                        Enregistrer
+                    </button>
+
+                </div>
+
+            </form>
+
+        </section>
+
+    </main>
+
+{% endblock %}

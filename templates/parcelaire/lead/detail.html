@@ -1,0 +1,155 @@
+{% extends "layouts/base.html" %}
+{% load static %}
+
+{% block content %}
+<main class="mx-auto max-w-full px-4 py-6 lg:px-8">
+
+    <!-- Hero -->
+    <section class="mb-6">
+        <div class="hero-card overflow-hidden rounded-[34px] p-6 text-white md:p-8">
+            <div class="grid gap-6 xl:grid-cols-[1.35fr_.95fr]">
+                <div>
+                    <p class="text-xs font-bold uppercase tracking-[0.24em] text-white/60">Dataset parcellaire</p>
+                    <h1 class="mt-3 text-3xl font-black tracking-tight md:text-4xl">
+                        {{ dataset.name }}
+                    </h1>
+                    <p class="mt-4 max-w-3xl text-sm leading-7 text-white/75 md:text-base">
+                        Ce dataset centralise les informations d’import utilisées pour alimenter
+                        le référentiel parcellaire du programme.
+                    </p>
+
+                    <div class="mt-6 flex flex-wrap gap-3">
+                        <a href="{% url 'dataset_edit' dataset.pk %}"
+                           class="inline-flex items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-bold text-slate-900">
+                            <i class="fa-solid fa-pen"></i>
+                            <span>Modifier</span>
+                        </a>
+
+                        <a href="{% url 'program_detail' dataset.program.pk %}"
+                           class="inline-flex items-center gap-2 rounded-2xl bg-white/10 px-5 py-3 text-sm font-bold text-white">
+                            <i class="fa-solid fa-arrow-left"></i>
+                            <span>Retour programme</span>
+                        </a>
+                    </div>
+                </div>
+
+                <div class="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+                    <div class="rounded-[24px] bg-white/10 p-4">
+                        <p class="text-xs uppercase tracking-[0.18em] text-white/60">Parcelles liées</p>
+                        <p class="mt-2 text-3xl font-black">{{ parcels_count }}</p>
+                    </div>
+                    <div class="rounded-[24px] bg-white/10 p-4">
+                        <p class="text-xs uppercase tracking-[0.18em] text-white/60">Programme</p>
+                        <p class="mt-2 text-lg font-black">{{ dataset.program.name|default:"—" }}</p>
+                    </div>
+                    <div class="rounded-[24px] bg-white/10 p-4">
+                        <p class="text-xs uppercase tracking-[0.18em] text-white/60">Phase</p>
+                        <p class="mt-2 text-lg font-black">{{ dataset.phase.name|default:"—" }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Infos -->
+    <section class="grid gap-6 xl:grid-cols-3">
+        <div class="panel rounded-[30px] p-6 xl:col-span-1">
+            <p class="text-xs font-bold uppercase tracking-[0.22em] text-premium-600">Informations</p>
+            <h2 class="mt-2 text-2xl font-black text-slate-900">Métadonnées du dataset</h2>
+
+            <div class="mt-6 space-y-3">
+                <div class="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                    <p class="text-xs uppercase tracking-[0.16em] text-slate-400">Nom</p>
+                    <p class="mt-2 font-bold text-slate-900">{{ dataset.name }}</p>
+                </div>
+
+                <div class="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                    <p class="text-xs uppercase tracking-[0.16em] text-slate-400">Code source</p>
+                    <p class="mt-2 font-bold text-slate-900">{{ dataset.source_code|default:"—" }}</p>
+                </div>
+
+                <div class="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                    <p class="text-xs uppercase tracking-[0.16em] text-slate-400">Programme</p>
+                    <p class="mt-2 font-bold text-slate-900">{{ dataset.program.name|default:"—" }}</p>
+                </div>
+
+                <div class="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                    <p class="text-xs uppercase tracking-[0.16em] text-slate-400">Phase</p>
+                    <p class="mt-2 font-bold text-slate-900">{{ dataset.phase.name|default:"—" }}</p>
+                </div>
+
+                <div class="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                    <p class="text-xs uppercase tracking-[0.16em] text-slate-400">Fichier source</p>
+                    <p class="mt-2 font-bold text-slate-900 break-all">{{ dataset.source_file_name|default:"—" }}</p>
+                </div>
+
+                <div class="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                    <p class="text-xs uppercase tracking-[0.16em] text-slate-400">Créé le</p>
+                    <p class="mt-2 font-bold text-slate-900">{{ dataset.created_at|date:"d/m/Y H:i" }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel rounded-[30px] p-6 xl:col-span-2">
+            <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                    <p class="text-xs font-bold uppercase tracking-[0.22em] text-premium-600">Aperçu du contenu</p>
+                    <h2 class="mt-2 text-2xl font-black text-slate-900">Parcelles associées</h2>
+                </div>
+
+                <span class="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-700 soft-ring">
+                    {{ parcels_count }} parcelle{{ parcels_count|pluralize }}
+                </span>
+            </div>
+
+            <div class="scrollbar-thin mt-6 overflow-x-auto">
+                <table class="min-w-full overflow-hidden rounded-3xl bg-white">
+                    <thead class="bg-slate-50">
+                    <tr>
+                        <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Lot</th>
+                        <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Référence</th>
+                        <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Îlot</th>
+                        <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Phase</th>
+                        <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Surface</th>
+                    </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                    {% for parcel in parcels %}
+                        <tr class="table-row-hover">
+                            <td class="px-5 py-4 font-semibold text-slate-900">
+                                {{ parcel.lot_number|default:"—" }}
+                            </td>
+                            <td class="px-5 py-4 text-sm text-slate-700">
+                                {{ parcel.parcel_code|default:"—" }}
+                            </td>
+                            <td class="px-5 py-4 text-sm text-slate-700">
+                                {{ parcel.block.code|default:"—" }}
+                            </td>
+                            <td class="px-5 py-4 text-sm text-slate-700">
+                                {{ parcel.phase.name|default:"—" }}
+                            </td>
+                            <td class="px-5 py-4 text-sm text-slate-700">
+                                {% if parcel.official_area_m2 %}{{ parcel.official_area_m2 }} m²{% else %}—{% endif %}
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="5" class="px-5 py-10 text-center text-slate-500">
+                                Aucune parcelle associée à ce dataset.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% if parcels_count > 100 %}
+                <div class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                    Affichage limité aux 100 premières parcelles liées à ce dataset.
+                </div>
+            {% endif %}
+        </div>
+    </section>
+
+</main>
+{% endblock %}
