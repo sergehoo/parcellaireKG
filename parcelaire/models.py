@@ -690,6 +690,9 @@ class SaleFile(TimeStampedModel, SoftDeleteModel):
     sales_agent = models.CharField(max_length=255, blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
 
+    def __str__(self):
+        return f'{self.customer.last_name}- {self.customer.first_name}-{self.sale_number}'
+
 
 class PaymentSchedule(TimeStampedModel, SoftDeleteModel):
     sale_file = models.OneToOneField(SaleFile, on_delete=models.CASCADE, related_name="payment_schedule")

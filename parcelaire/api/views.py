@@ -35,7 +35,73 @@ class RealEstateMapAPIView(APIView):
     # =========================
     # PERMISSIONS
     # =========================
+    def get_hypotheque_payment_ratio(self, valeur_hypothecaire, montant_paye):
+        """
+        ratio = ((montant_paye - valeur_hypothecaire) / valeur_hypothecaire) * 100
 
+        Ex:
+        - si montant payé est bien en dessous => ratio négatif
+        - si montant payé atteint/dépasse => ratio >= 0
+        """
+        try:
+            valeur_hypothecaire = Decimal(valeur_hypothecaire or 0)
+            montant_paye = Decimal(montant_paye or 0)
+
+            if valeur_hypothecaire <= 0:
+                return {
+                    "ratio_value": 0,
+                    "ratio_label": "0%",
+                    "priority": "LOW",
+                    "priority_label": "Priorité faible",
+                    "priority_color": "#22c55e",
+                    "priority_badge": "bg-emerald-100 text-emerald-700",
+                    "priority_dot": "green",
+                }
+
+            ratio = ((montant_paye - valeur_hypothecaire) / valeur_hypothecaire) * Decimal("100")
+            ratio = round(ratio, 2)
+
+            if ratio <= Decimal("-19"):
+                return {
+                    "ratio_value": float(ratio),
+                    "ratio_label": f"{ratio}%",
+                    "priority": "LOW",
+                    "priority_label": "Priorité faible",
+                    "priority_color": "#22c55e",
+                    "priority_badge": "bg-emerald-100 text-emerald-700",
+                    "priority_dot": "green",
+                }
+            elif Decimal("-19") < ratio < Decimal("0"):
+                return {
+                    "ratio_value": float(ratio),
+                    "ratio_label": f"{ratio}%",
+                    "priority": "MEDIUM",
+                    "priority_label": "Priorité moyenne",
+                    "priority_color": "#f59e0b",
+                    "priority_badge": "bg-amber-100 text-amber-700",
+                    "priority_dot": "orange",
+                }
+            else:
+                return {
+                    "ratio_value": float(ratio),
+                    "ratio_label": f"{ratio}%",
+                    "priority": "HIGH",
+                    "priority_label": "Priorité élevée",
+                    "priority_color": "#ef4444",
+                    "priority_badge": "bg-rose-100 text-rose-700",
+                    "priority_dot": "red",
+                }
+
+        except Exception:
+            return {
+                "ratio_value": 0,
+                "ratio_label": "0%",
+                "priority": "LOW",
+                "priority_label": "Priorité faible",
+                "priority_color": "#22c55e",
+                "priority_badge": "bg-emerald-100 text-emerald-700",
+                "priority_dot": "green",
+            }
     def get_user_rights(self, request):
         user = request.user
         return {
@@ -793,6 +859,16 @@ class RealEstateMapAPIView(APIView):
             if can_view_patient:
                 details.append({"label": "Client", "value": client_name})
 
+            if can_view_financial and can_view_construction:
+                details.append({
+                    "label": "Ratio hypo / paiements",
+                    "value": priority_stats["ratio_label"],
+                })
+                details.append({
+                    "label": "Niveau priorité",
+                    "value": priority_stats["priority_label"],
+                })
+
             construction_stats = (
                 self.get_construction_stats(parcel=parcel, asset=asset)
                 if can_view_construction
@@ -804,11 +880,26 @@ class RealEstateMapAPIView(APIView):
                 if can_view_financial
                 else self.get_masked_financial_stats()
             )
-
+            if can_view_financial and can_view_construction:
+                priority_stats = self.get_hypotheque_payment_ratio(
+                    construction_stats.get("valeur_hypothecaire_value", 0),
+                    financial_stats.get("montant_paye_value", 0),
+                )
+            else:
+                priority_stats = {
+                    "ratio_value": 0,
+                    "ratio_label": "Masqué",
+                    "priority": "UNKNOWN",
+                    "priority_label": "Masqué",
+                    "priority_color": "#94a3b8",
+                    "priority_badge": "bg-slate-100 text-slate-700",
+                    "priority_dot": "gray",
+                }
             if can_view_financial:
                 details.append({
                     "label": "Valeur hypothécaire",
                     "value": construction_stats["valeur_hypothecaire"] if can_view_construction else "Masqué",
+
                 })
 
             metrics = [
@@ -820,6 +911,8 @@ class RealEstateMapAPIView(APIView):
                 },
             ]
 
+            if can_view_financial and can_view_construction:
+                ui["color"] = priority_stats["priority_color"]
             assets_payload.append(
                 {
                     "id": asset.id,
@@ -852,6 +945,7 @@ class RealEstateMapAPIView(APIView):
                     "building_type": self.get_3d_type(asset=asset, parcel=parcel),
                     "financial_stats": financial_stats,
                     "construction_stats": construction_stats,
+                    "priority_stats": priority_stats,
                 }
             )
 
@@ -936,6 +1030,21 @@ class RealEstateMapAPIView(APIView):
                 if can_view_construction
                 else self.get_masked_construction_stats()
             )
+            if can_view_financial and can_view_construction:
+                priority_stats = self.get_hypotheque_payment_ratio(
+                    construction_stats.get("valeur_hypothecaire_value", 0),
+                    financial_stats.get("montant_paye_value", 0),
+                )
+            else:
+                priority_stats = {
+                    "ratio_value": 0,
+                    "ratio_label": "Masqué",
+                    "priority": "UNKNOWN",
+                    "priority_label": "Masqué",
+                    "priority_color": "#94a3b8",
+                    "priority_badge": "bg-slate-100 text-slate-700",
+                    "priority_dot": "gray",
+                }
 
             if can_view_financial:
                 details.append({
@@ -951,7 +1060,8 @@ class RealEstateMapAPIView(APIView):
                     "value": construction_stats["taux_avancement"] if can_view_construction else "Masqué",
                 },
             ]
-
+            if can_view_financial and can_view_construction:
+                ui["color"] = priority_stats["priority_color"]
             assets_payload.append(
                 {
                     "id": parcel.id,
@@ -980,6 +1090,7 @@ class RealEstateMapAPIView(APIView):
                     "building_type": self.get_3d_type(parcel=parcel),
                     "financial_stats": financial_stats,
                     "construction_stats": construction_stats,
+                    "priority_stats": priority_stats,
                 }
             )
 
