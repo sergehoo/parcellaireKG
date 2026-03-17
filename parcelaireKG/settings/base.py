@@ -34,7 +34,7 @@ CSRF_TRUSTED_ORIGINS=[
     'https://datarium-dev.com',
     'http://datarium-dev.com',
 ]
-
+SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 # Application definition
 
 INSTALLED_APPS = [
