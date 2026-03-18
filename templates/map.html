@@ -1131,6 +1131,7 @@
 
                 const baseName = this.getBaseParcelName(asset);
                 const progress = asset.construction_stats?.taux_avancement || '0%';
+                const paiement = asset.financial_stats?.taux_paiement || '0%';
                 const deltaValue = asset.construction_stats?.evolution_mensuelle || 0;
                 const deltaLabel = this.getTrendLabel(deltaValue);
                 const deltaClass = this.getTrendClass(deltaValue);
@@ -1161,7 +1162,7 @@
         <div class="parcel-label ${priorityBlockClass}">
             <div class="parcel-label-name">${baseName}</div>
             <div class="parcel-label-progress">
-                Avancement : ${progress}
+                T : ${progress}
                 <span class="parcel-label-trend ${deltaClass}">${deltaLabel}</span>
             </div>
 {#            <div style="display:flex;align-items:center;gap:6px;font-size:10px;font-weight:800;">#}
@@ -1169,7 +1170,7 @@
 {#                <span>${priorityLabel}</span>#}
 {#            </div>#}
             <div style="font-size:10px;color:#cbd5e1;font-weight:700;">
-                Paiement : ${ratioLabel}
+                P : ${paiement}
             </div>
         </div>
     `;
