@@ -561,7 +561,7 @@ class RealEstateMapAPIView(APIView):
             ).quantize(Decimal("1"))
 
         return {
-            "taux_avancement": f"{round(current_progress)}%",
+            "taux_avancement": f":{round(current_progress)}%",
             "taux_avancement_value": current_progress,
             "valeur_hypothecaire": self.money_display(valeur_hypothecaire),
             "valeur_hypothecaire_value": float(valeur_hypothecaire),
