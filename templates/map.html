@@ -690,12 +690,12 @@
                 </div>
             </div>
 
-            <div class="grid grid-cols-2 gap-3 border-t border-slate-200/70 p-5 lg:px-6">
-                <button class="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white transition hover:opacity-95">Ouvrir dossier</button>
-                <button class="rounded-2xl bg-premium-500 px-4 py-3 text-sm font-bold text-white transition hover:bg-premium-600">Créer réservation</button>
-                <button class="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-soft">Planifier visite</button>
-                <button class="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-soft">Exporter fiche</button>
-            </div>
+{#            <div class="grid grid-cols-2 gap-3 border-t border-slate-200/70 p-5 lg:px-6">#}
+{#                <button class="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white transition hover:opacity-95">Ouvrir dossier</button>#}
+{#                <button class="rounded-2xl bg-premium-500 px-4 py-3 text-sm font-bold text-white transition hover:bg-premium-600">Créer réservation</button>#}
+{#                <button class="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-soft">Planifier visite</button>#}
+{#                <button class="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-soft">Exporter fiche</button>#}
+{#            </div>#}
         </aside>
     </div>
 
@@ -1161,15 +1161,15 @@
         <div class="parcel-label ${priorityBlockClass}">
             <div class="parcel-label-name">${baseName}</div>
             <div class="parcel-label-progress">
-                Etat : ${progress}
+                Avancement : ${progress}
                 <span class="parcel-label-trend ${deltaClass}">${deltaLabel}</span>
             </div>
-            <div style="display:flex;align-items:center;gap:6px;font-size:10px;font-weight:800;">
-                <span style="width:9px;height:9px;border-radius:999px;display:inline-block;${priorityDotClass}"></span>
-                <span>${priorityLabel}</span>
-            </div>
+{#            <div style="display:flex;align-items:center;gap:6px;font-size:10px;font-weight:800;">#}
+{#                <span style="width:9px;height:9px;border-radius:999px;display:inline-block;${priorityDotClass}"></span>#}
+{#                <span>${priorityLabel}</span>#}
+{#            </div>#}
             <div style="font-size:10px;color:#cbd5e1;font-weight:700;">
-                Ratio : ${ratioLabel}
+                Paiement : ${ratioLabel}
             </div>
         </div>
     `;
