@@ -417,11 +417,12 @@
     <span x-text="selectedAsset.construction_stats?.valeur_hypothecaire || '—'"></span>
 </p>
                     </div>
-                    <span
-                        class="rounded-full px-3 py-1 text-xs font-bold"
-                        :class="selectedAsset.statusBadge || 'bg-slate-100 text-slate-700'"
-                        x-text="selectedAsset.status || '—'"
-                    ></span>
+{#                    <span#}
+{#                        class="rounded-full px-3 py-1 text-xs font-bold"#}
+{#                        :class="selectedAsset.statusBadge || 'bg-slate-100 text-slate-700'"#}
+{#                        x-text="selectedAsset.status || '—'"#}
+{#                    ></span>#}
+                    <a href="#" class="rounded-full px-3 py-1 text-xs font-bold bg-slate-100 text-slate-700" >Visite Guidée </a>
                     <button
             @click="sidebarOpen = false"
             class="grid h-10 w-10 place-items-center rounded-full bg-white text-slate-700 shadow-soft hover:bg-slate-100"
@@ -543,7 +544,7 @@
                             <p class="mt-1 font-semibold" x-text="selectedAsset.financial_stats?.montant_base || '—'"></p>
                         </div>
                         <div class="rounded-2xl bg-white/8 p-4">
-                            <p class="text-white/50">Montant vendu</p>
+                            <p class="text-white/50">Prix de vente </p>
                             <p class="mt-1 font-semibold" x-text="selectedAsset.financial_stats?.montant_vendu || '—'"></p>
                         </div>
                         <div class="rounded-2xl bg-white/8 p-4">
@@ -574,22 +575,23 @@
                             <p class="text-white/50">Valeur hypothécaire</p>
                             <p class="mt-1 font-semibold" x-text="selectedAsset.construction_stats?.valeur_hypothecaire || '—'"></p>
                         </div>
-                        <div class="rounded-2xl bg-white/8 p-4">
-                            <p class="text-white/50">Budget prévisionnel</p>
-                            <p class="mt-1 font-semibold" x-text="selectedAsset.construction_stats?.budget_previsionnel || '—'"></p>
-                        </div>
-                        <div class="rounded-2xl bg-white/8 p-4">
-                            <p class="text-white/50">Coût réel</p>
-                            <p class="mt-1 font-semibold" x-text="selectedAsset.construction_stats?.cout_reel || '—'"></p>
-                        </div>
+                        <div class="rounded-2xl bg-white/8 p-4 ">
+            <p class="text-white/50">Ratio hypothécaire / paiements</p>
+            <p class="mt-1 font-semibold" x-text="selectedAsset.priority_stats?.ratio_label || '—'"></p>
+        </div>
+{#                        <div class="rounded-2xl bg-white/8 p-4">#}
+{#                            <p class="text-white/50">Budget prévisionnel</p>#}
+{#                            <p class="mt-1 font-semibold" x-text="selectedAsset.construction_stats?.budget_previsionnel || '—'"></p>#}
+{#                        </div>#}
+{#                        <div class="rounded-2xl bg-white/8 p-4">#}
+{#                            <p class="text-white/50">Coût réel</p>#}
+{#                            <p class="mt-1 font-semibold" x-text="selectedAsset.construction_stats?.cout_reel || '—'"></p>#}
+{#                        </div>#}
                         <div class="rounded-2xl bg-white/8 p-4">
                             <p class="text-white/50">Évolution mois</p>
                             <p class="mt-1 font-semibold" x-text="selectedAsset.construction_stats?.evolution_mensuelle_label || '0% ce mois'"></p>
                         </div>
-                        <div class="rounded-2xl bg-white/8 p-4 col-span-2">
-            <p class="text-white/50">Ratio hypothécaire / paiements</p>
-            <p class="mt-1 font-semibold" x-text="selectedAsset.priority_stats?.ratio_label || '—'"></p>
-        </div>
+                        
                     </div>
 
                     <div class="mt-4 grid grid-cols-3 gap-3 text-sm">

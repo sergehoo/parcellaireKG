@@ -182,6 +182,38 @@ class KaydanCRMLotSyncService:
 
         return list(deduped.values())
 
+    def build_crm_sync_payload(self, item: dict, code_projet: str, lot: str, ilot: str, now):
+        valeur_hypothecaire = self._safe_decimal(item.get("valeur_hypothecaire"))
+        avancement_travaux_mois = self._safe_float(item.get("avancement_travaux_mois"))
+
+        cout_actif = self._safe_decimal(item.get("cout_actif"))
+        versement_client = self._safe_decimal(item.get("versement_client"))
+        ecart_status = self._safe_decimal(item.get("ecart_status"))
+
+        nom = self._safe_str(item.get("nom"))
+        prenom = self._safe_str(item.get("prenom"))
+        client_nom_complet = " ".join([x for x in [prenom, nom] if x]).strip()
+
+        return {
+            "lot": lot,
+            "ilot": ilot,
+            "code_projet": code_projet,
+
+            "valeur_hypothecaire": str(valeur_hypothecaire),
+            "avancement_travaux_mois": avancement_travaux_mois,
+
+            "nom": nom,
+            "prenom": prenom,
+            "client_nom_complet": client_nom_complet,
+
+            "cout_actif": str(cout_actif),
+            "versement_client": str(versement_client),
+            "ecart_status": str(ecart_status),
+
+            "synced_at": now.isoformat(),
+            "raw": item,
+        }
+
     def sync_queryset(self, queryset):
         parcels = list(
             queryset.select_related("program", "program__project", "block")
@@ -235,19 +267,13 @@ class KaydanCRMLotSyncService:
                                 continue
 
                             metadata = parcel.metadata or {}
-                            metadata["crm_lot_sync"] = {
-                                "lot": lot,
-                                "ilot": ilot,
-                                "code_projet": code_retour,
-                                "valeur_hypothecaire": str(
-                                    self._safe_decimal(item.get("valeur_hypothecaire"))
-                                ),
-                                "avancement_travaux_mois": self._safe_float(
-                                    item.get("avancement_travaux_mois")
-                                ),
-                                "synced_at": now.isoformat(),
-                                "raw": item,
-                            }
+                            metadata["crm_lot_sync"] = self.build_crm_sync_payload(
+                                item=item,
+                                code_projet=code_retour,
+                                lot=lot,
+                                ilot=ilot,
+                                now=now,
+                            )
 
                             parcel.metadata = metadata
                             parcel.crm_last_synced_at = now
@@ -303,3 +329,28 @@ def sync_stale_parcels(hours=24):
     ).select_related("program", "program__project", "block")
 
     return KaydanCRMLotSyncService().sync_queryset(queryset)
+
+
+#
+# def sync_program_parcels(program_id):
+#     queryset = Parcel.objects.filter(
+#         is_active=True,
+#         program__is_active=True,
+#         program_id=program_id,
+#     ).select_related("program", "program__project", "block")
+#
+#     return KaydanCRMLotSyncService().sync_queryset(queryset)
+#
+#
+# def sync_stale_parcels(hours=24):
+#     threshold = timezone.now() - timezone.timedelta(hours=hours)
+#
+#     queryset = Parcel.objects.filter(
+#         is_active=True,
+#         program__is_active=True,
+#     ).filter(
+#         models.Q(crm_last_synced_at__isnull=True) |
+#         models.Q(crm_last_synced_at__lt=threshold)
+#     ).select_related("program", "program__project", "block")
+#
+#     return KaydanCRMLotSyncService().sync_queryset(queryset)
