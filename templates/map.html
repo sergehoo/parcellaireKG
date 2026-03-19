@@ -13,11 +13,12 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"/>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+          rel="stylesheet">
 
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -26,9 +27,19 @@
     <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
     <style>
-        html, body { height: 100%; }
-        body { font-family: 'Inter', sans-serif; background: #0f172a; }
-        #map { height: 100vh; width: 100%; }
+        html, body {
+            height: 100%;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #0f172a;
+        }
+
+        #map {
+            height: 100vh;
+            width: 100%;
+        }
 
         .glass {
             backdrop-filter: blur(18px);
@@ -48,7 +59,9 @@
             box-shadow: 0 20px 60px rgba(15, 23, 42, 0.35);
         }
 
-        .leaflet-popup-content { margin: 12px 12px 10px 12px; }
+        .leaflet-popup-content {
+            margin: 12px 12px 10px 12px;
+        }
 
         .leaflet-control-zoom {
             border: 0 !important;
@@ -66,10 +79,12 @@
             border-bottom: 1px solid rgba(234, 88, 12, 0.10) !important;
             font-weight: 700;
         }
-.leaflet-top.leaflet-left {
-    top: 180px !important;
-    left: 14px !important;
-}
+
+        .leaflet-top.leaflet-left {
+            top: 180px !important;
+            left: 14px !important;
+        }
+
         .leaflet-control-attribution {
             background: rgba(255, 255, 255, 0.78) !important;
             border-radius: 12px 0 0 0;
@@ -99,10 +114,19 @@
             box-shadow: 0 10px 28px rgba(194, 65, 12, 0.35), 0 0 0 10px rgba(249, 115, 22, 0.14);
         }
 
-        .scrollbar-thin::-webkit-scrollbar { width: 8px; height: 8px; }
-        .scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(251, 146, 60, .35); border-radius: 999px; }
+        .scrollbar-thin::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
 
-        .sidebar-shadow { box-shadow: 0 20px 80px rgba(15, 23, 42, 0.22); }
+        .scrollbar-thin::-webkit-scrollbar-thumb {
+            background: rgba(251, 146, 60, .35);
+            border-radius: 999px;
+        }
+
+        .sidebar-shadow {
+            box-shadow: 0 20px 80px rgba(15, 23, 42, 0.22);
+        }
 
         .top-fade {
             background: linear-gradient(180deg, rgba(15, 23, 42, 0.55) 0%, rgba(15, 23, 42, 0.20) 48%, rgba(15, 23, 42, 0.00) 100%);
@@ -144,8 +168,13 @@
             z-index: 3;
         }
 
-        .popup-carousel-btn.left { left: 10px; }
-        .popup-carousel-btn.right { right: 10px; }
+        .popup-carousel-btn.left {
+            left: 10px;
+        }
+
+        .popup-carousel-btn.right {
+            right: 10px;
+        }
 
         .popup-dots {
             position: absolute;
@@ -164,57 +193,59 @@
             background: rgba(255, 255, 255, .38);
         }
 
-        .popup-dot.active { background: white; }
-        .thumb-active { box-shadow: 0 0 0 2px #f97316; }
+        .popup-dot.active {
+            background: white;
+        }
+
+        .thumb-active {
+            box-shadow: 0 0 0 2px #f97316;
+        }
 
         .parcel-label-wrapper {
             background: transparent;
             border: 0;
         }
 
-       .parcel-label {
-    min-width: 120px;
-    max-width: 180px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-    padding: 7px 10px;
-    border-radius: 14px;
-    color: #fff;
-    line-height: 1.15;
-    white-space: normal;
-    text-align: center;
-    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.22);
-    border: 1px solid rgba(255,255,255,0.18);
-    backdrop-filter: blur(6px);
-    transform: translate(-50%, -50%);
-    transition: all .25s ease;
-}
+        .parcel-label {
+            min-width: 120px;
+            max-width: 180px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            padding: 7px 10px;
+            border-radius: 14px;
+            color: #fff;
+            line-height: 1.15;
+            white-space: normal;
+            text-align: center;
+            box-shadow: 0 6px 16px rgba(15, 23, 42, 0.22);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            backdrop-filter: blur(6px);
+            transform: translate(-50%, -50%);
+            transition: all .25s ease;
+        }
 
-.parcel-label.priority-low {
-    background: rgba(15, 23, 42, 0.84);
-    border-color: rgba(34, 197, 94, 0.30);
-    box-shadow:
-        0 6px 16px rgba(15, 23, 42, 0.22),
-        0 0 0 1px rgba(34, 197, 94, 0.12);
-}
+        .parcel-label.priority-low {
+            background: rgba(15, 23, 42, 0.84);
+            border-color: rgba(34, 197, 94, 0.30);
+            box-shadow: 0 6px 16px rgba(15, 23, 42, 0.22),
+            0 0 0 1px rgba(34, 197, 94, 0.12);
+        }
 
-.parcel-label.priority-medium {
-    background: rgba(120, 53, 15, 0.90);
-    border-color: rgba(245, 158, 11, 0.35);
-    box-shadow:
-        0 8px 18px rgba(120, 53, 15, 0.28),
-        0 0 0 1px rgba(245, 158, 11, 0.16);
-}
+        .parcel-label.priority-medium {
+            background: rgba(120, 53, 15, 0.90);
+            border-color: rgba(245, 158, 11, 0.35);
+            box-shadow: 0 8px 18px rgba(120, 53, 15, 0.28),
+            0 0 0 1px rgba(245, 158, 11, 0.16);
+        }
 
-.parcel-label.priority-high {
-    background: rgba(127, 29, 29, 0.94);
-    border-color: rgba(239, 68, 68, 0.45);
-    box-shadow:
-        0 10px 24px rgba(127, 29, 29, 0.34),
-        0 0 0 1px rgba(239, 68, 68, 0.18);
-}
+        .parcel-label.priority-high {
+            background: rgba(127, 29, 29, 0.94);
+            border-color: rgba(239, 68, 68, 0.45);
+            box-shadow: 0 10px 24px rgba(127, 29, 29, 0.34),
+            0 0 0 1px rgba(239, 68, 68, 0.18);
+        }
 
         .parcel-label-name {
             font-size: 11px;
@@ -279,574 +310,625 @@
 </head>
 <body>
 {% if perms.parcelaire.view_parcellaire %}
-<div x-data="estateMapApp()" x-init="init()" class="relative h-screen w-screen overflow-hidden">
-    <div id="map" class="absolute inset-0 z-0"></div>
-    <div class="top-fade absolute inset-x-0 top-0 z-10 h-36"></div>
+    <div x-data="estateMapApp()" x-init="init()" class="relative h-screen w-screen overflow-hidden">
+        <div id="map" class="absolute inset-0 z-0"></div>
+        <div class="top-fade absolute inset-x-0 top-0 z-10 h-36"></div>
 
-    <div class="pointer-events-none absolute inset-x-0 top-0 z-20 px-4 pt-4 lg:px-6">
-        <div class="pointer-events-auto flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div class="glass sidebar-shadow rounded-[28px] border border-white/20 bg-white/75 px-4 py-4 shadow-premium lg:px-5">
-                <div class="flex items-center gap-4">
-                    <div class="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-premium-500 to-premium-700 text-white shadow-premium">
-                       <i class="fa-solid fa-city text-xl"></i>
-                    </div>
-                    <div><a href="{% url 'parcelaire_dashboard' %}">
-                        <img src="{% static 'logo/logo_kaydanG_B.png' %}" width="150" class="text-lg font-extrabold tracking-tight text-slate-900 lg:text-xl" alt="Kaydan">
-                        <p class="text-sm text-slate-600">Parcellaire immobilier</p></a>
-                    </div>
-                </div>
-            </div>
-
-            <div class="pointer-events-auto flex flex-wrap items-center gap-2">
-                <div class="glass flex items-center gap-3 rounded-2xl border border-white/20 bg-white/80 px-4 py-3 shadow-soft">
-                    <svg class="h-5 w-5 text-premium-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                        <circle cx="11" cy="11" r="7"/>
-                        <path d="m20 20-3.5-3.5"/>
-                    </svg>
-                    <input
-                        x-model="search"
-                        @input.debounce.250ms="filterAssets()"
-                        type="text"
-                        placeholder="Rechercher un projet, programme, lot, client..."
-                        class="w-64 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
-                    />
-                </div>
-
-                <div class="glass rounded-2xl border border-white/20 bg-white/80 px-3 py-2 shadow-soft">
-                    <select x-model="projectFilter" @change="onProjectChange()" class="bg-transparent text-sm font-semibold text-slate-700 outline-none">
-                        <option value="">Tous les projets</option>
-                        <template x-for="project in projectOptions" :key="project">
-                            <option :value="project" x-text="project"></option>
-                        </template>
-                    </select>
-                </div>
-
-                <div class="glass rounded-2xl border border-white/20 bg-white/80 px-3 py-2 shadow-soft">
-                    <select x-model="programFilter" @change="filterAssets()" class="bg-transparent text-sm font-semibold text-slate-700 outline-none">
-                        <option value="">Tous les programmes</option>
-                        <template x-for="program in filteredProgramOptions" :key="program">
-                            <option :value="program" x-text="program"></option>
-                        </template>
-                    </select>
-                </div>
-
-                <div class="glass rounded-2xl border border-white/20 bg-white/80 px-2 py-2 shadow-soft">
-                    <div class="flex items-center gap-1">
-                        <button
-                            @click="toggleParcels()"
-                            :class="showParcels ? 'bg-slate-900 text-white' : 'bg-white text-slate-700'"
-                            class="rounded-xl px-3 py-2 text-sm font-semibold transition"
-                        >
-                            Parcelles
-                        </button>
-
-                        <button
-                            @click="toggleParcelLabels()"
-                            :class="showParcelLabels ? 'bg-slate-900 text-white' : 'bg-white text-slate-700'"
-                            class="rounded-xl px-3 py-2 text-sm font-semibold transition"
-                        >
-                            Noms lots
-                        </button>
-
-                        <button
-                            @click="setMapMode('osm')"
-                            :class="mapMode === 'osm' ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'"
-                            class="rounded-xl px-3 py-2 text-sm font-semibold transition"
-                        >
-                            OSM
-                        </button>
-                        <button
-                            @click="setMapMode('ortho')"
-                            :class="mapMode === 'ortho' ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'"
-                            class="rounded-xl px-3 py-2 text-sm font-semibold transition"
-                        >
-                            Orthophoto
-                        </button>
-                        <button
-                            @click="setMapMode('mixed')"
-                            :class="mapMode === 'mixed' ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'"
-                            class="rounded-xl px-3 py-2 text-sm font-semibold transition"
-                        >
-                            Mixte
-                        </button>
+        <div class="pointer-events-none absolute inset-x-0 top-0 z-20 px-4 pt-4 lg:px-6">
+            <div class="pointer-events-auto flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div class="glass sidebar-shadow rounded-[28px] border border-white/20 bg-white/75 px-4 py-4 shadow-premium lg:px-5">
+                    <div class="flex items-center gap-4">
+                        <div class="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-premium-500 to-premium-700 text-white shadow-premium">
+                            <i class="fa-solid fa-city text-xl"></i>
+                        </div>
+                        <div><a href="{% url 'parcelaire_dashboard' %}">
+                            <img src="{% static 'logo/logo_kaydanG_B.png' %}" width="150"
+                                 class="text-lg font-extrabold tracking-tight text-slate-900 lg:text-xl" alt="Kaydan">
+                            <p class="text-sm text-slate-600">Parcellaire immobilier</p></a>
+                        </div>
                     </div>
                 </div>
 
-                <template x-for="f in filters" :key="f">
+                <div class="pointer-events-auto flex flex-wrap items-center gap-2">
+                    <div class="glass flex items-center gap-3 rounded-2xl border border-white/20 bg-white/80 px-4 py-3 shadow-soft">
+                        <svg class="h-5 w-5 text-premium-600" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                             stroke-width="1.8">
+                            <circle cx="11" cy="11" r="7"/>
+                            <path d="m20 20-3.5-3.5"/>
+                        </svg>
+                        <input
+                                x-model="search"
+                                @input.debounce.250ms="filterAssets()"
+                                type="text"
+                                placeholder="Rechercher un projet, programme, lot, client..."
+                                class="w-64 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
+                        />
+                    </div>
+
+                    <div class="glass rounded-2xl border border-white/20 bg-white/80 px-3 py-2 shadow-soft">
+                        <select x-model="projectFilter" @change="onProjectChange()"
+                                class="bg-transparent text-sm font-semibold text-slate-700 outline-none">
+                            <option value="">Tous les projets</option>
+                            <template x-for="project in projectOptions" :key="project">
+                                <option :value="project" x-text="project"></option>
+                            </template>
+                        </select>
+                    </div>
+
+                    <div class="glass rounded-2xl border border-white/20 bg-white/80 px-3 py-2 shadow-soft">
+                        <select x-model="programFilter" @change="filterAssets()"
+                                class="bg-transparent text-sm font-semibold text-slate-700 outline-none">
+                            <option value="">Tous les programmes</option>
+                            <template x-for="program in filteredProgramOptions" :key="program">
+                                <option :value="program" x-text="program"></option>
+                            </template>
+                        </select>
+                    </div>
+
+                    <div class="glass rounded-2xl border border-white/20 bg-white/80 px-2 py-2 shadow-soft">
+                        <div class="flex items-center gap-1">
+                            <button
+                                    @click="toggleParcels()"
+                                    :class="showParcels ? 'bg-slate-900 text-white' : 'bg-white text-slate-700'"
+                                    class="rounded-xl px-3 py-2 text-sm font-semibold transition"
+                            >
+                                Parcelles
+                            </button>
+
+                            <button
+                                    @click="toggleParcelLabels()"
+                                    :class="showParcelLabels ? 'bg-slate-900 text-white' : 'bg-white text-slate-700'"
+                                    class="rounded-xl px-3 py-2 text-sm font-semibold transition"
+                            >
+                                Noms lots
+                            </button>
+
+                            <button
+                                    @click="setMapMode('osm')"
+                                    :class="mapMode === 'osm' ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'"
+                                    class="rounded-xl px-3 py-2 text-sm font-semibold transition"
+                            >
+                                OSM
+                            </button>
+                            <button
+                                    @click="setMapMode('ortho')"
+                                    :class="mapMode === 'ortho' ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'"
+                                    class="rounded-xl px-3 py-2 text-sm font-semibold transition"
+                            >
+                                Orthophoto
+                            </button>
+                            <button
+                                    @click="setMapMode('mixed')"
+                                    :class="mapMode === 'mixed' ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'"
+                                    class="rounded-xl px-3 py-2 text-sm font-semibold transition"
+                            >
+                                Mixte
+                            </button>
+                        </div>
+                    </div>
+
+                    <template x-for="f in filters" :key="f">
+                        <button
+                                @click="activeFilter = f; refreshMapStyles();"
+                                :class="activeFilter === f ? 'bg-slate-900 text-white border-slate-900' : 'bg-white/80 text-slate-700 border-white/40 hover:bg-white'"
+                                class="glass rounded-2xl border px-4 py-3 text-sm font-semibold shadow-soft transition"
+                                x-text="f"
+                        ></button>
+                    </template>
+
                     <button
-                        @click="activeFilter = f; refreshMapStyles();"
-                        :class="activeFilter === f ? 'bg-slate-900 text-white border-slate-900' : 'bg-white/80 text-slate-700 border-white/40 hover:bg-white'"
-                        class="glass rounded-2xl border px-4 py-3 text-sm font-semibold shadow-soft transition"
-                        x-text="f"
-                    ></button>
-                </template>
-
-                <button
-                    @click="resetFilters()"
-                    class="glass rounded-2xl border border-white/20 bg-white/80 px-4 py-3 text-sm font-semibold text-slate-700 shadow-soft transition hover:bg-white"
-                >
-                    Réinitialiser
-                </button>
+                            @click="resetFilters()"
+                            class="glass rounded-2xl border border-white/20 bg-white/80 px-4 py-3 text-sm font-semibold text-slate-700 shadow-soft transition hover:bg-white"
+                    >
+                        Réinitialiser
+                    </button>
+                </div>
             </div>
         </div>
-    </div>
 
-    <div class="pointer-events-none absolute inset-y-0 right-0 z-20 flex w-full justify-end p-4 lg:p-12">
-    <aside
-        x-show="sidebarOpen"
-        x-transition:enter="transition ease-out duration-300"
-        x-transition:enter-start="opacity-0 translate-x-8"
-        x-transition:enter-end="opacity-100 translate-x-0"
-        x-transition:leave="transition ease-in duration-200"
-        x-transition:leave-start="opacity-100 translate-x-0"
-        x-transition:leave-end="opacity-0 translate-x-8"
-        class="pointer-events-auto mt-10 flex h-full w-full max-w-[430px] flex-col overflow-hidden rounded-[32px] border border-white/20 bg-white/78 shadow-premium glass sidebar-shadow"
-    >
-            <div class="border-b border-slate-200/70 px-5 py-5 lg:px-6">
-                <div class="flex items-start justify-between gap-3">
-                    <div>
-                        <p class="text-xs font-bold uppercase tracking-[0.28em] text-premium-600">Actif sélectionné</p>
-                        <h2 class="mt-2 text-2xl font-extrabold tracking-tight text-slate-900" x-text="selectedAsset.name || '—'"></h2>
-                        <p class="mt-1 text-sm text-slate-500" x-text="selectedAsset.program || '—'"></p>
-                       <p class="mt-2 text-xs font-medium text-slate-500">
-    Avancement :
-    <span x-text="selectedAsset.construction_stats?.taux_avancement || '0%'"></span>
-    • Paiement :
-    <span x-text="selectedAsset.financial_stats?.taux_paiement || '0%'"></span>
-    • Valeur hypothécaire :
-    <span x-text="selectedAsset.construction_stats?.valeur_hypothecaire || '—'"></span>
-</p>
+        <div class="pointer-events-none absolute inset-y-0 right-0 z-20 flex w-full justify-end p-4 lg:p-12">
+            <aside
+                    x-show="sidebarOpen"
+                    x-transition:enter="transition ease-out duration-300"
+                    x-transition:enter-start="opacity-0 translate-x-8"
+                    x-transition:enter-end="opacity-100 translate-x-0"
+                    x-transition:leave="transition ease-in duration-200"
+                    x-transition:leave-start="opacity-100 translate-x-0"
+                    x-transition:leave-end="opacity-0 translate-x-8"
+                    class="pointer-events-auto mt-10 flex h-full w-full max-w-[430px] flex-col overflow-hidden rounded-[32px] border border-white/20 bg-white/78 shadow-premium glass sidebar-shadow"
+            >
+                <div class="border-b border-slate-200/70 px-5 py-5 lg:px-6">
+                    <div class="flex items-start justify-between gap-3">
+                        <div>
+                            <p class="text-xs font-bold uppercase tracking-[0.28em] text-premium-600">Actif
+                                sélectionné</p>
+                            <h2 class="mt-2 text-2xl font-extrabold tracking-tight text-slate-900"
+                                x-text="selectedAsset.name || '—'"></h2>
+                            <p class="mt-1 text-sm text-slate-500" x-text="selectedAsset.program || '—'"></p>
+                            <p class="mt-2 text-xs font-medium text-slate-500">
+                                Avancement :
+                                <span x-text="selectedAsset.construction_stats?.taux_avancement || '0%'"></span>
+                                • Paiement :
+                                <span x-text="selectedAsset.financial_stats?.taux_paiement || '0%'"></span>
+                                • Valeur hypothécaire :
+                                <span x-text="selectedAsset.construction_stats?.valeur_hypothecaire || '—'"></span>
+                            </p>
+                        </div>
+                        {#                    <span#}
+                        {#                        class="rounded-full px-3 py-1 text-xs font-bold"#}
+                        {#                        :class="selectedAsset.statusBadge || 'bg-slate-100 text-slate-700'"#}
+                        {#                        x-text="selectedAsset.status || '—'"#}
+                        {#                    ></span>#}
+                        <a href="http://visiteguidee.cofr8708.odns.fr/" target="_blank"
+                           class="rounded-full px-3 py-1 text-xs font-bold bg-slate-100 text-slate-700">Visite
+                            Guidée </a>
+                        <button
+                                @click="sidebarOpen = false"
+                                class="grid h-10 w-10 place-items-center rounded-full bg-white text-slate-700 shadow-soft hover:bg-slate-100"
+                                title="Fermer"
+                        >
+                            ✕
+                        </button>
                     </div>
-{#                    <span#}
-{#                        class="rounded-full px-3 py-1 text-xs font-bold"#}
-{#                        :class="selectedAsset.statusBadge || 'bg-slate-100 text-slate-700'"#}
-{#                        x-text="selectedAsset.status || '—'"#}
-{#                    ></span>#}
-                    <a href="http://visiteguidee.cofr8708.odns.fr/" target="_blank" class="rounded-full px-3 py-1 text-xs font-bold bg-slate-100 text-slate-700" >Visite Guidée </a>
-                    <button
-            @click="sidebarOpen = false"
-            class="grid h-10 w-10 place-items-center rounded-full bg-white text-slate-700 shadow-soft hover:bg-slate-100"
-            title="Fermer"
-        >
-            ✕
-        </button>
                 </div>
-            </div>
 
-            <div class="scrollbar-thin flex-1 overflow-y-auto px-5 py-5 lg:px-6">
-                <div class="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-soft">
-                    <div class="relative aspect-[16/10] overflow-hidden bg-slate-100">
-                        <template x-if="selectedAsset.images && selectedAsset.images.length">
-                            <img
-                                :src="currentSidebarImage"
-                                :alt="selectedAsset.name"
-                                class="h-full w-full object-cover cursor-zoom-in transition duration-300 hover:scale-[1.02]"
-                                @click="openLightbox(currentSidebarImage)"
-                            />
-                        </template>
+                <div class="scrollbar-thin flex-1 overflow-y-auto px-5 py-5 lg:px-6">
+                    <div class="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-soft">
+                        <div class="relative aspect-[16/10] overflow-hidden bg-slate-100">
+                            <template x-if="selectedAsset.images && selectedAsset.images.length">
+                                <img
+                                        :src="currentSidebarImage"
+                                        :alt="selectedAsset.name"
+                                        class="h-full w-full object-cover cursor-zoom-in transition duration-300 hover:scale-[1.02]"
+                                        @click="openLightbox(currentSidebarImage)"
+                                />
+                            </template>
 
-                        <template x-if="!selectedAsset.images || !selectedAsset.images.length">
-                            <div class="flex h-full w-full items-center justify-center bg-slate-100 text-sm font-medium text-slate-400">
-                                Aucune image disponible
+                            <template x-if="!selectedAsset.images || !selectedAsset.images.length">
+                                <div class="flex h-full w-full items-center justify-center bg-slate-100 text-sm font-medium text-slate-400">
+                                    Aucune image disponible
+                                </div>
+                            </template>
+
+                            <button
+                                    x-show="selectedAsset.images && selectedAsset.images.length > 1"
+                                    @click="prevSidebarImage()"
+                                    class="absolute left-3 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-slate-900/65 text-white shadow-lg"
+                            >‹
+                            </button>
+
+                            <button
+                                    x-show="selectedAsset.images && selectedAsset.images.length > 1"
+                                    @click="nextSidebarImage()"
+                                    class="absolute right-3 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-slate-900/65 text-white shadow-lg"
+                            >›
+                            </button>
+
+                            <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/70 to-transparent p-4 text-white">
+                                <div class="flex items-center justify-between gap-3">
+                                    <div>
+                                        <p class="text-xs uppercase tracking-[0.22em] text-white/70">Galerie actif</p>
+                                        <p class="mt-1 text-sm font-semibold" x-text="selectedAsset.type || '—'"></p>
+                                    </div>
+                                    <div
+                                            x-show="selectedAsset.images && selectedAsset.images.length"
+                                            class="rounded-full bg-white/15 px-3 py-1 text-xs font-bold"
+                                    >
+                                        <span x-text="(sidebarImageIndex + 1)"></span>/<span
+                                            x-text="selectedAsset.images ? selectedAsset.images.length : 0"></span>
+                                    </div>
+                                </div>
                             </div>
-                        </template>
+                        </div>
 
-                        <button
-                            x-show="selectedAsset.images && selectedAsset.images.length > 1"
-                            @click="prevSidebarImage()"
-                            class="absolute left-3 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-slate-900/65 text-white shadow-lg"
-                        >‹</button>
-
-                        <button
-                            x-show="selectedAsset.images && selectedAsset.images.length > 1"
-                            @click="nextSidebarImage()"
-                            class="absolute right-3 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-slate-900/65 text-white shadow-lg"
-                        >›</button>
-
-                        <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/70 to-transparent p-4 text-white">
-                            <div class="flex items-center justify-between gap-3">
-                                <div>
-                                    <p class="text-xs uppercase tracking-[0.22em] text-white/70">Galerie actif</p>
-                                    <p class="mt-1 text-sm font-semibold" x-text="selectedAsset.type || '—'"></p>
-                                </div>
-                                <div
-                                    x-show="selectedAsset.images && selectedAsset.images.length"
-                                    class="rounded-full bg-white/15 px-3 py-1 text-xs font-bold"
-                                >
-                                    <span x-text="(sidebarImageIndex + 1)"></span>/<span x-text="selectedAsset.images ? selectedAsset.images.length : 0"></span>
-                                </div>
+                        <div class="p-3">
+                            <div x-show="selectedAsset.images && selectedAsset.images.length"
+                                 class="grid grid-cols-4 gap-2">
+                                <template x-for="(img, index) in (selectedAsset.images || [])" :key="img + index">
+                                    <button
+                                            @click="setSidebarImage(index)"
+                                            class="overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 transition"
+                                            :class="sidebarImageIndex === index ? 'thumb-active' : ''"
+                                    >
+                                        <img :src="img" :alt="selectedAsset.name + ' ' + (index + 1)"
+                                             class="h-16 w-full object-cover"/>
+                                    </button>
+                                </template>
                             </div>
                         </div>
                     </div>
 
-                    <div class="p-3">
-                        <div x-show="selectedAsset.images && selectedAsset.images.length" class="grid grid-cols-4 gap-2">
-                            <template x-for="(img, index) in (selectedAsset.images || [])" :key="img + index">
+                    <div class="mt-5 rounded-[28px] bg-gradient-to-br from-slate-950 via-slate-900 to-premium-900 p-5 text-white shadow-premium">
+                        <div class="flex items-center justify-between gap-4">
+                            <div>
+                                <p class="text-xs uppercase tracking-[0.24em] text-white/50">Type d’actif</p>
+                                <h3 class="mt-2 text-xl font-extrabold" x-text="selectedAsset.type || '—'"></h3>
+                            </div>
+                            <div class="rounded-2xl bg-white/10 px-4 py-2 text-right">
+                                <p class="text-[11px] uppercase tracking-[0.20em] text-white/50">Prix</p>
+                                <p class="mt-1 text-base font-bold" x-text="selectedAsset.price || '—'"></p>
+                            </div>
+                        </div>
+
+                        <div class="mt-5 grid grid-cols-2 gap-3 text-sm">
+                            <div class="rounded-2xl bg-white/8 p-4">
+                                <p class="text-white/50">Surface</p>
+                                <p class="mt-1 font-semibold" x-text="selectedAsset.surface || '—'"></p>
+                            </div>
+                            <div class="rounded-2xl bg-white/8 p-4">
+                                <p class="text-white/50">Paiement</p>
+                                <p class="mt-1 font-semibold"
+                                   x-text="selectedAsset.financial_stats?.taux_paiement || selectedAsset.payment || '0%'"></p>
+                            </div>
+                            <div class="rounded-2xl bg-white/8 p-4">
+                                <p class="text-white/50">Client</p>
+                                <p class="mt-1 font-semibold" x-text="selectedAsset.client || '—'"></p>
+                            </div>
+                            <div class="rounded-2xl bg-white/8 p-4">
+                                <p class="text-white/50">Phase</p>
+                                <p class="mt-1 font-semibold" x-text="selectedAsset.phase || '—'"></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-5 rounded-[28px] bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-5 text-white shadow-premium">
+                        <div class="flex items-center justify-between gap-4">
+                            <div>
+                                <p class="text-xs uppercase tracking-[0.24em] text-white/50">Données financières</p>
+                                <h3 class="mt-2 text-xl font-extrabold">Finance client</h3>
+                            </div>
+                            <div class="rounded-2xl bg-white/10 px-4 py-2 text-right">
+                                <p class="text-[11px] uppercase tracking-[0.20em] text-white/50">Taux de paiement</p>
+                                <p class="mt-1 text-base font-bold"
+                                   x-text="selectedAsset.financial_stats?.taux_paiement || '0%'"></p>
+                            </div>
+                        </div>
+
+                        <div class="mt-5 grid grid-cols-2 gap-3 text-sm">
+                            <div class="rounded-2xl bg-white/8 p-4">
+                                <p class="text-white/50">Montant de base</p>
+                                <p class="mt-1 font-semibold"
+                                   x-text="selectedAsset.financial_stats?.montant_base || '—'"></p>
+                            </div>
+                            <div class="rounded-2xl bg-white/8 p-4">
+                                <p class="text-white/50">Prix de vente </p>
+                                <p class="mt-1 font-semibold"
+                                   x-text="selectedAsset.financial_stats?.montant_vendu || '—'"></p>
+                            </div>
+                            <div class="rounded-2xl bg-white/8 p-4">
+                                <p class="text-white/50">Montant payé</p>
+                                <p class="mt-1 font-semibold"
+                                   x-text="selectedAsset.financial_stats?.montant_paye || '—'"></p>
+                            </div>
+                            <div class="rounded-2xl bg-white/8 p-4">
+                                <p class="text-white/50">Nombre paiements</p>
+                                <p class="mt-1 font-semibold"
+                                   x-text="selectedAsset.financial_stats?.nombre_paiements ?? 0"></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-5 rounded-[28px] bg-gradient-to-br from-premium-900 via-slate-900 to-slate-950 p-5 text-white shadow-premium">
+                        <div class="flex items-center justify-between gap-4">
+                            <div>
+                                <p class="text-xs uppercase tracking-[0.24em] text-white/50">Travaux & valorisation</p>
+                                <h3 class="mt-2 text-xl font-extrabold">Progression chantier</h3>
+                            </div>
+                            <div class="rounded-2xl bg-white/10 px-4 py-2 text-right">
+                                <p class="text-[11px] uppercase tracking-[0.20em] text-white/50">Avancement</p>
+                                <p class="mt-1 text-base font-bold"
+                                   x-text="selectedAsset.construction_stats?.taux_avancement || '0%'"></p>
+                            </div>
+                        </div>
+
+                        <div class="mt-5 grid grid-cols-2 gap-3 text-sm">
+                            <div class="rounded-2xl bg-white/8 p-4">
+                                <p class="text-white/50">Valeur hypothécaire</p>
+                                <p class="mt-1 font-semibold"
+                                   x-text="selectedAsset.construction_stats?.valeur_hypothecaire || '—'"></p>
+                            </div>
+                            <div class="rounded-2xl bg-white/8 p-4 ">
+                                <p class="text-white/50">Ratio hypothécaire / paiements</p>
+                                <p class="mt-1 font-semibold"
+                                   x-text="selectedAsset.priority_stats?.ratio_label || '—'"></p>
+                            </div>
+                            {#                        <div class="rounded-2xl bg-white/8 p-4">#}
+                            {#                            <p class="text-white/50">Budget prévisionnel</p>#}
+                            {#                            <p class="mt-1 font-semibold" x-text="selectedAsset.construction_stats?.budget_previsionnel || '—'"></p>#}
+                            {#                        </div>#}
+                            {#                        <div class="rounded-2xl bg-white/8 p-4">#}
+                            {#                            <p class="text-white/50">Coût réel</p>#}
+                            {#                            <p class="mt-1 font-semibold" x-text="selectedAsset.construction_stats?.cout_reel || '—'"></p>#}
+                            {#                        </div>#}
+                            <div class="rounded-2xl bg-white/8 p-4">
+                                <p class="text-white/50">Évolution mois</p>
+                                <p class="mt-1 font-semibold"
+                                   x-text="selectedAsset.construction_stats?.evolution_mensuelle_label || '0% ce mois'"></p>
+                            </div>
+
+                        </div>
+
+                        <div class="mt-4 grid grid-cols-3 gap-3 text-sm">
+                            <div class="rounded-2xl bg-white/8 p-4 text-center">
+                                <p class="text-white/50">Il y a 2 mois</p>
+                                <p class="mt-1 font-semibold"
+                                   x-text="formatPercent(selectedAsset.construction_stats?.comparatif_progression?.il_y_a_2_mois)"></p>
+                            </div>
+                            <div class="rounded-2xl bg-white/8 p-4 text-center">
+                                <p class="text-white/50">Mois dernier</p>
+                                <p class="mt-1 font-semibold"
+                                   x-text="formatPercent(selectedAsset.construction_stats?.comparatif_progression?.mois_dernier)"></p>
+                            </div>
+                            <div class="rounded-2xl bg-white/8 p-4 text-center">
+                                <p class="text-white/50">Mois en cours</p>
+                                <p class="mt-1 font-semibold"
+                                   x-text="formatPercent(selectedAsset.construction_stats?.comparatif_progression?.mois_en_cours)"></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-5 grid grid-cols-3 gap-3">
+                        <template x-for="metric in selectedAsset.metrics || []" :key="metric.label">
+                            <div class="rounded-3xl border border-slate-200 bg-white p-4 text-center shadow-soft">
+                                <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400"
+                                   x-text="metric.label"></p>
+                                <p class="mt-2 text-lg font-extrabold text-slate-900" x-text="metric.value"></p>
+                            </div>
+                        </template>
+                    </div>
+
+                    <div class="mt-6">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-sm font-extrabold uppercase tracking-[0.22em] text-slate-500">Détails</h3>
+                            <button @click="flyToSelected()"
+                                    class="rounded-2xl bg-premium-500 px-4 py-2 text-xs font-bold text-white transition hover:bg-premium-600">
+                                Centrer sur la carte
+                            </button>
+                        </div>
+                        <div class="mt-3 space-y-3">
+                            <template x-for="item in selectedAsset.details || []" :key="item.label">
+                                <div class="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-soft">
+                                    <span class="text-sm text-slate-500" x-text="item.label"></span>
+                                    <span class="text-sm font-semibold text-slate-800" x-text="item.value"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <div class="mt-6">
+                        <h3 class="text-sm font-extrabold uppercase tracking-[0.22em] text-slate-500">Timeline
+                            commerciale</h3>
+                        <div class="mt-4 space-y-3">
+                            <template x-for="step in selectedAsset.timeline || []" :key="step.label + '-' + step.date">
+                                <div class="flex gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-soft">
+                                    <div class="mt-0.5 h-10 w-10 rounded-2xl" :class="step.iconBg"></div>
+                                    <div class="min-w-0 flex-1">
+                                        <div class="flex items-center justify-between gap-3">
+                                            <p class="font-semibold text-slate-900" x-text="step.label"></p>
+                                            <span class="text-xs font-bold text-slate-400" x-text="step.date"></span>
+                                        </div>
+                                        <p class="mt-1 text-sm text-slate-500" x-text="step.text"></p>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <div x-show="loading"
+                         class="mt-6 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500 shadow-soft">
+                        Chargement des données cartographiques...
+                    </div>
+
+                    <div x-show="!loading && apiError"
+                         class="mt-6 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 shadow-soft"
+                         x-text="apiError"></div>
+
+                    <div x-show="!loading && !visibleAssets.length"
+                         class="mt-6 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500 shadow-soft">
+                        Aucun actif ne correspond aux filtres sélectionnés.
+                    </div>
+
+                    <div class="mt-6">
+                        <h3 class="text-sm font-extrabold uppercase tracking-[0.22em] text-slate-500">Actifs du
+                            programme</h3>
+                        <div class="mt-3 space-y-2">
+                            <template x-for="asset in visibleAssets" :key="asset.id">
                                 <button
-                                    @click="setSidebarImage(index)"
-                                    class="overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 transition"
-                                    :class="sidebarImageIndex === index ? 'thumb-active' : ''"
+                                        @click="selectAsset(asset.id, true)"
+                                        class="flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left transition"
+                                        :class="selectedAsset.id === asset.id ? 'border-premium-300 bg-premium-50 shadow-soft' : 'border-slate-200 bg-white hover:border-premium-200 hover:bg-premium-50/40'"
                                 >
-                                    <img :src="img" :alt="selectedAsset.name + ' ' + (index + 1)" class="h-16 w-full object-cover"/>
+                                    <div>
+                                        <p class="font-semibold text-slate-900" x-text="asset.name"></p>
+                                        <p class="mt-1 text-xs text-slate-500">
+                                            <span x-text="asset.type"></span>
+                                            •
+                                            <span x-text="asset.surface"></span>
+                                            •
+                                            <span x-text="asset.construction_stats?.valeur_hypothecaire || '—'"></span>
+                                        </p>
+                                    </div>
+                                    <span class="rounded-full px-3 py-1 text-[11px] font-bold"
+                                          :class="asset.statusBadge" x-text="asset.status"></span>
                                 </button>
                             </template>
                         </div>
                     </div>
                 </div>
 
-                <div class="mt-5 rounded-[28px] bg-gradient-to-br from-slate-950 via-slate-900 to-premium-900 p-5 text-white shadow-premium">
-                    <div class="flex items-center justify-between gap-4">
-                        <div>
-                            <p class="text-xs uppercase tracking-[0.24em] text-white/50">Type d’actif</p>
-                            <h3 class="mt-2 text-xl font-extrabold" x-text="selectedAsset.type || '—'"></h3>
-                        </div>
-                        <div class="rounded-2xl bg-white/10 px-4 py-2 text-right">
-                            <p class="text-[11px] uppercase tracking-[0.20em] text-white/50">Prix</p>
-                            <p class="mt-1 text-base font-bold" x-text="selectedAsset.price || '—'"></p>
-                        </div>
-                    </div>
-
-                    <div class="mt-5 grid grid-cols-2 gap-3 text-sm">
-                        <div class="rounded-2xl bg-white/8 p-4">
-                            <p class="text-white/50">Surface</p>
-                            <p class="mt-1 font-semibold" x-text="selectedAsset.surface || '—'"></p>
-                        </div>
-                        <div class="rounded-2xl bg-white/8 p-4">
-                            <p class="text-white/50">Paiement</p>
-                            <p class="mt-1 font-semibold" x-text="selectedAsset.financial_stats?.taux_paiement || selectedAsset.payment || '0%'"></p>
-                        </div>
-                        <div class="rounded-2xl bg-white/8 p-4">
-                            <p class="text-white/50">Client</p>
-                            <p class="mt-1 font-semibold" x-text="selectedAsset.client || '—'"></p>
-                        </div>
-                        <div class="rounded-2xl bg-white/8 p-4">
-                            <p class="text-white/50">Phase</p>
-                            <p class="mt-1 font-semibold" x-text="selectedAsset.phase || '—'"></p>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="mt-5 rounded-[28px] bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-5 text-white shadow-premium">
-                    <div class="flex items-center justify-between gap-4">
-                        <div>
-                            <p class="text-xs uppercase tracking-[0.24em] text-white/50">Données financières</p>
-                            <h3 class="mt-2 text-xl font-extrabold">Finance client</h3>
-                        </div>
-                        <div class="rounded-2xl bg-white/10 px-4 py-2 text-right">
-                            <p class="text-[11px] uppercase tracking-[0.20em] text-white/50">Taux de paiement</p>
-                            <p class="mt-1 text-base font-bold" x-text="selectedAsset.financial_stats?.taux_paiement || '0%'"></p>
-                        </div>
-                    </div>
-
-                    <div class="mt-5 grid grid-cols-2 gap-3 text-sm">
-                        <div class="rounded-2xl bg-white/8 p-4">
-                            <p class="text-white/50">Montant de base</p>
-                            <p class="mt-1 font-semibold" x-text="selectedAsset.financial_stats?.montant_base || '—'"></p>
-                        </div>
-                        <div class="rounded-2xl bg-white/8 p-4">
-                            <p class="text-white/50">Prix de vente </p>
-                            <p class="mt-1 font-semibold" x-text="selectedAsset.financial_stats?.montant_vendu || '—'"></p>
-                        </div>
-                        <div class="rounded-2xl bg-white/8 p-4">
-                            <p class="text-white/50">Montant payé</p>
-                            <p class="mt-1 font-semibold" x-text="selectedAsset.financial_stats?.montant_paye || '—'"></p>
-                        </div>
-                        <div class="rounded-2xl bg-white/8 p-4">
-                            <p class="text-white/50">Nombre paiements</p>
-                            <p class="mt-1 font-semibold" x-text="selectedAsset.financial_stats?.nombre_paiements ?? 0"></p>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="mt-5 rounded-[28px] bg-gradient-to-br from-premium-900 via-slate-900 to-slate-950 p-5 text-white shadow-premium">
-                    <div class="flex items-center justify-between gap-4">
-                        <div>
-                            <p class="text-xs uppercase tracking-[0.24em] text-white/50">Travaux & valorisation</p>
-                            <h3 class="mt-2 text-xl font-extrabold">Progression chantier</h3>
-                        </div>
-                        <div class="rounded-2xl bg-white/10 px-4 py-2 text-right">
-                            <p class="text-[11px] uppercase tracking-[0.20em] text-white/50">Avancement</p>
-                            <p class="mt-1 text-base font-bold" x-text="selectedAsset.construction_stats?.taux_avancement || '0%'"></p>
-                        </div>
-                    </div>
-
-                    <div class="mt-5 grid grid-cols-2 gap-3 text-sm">
-                        <div class="rounded-2xl bg-white/8 p-4">
-                            <p class="text-white/50">Valeur hypothécaire</p>
-                            <p class="mt-1 font-semibold" x-text="selectedAsset.construction_stats?.valeur_hypothecaire || '—'"></p>
-                        </div>
-                        <div class="rounded-2xl bg-white/8 p-4 ">
-            <p class="text-white/50">Ratio hypothécaire / paiements</p>
-            <p class="mt-1 font-semibold" x-text="selectedAsset.priority_stats?.ratio_label || '—'"></p>
+                {#            <div class="grid grid-cols-2 gap-3 border-t border-slate-200/70 p-5 lg:px-6">#}
+                {#                <button class="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white transition hover:opacity-95">Ouvrir dossier</button>#}
+                {#                <button class="rounded-2xl bg-premium-500 px-4 py-3 text-sm font-bold text-white transition hover:bg-premium-600">Créer réservation</button>#}
+                {#                <button class="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-soft">Planifier visite</button>#}
+                {#                <button class="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-soft">Exporter fiche</button>#}
+                {#            </div>#}
+            </aside>
         </div>
-{#                        <div class="rounded-2xl bg-white/8 p-4">#}
-{#                            <p class="text-white/50">Budget prévisionnel</p>#}
-{#                            <p class="mt-1 font-semibold" x-text="selectedAsset.construction_stats?.budget_previsionnel || '—'"></p>#}
-{#                        </div>#}
-{#                        <div class="rounded-2xl bg-white/8 p-4">#}
-{#                            <p class="text-white/50">Coût réel</p>#}
-{#                            <p class="mt-1 font-semibold" x-text="selectedAsset.construction_stats?.cout_reel || '—'"></p>#}
-{#                        </div>#}
-                        <div class="rounded-2xl bg-white/8 p-4">
-                            <p class="text-white/50">Évolution mois</p>
-                            <p class="mt-1 font-semibold" x-text="selectedAsset.construction_stats?.evolution_mensuelle_label || '0% ce mois'"></p>
-                        </div>
-                        
-                    </div>
 
-                    <div class="mt-4 grid grid-cols-3 gap-3 text-sm">
-                        <div class="rounded-2xl bg-white/8 p-4 text-center">
-                            <p class="text-white/50">Il y a 2 mois</p>
-                            <p class="mt-1 font-semibold" x-text="formatPercent(selectedAsset.construction_stats?.comparatif_progression?.il_y_a_2_mois)"></p>
-                        </div>
-                        <div class="rounded-2xl bg-white/8 p-4 text-center">
-                            <p class="text-white/50">Mois dernier</p>
-                            <p class="mt-1 font-semibold" x-text="formatPercent(selectedAsset.construction_stats?.comparatif_progression?.mois_dernier)"></p>
-                        </div>
-                        <div class="rounded-2xl bg-white/8 p-4 text-center">
-                            <p class="text-white/50">Mois en cours</p>
-                            <p class="mt-1 font-semibold" x-text="formatPercent(selectedAsset.construction_stats?.comparatif_progression?.mois_en_cours)"></p>
-                        </div>
-                    </div>
-                </div>
+        <div class="pointer-events-none absolute bottom-4 left-4 z-20 lg:bottom-5 lg:left-4">
+            <div class="pointer-events-auto grid gap-3 lg:grid-cols-3">
 
-                <div class="mt-5 grid grid-cols-3 gap-3">
-                    <template x-for="metric in selectedAsset.metrics || []" :key="metric.label">
-                        <div class="rounded-3xl border border-slate-200 bg-white p-4 text-center shadow-soft">
-                            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400" x-text="metric.label"></p>
-                            <p class="mt-2 text-lg font-extrabold text-slate-900" x-text="metric.value"></p>
-                        </div>
-                    </template>
-                </div>
 
-                <div class="mt-6">
-                    <div class="flex items-center justify-between">
-                        <h3 class="text-sm font-extrabold uppercase tracking-[0.22em] text-slate-500">Détails</h3>
-                        <button @click="flyToSelected()" class="rounded-2xl bg-premium-500 px-4 py-2 text-xs font-bold text-white transition hover:bg-premium-600">
-                            Centrer sur la carte
-                        </button>
-                    </div>
-                    <div class="mt-3 space-y-3">
-                        <template x-for="item in selectedAsset.details || []" :key="item.label">
-                            <div class="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-soft">
-                                <span class="text-sm text-slate-500" x-text="item.label"></span>
-                                <span class="text-sm font-semibold text-slate-800" x-text="item.value"></span>
-                            </div>
-                        </template>
-                    </div>
-                </div>
-
-                <div class="mt-6">
-                    <h3 class="text-sm font-extrabold uppercase tracking-[0.22em] text-slate-500">Timeline commerciale</h3>
-                    <div class="mt-4 space-y-3">
-                        <template x-for="step in selectedAsset.timeline || []" :key="step.label + '-' + step.date">
-                            <div class="flex gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-soft">
-                                <div class="mt-0.5 h-10 w-10 rounded-2xl" :class="step.iconBg"></div>
-                                <div class="min-w-0 flex-1">
-                                    <div class="flex items-center justify-between gap-3">
-                                        <p class="font-semibold text-slate-900" x-text="step.label"></p>
-                                        <span class="text-xs font-bold text-slate-400" x-text="step.date"></span>
-                                    </div>
-                                    <p class="mt-1 text-sm text-slate-500" x-text="step.text"></p>
-                                </div>
-                            </div>
-                        </template>
-                    </div>
-                </div>
-
-                <div x-show="loading" class="mt-6 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500 shadow-soft">
-                    Chargement des données cartographiques...
-                </div>
-
-                <div x-show="!loading && apiError" class="mt-6 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 shadow-soft" x-text="apiError"></div>
-
-                <div x-show="!loading && !visibleAssets.length" class="mt-6 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500 shadow-soft">
-                    Aucun actif ne correspond aux filtres sélectionnés.
-                </div>
-
-                <div class="mt-6">
-                    <h3 class="text-sm font-extrabold uppercase tracking-[0.22em] text-slate-500">Actifs du programme</h3>
-                    <div class="mt-3 space-y-2">
-                        <template x-for="asset in visibleAssets" :key="asset.id">
-                            <button
-                                @click="selectAsset(asset.id, true)"
-                                class="flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left transition"
-                                :class="selectedAsset.id === asset.id ? 'border-premium-300 bg-premium-50 shadow-soft' : 'border-slate-200 bg-white hover:border-premium-200 hover:bg-premium-50/40'"
-                            >
-                                <div>
-                                    <p class="font-semibold text-slate-900" x-text="asset.name"></p>
-                                   <p class="mt-1 text-xs text-slate-500">
-    <span x-text="asset.type"></span>
-    •
-    <span x-text="asset.surface"></span>
-    •
-    <span x-text="asset.construction_stats?.valeur_hypothecaire || '—'"></span>
-</p>
-                                </div>
-                                <span class="rounded-full px-3 py-1 text-[11px] font-bold" :class="asset.statusBadge" x-text="asset.status"></span>
-                            </button>
-                        </template>
-                    </div>
-                </div>
-            </div>
-
-{#            <div class="grid grid-cols-2 gap-3 border-t border-slate-200/70 p-5 lg:px-6">#}
-{#                <button class="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white transition hover:opacity-95">Ouvrir dossier</button>#}
-{#                <button class="rounded-2xl bg-premium-500 px-4 py-3 text-sm font-bold text-white transition hover:bg-premium-600">Créer réservation</button>#}
-{#                <button class="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-soft">Planifier visite</button>#}
-{#                <button class="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-soft">Exporter fiche</button>#}
-{#            </div>#}
-        </aside>
-    </div>
-
-    <div class="pointer-events-none absolute bottom-4 left-4 z-20 lg:bottom-5 lg:left-4">
-        <div class="pointer-events-auto grid gap-3 lg:grid-cols-3">
-            
-    
-    <!-- STATUT -->
-    <div class="glass rounded-[26px] border border-white/20 bg-white/78 p-4 shadow-premium">
-{#        <p class="text-xs font-extrabold uppercase tracking-[0.22em] text-premium-600">Statut</p>#}
-{#        <div class="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-slate-700">#}
-{#            <span class="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 shadow-soft">#}
-{#                <span class="h-3 w-3 rounded-full bg-sky-400"></span> Disponible#}
-{#            </span>#}
-{#            <span class="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 shadow-soft">#}
-{#                <span class="h-3 w-3 rounded-full bg-red-400"></span> Attention#}
-{#            </span>#}
-{#            <span class="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 shadow-soft">#}
-{#                <span class="h-3 w-3 rounded-full bg-emerald-500"></span> Vendu#}
-{#            </span>#}
-{#        </div>#}
-          <p class="text-xs font-extrabold uppercase tracking-[0.22em] text-premium-600">Priorité travaux</p>
-        <div class="mt-2 flex flex-wrap gap-2 text-xs font-semibold text-slate-700">
+                <!-- STATUT -->
+                <div class="glass rounded-[26px] border border-white/20 bg-white/78 p-4 shadow-premium">
+                    {#        <p class="text-xs font-extrabold uppercase tracking-[0.22em] text-premium-600">Statut</p>#}
+                    {#        <div class="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-slate-700">#}
+                    {#            <span class="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 shadow-soft">#}
+                    {#                <span class="h-3 w-3 rounded-full bg-sky-400"></span> Disponible#}
+                    {#            </span>#}
+                    {#            <span class="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 shadow-soft">#}
+                    {#                <span class="h-3 w-3 rounded-full bg-red-400"></span> Attention#}
+                    {#            </span>#}
+                    {#            <span class="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 shadow-soft">#}
+                    {#                <span class="h-3 w-3 rounded-full bg-emerald-500"></span> Vendu#}
+                    {#            </span>#}
+                    {#        </div>#}
+                    <p class="text-xs font-extrabold uppercase tracking-[0.22em] text-premium-600">Priorité travaux</p>
+                    <div class="mt-2 flex flex-wrap gap-2 text-xs font-semibold text-slate-700">
             <span class="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 shadow-soft">
                 <span class="h-3 w-3 rounded-full bg-green-500"></span> Faible
             </span>
-            <span class="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 shadow-soft">
+                        <span class="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 shadow-soft">
                 <span class="h-3 w-3 rounded-full bg-amber-500"></span> Moyenne
             </span>
-            <span class="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 shadow-soft">
+                        <span class="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 shadow-soft">
                 <span class="h-3 w-3 rounded-full bg-red-500"></span> Élevée
             </span>
-            
-             <span class="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 shadow-soft">
+
+                        <span class="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 shadow-soft">
                 T= Travaux - P= Paiement - V=Variation
             </span>
-        </div>
-    </div>
-
-
-
-
-
-
-{#            <div class="glass rounded-[26px] border border-white/20 bg-white/78 p-4 shadow-premium">#}
-{#                <p class="text-xs font-extrabold uppercase tracking-[0.22em] text-premium-600">Vue programme</p>#}
-{#                <div class="mt-2 grid grid-cols-3 gap-2 text-center">#}
-{#                    <template x-for="summary in summaries" :key="summary.label">#}
-{#                        <div class="rounded-2xl bg-white p-3 shadow-soft">#}
-{#                            <p class="text-[11px] uppercase tracking-[0.16em] text-slate-400" x-text="summary.label"></p>#}
-{#                            <p class="mt-1 text-base font-extrabold text-slate-900" x-text="summary.value"></p>#}
-{#                        </div>#}
-{#                    </template>#}
-{#                </div>#}
-{#            </div>#}
-
-
-        </div>
-    </div>
-
-    <div x-show="lightboxOpen" x-transition.opacity class="absolute inset-0 z-50 flex items-center justify-center bg-slate-950/88 p-6" @click.self="closeLightbox()">
-        <button @click="closeLightbox()" class="absolute right-6 top-6 grid h-12 w-12 place-items-center rounded-full bg-white/10 text-white">✕</button>
-        <button @click.stop="prevLightboxImage()" class="absolute left-6 top-1/2 grid h-12 w-12 -translate-y-1/2 place-items-center rounded-full bg-white/10 text-white">‹</button>
-        <img :src="lightboxImage" alt="Aperçu" class="max-h-[88vh] max-w-[92vw] rounded-3xl object-contain shadow-2xl"/>
-        <button @click.stop="nextLightboxImage()" class="absolute right-6 top-1/2 grid h-12 w-12 -translate-y-1/2 place-items-center rounded-full bg-white/10 text-white">›</button>
-    </div>
-</div>
-  {% else %}
-<div class="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 flex items-center justify-center px-6 py-10">
-    <div class="relative w-full max-w-2xl overflow-hidden rounded-[36px] border border-white/10 bg-white/10 shadow-2xl backdrop-blur-2xl">
-        <div class="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-premium-500/10"></div>
-
-        <div class="relative p-8 md:p-12">
-            <div class="mx-auto flex h-24 w-24 items-center justify-center rounded-[28px] bg-gradient-to-br from-rose-500 to-premium-600 shadow-[0_20px_60px_rgba(244,63,94,0.30)]">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V7.75a4.5 4.5 0 10-9 0v2.75M6.75 10.5h10.5A1.75 1.75 0 0119 12.25v6A1.75 1.75 0 0117.25 20h-10.5A1.75 1.75 0 015 18.25v-6A1.75 1.75 0 016.75 10.5z"/>
-                </svg>
-            </div>
-
-            <div class="mt-8 text-center">
-                <p class="text-xs font-extrabold uppercase tracking-[0.32em] text-premium-300">
-                    Accès restreint
-                </p>
-
-                <h1 class="mt-4 text-3xl md:text-4xl font-extrabold tracking-tight text-white">
-                    Vous n’êtes pas autorisé à visualiser le parcellaire
-                </h1>
-
-                <p class="mx-auto mt-4 max-w-xl text-sm md:text-base leading-7 text-slate-300">
-                    Cette interface cartographique contient des données sensibles liées aux programmes immobiliers,
-                    aux informations techniques et aux éléments commerciaux. Votre profil actuel ne dispose pas
-                    des autorisations nécessaires pour accéder à cette vue.
-                </p>
-            </div>
-
-            <div class="mt-8 grid gap-4 md:grid-cols-3">
-                <div class="rounded-3xl border border-white/10 bg-white/5 p-5 text-center">
-                    <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-500/15 text-sky-300">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 01.553-.894L9 2m0 18l6-2m-6 2V2m6 16l5.447-2.724A1 1 0 0021 14.382V3.618a1 1 0 00-.553-.894L15 0m0 18V0"/>
-                        </svg>
                     </div>
-                    <h3 class="mt-4 text-sm font-bold text-white">Vue cartographique</h3>
-                    <p class="mt-2 text-xs leading-6 text-slate-400">
-                        Accès protégé aux cartes, parcelles et superpositions visuelles.
+                </div>
+
+
+                {#            <div class="glass rounded-[26px] border border-white/20 bg-white/78 p-4 shadow-premium">#}
+                {#                <p class="text-xs font-extrabold uppercase tracking-[0.22em] text-premium-600">Vue programme</p>#}
+                {#                <div class="mt-2 grid grid-cols-3 gap-2 text-center">#}
+                {#                    <template x-for="summary in summaries" :key="summary.label">#}
+                {#                        <div class="rounded-2xl bg-white p-3 shadow-soft">#}
+                {#                            <p class="text-[11px] uppercase tracking-[0.16em] text-slate-400" x-text="summary.label"></p>#}
+                {#                            <p class="mt-1 text-base font-extrabold text-slate-900" x-text="summary.value"></p>#}
+                {#                        </div>#}
+                {#                    </template>#}
+                {#                </div>#}
+                {#            </div>#}
+
+
+            </div>
+        </div>
+
+        <div x-show="lightboxOpen" x-transition.opacity
+             class="absolute inset-0 z-50 flex items-center justify-center bg-slate-950/88 p-6"
+             @click.self="closeLightbox()">
+            <button @click="closeLightbox()"
+                    class="absolute right-6 top-6 grid h-12 w-12 place-items-center rounded-full bg-white/10 text-white">
+                ✕
+            </button>
+            <button @click.stop="prevLightboxImage()"
+                    class="absolute left-6 top-1/2 grid h-12 w-12 -translate-y-1/2 place-items-center rounded-full bg-white/10 text-white">
+                ‹
+            </button>
+            <img :src="lightboxImage" alt="Aperçu"
+                 class="max-h-[88vh] max-w-[92vw] rounded-3xl object-contain shadow-2xl"/>
+            <button @click.stop="nextLightboxImage()"
+                    class="absolute right-6 top-1/2 grid h-12 w-12 -translate-y-1/2 place-items-center rounded-full bg-white/10 text-white">
+                ›
+            </button>
+        </div>
+    </div>
+{% else %}
+    <div class="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 flex items-center justify-center px-6 py-10">
+        <div class="relative w-full max-w-2xl overflow-hidden rounded-[36px] border border-white/10 bg-white/10 shadow-2xl backdrop-blur-2xl">
+            <div class="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-premium-500/10"></div>
+
+            <div class="relative p-8 md:p-12">
+                <div class="mx-auto flex h-24 w-24 items-center justify-center rounded-[28px] bg-gradient-to-br from-rose-500 to-premium-600 shadow-[0_20px_60px_rgba(244,63,94,0.30)]">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-white" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="1.8">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                              d="M16.5 10.5V7.75a4.5 4.5 0 10-9 0v2.75M6.75 10.5h10.5A1.75 1.75 0 0119 12.25v6A1.75 1.75 0 0117.25 20h-10.5A1.75 1.75 0 015 18.25v-6A1.75 1.75 0 016.75 10.5z"/>
+                    </svg>
+                </div>
+
+                <div class="mt-8 text-center">
+                    <p class="text-xs font-extrabold uppercase tracking-[0.32em] text-premium-300">
+                        Accès restreint
+                    </p>
+
+                    <h1 class="mt-4 text-3xl md:text-4xl font-extrabold tracking-tight text-white">
+                        Vous n’êtes pas autorisé à visualiser le parcellaire
+                    </h1>
+
+                    <p class="mx-auto mt-4 max-w-xl text-sm md:text-base leading-7 text-slate-300">
+                        Cette interface cartographique contient des données sensibles liées aux programmes immobiliers,
+                        aux informations techniques et aux éléments commerciaux. Votre profil actuel ne dispose pas
+                        des autorisations nécessaires pour accéder à cette vue.
                     </p>
                 </div>
 
-                <div class="rounded-3xl border border-white/10 bg-white/5 p-5 text-center">
-                    <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/15 text-amber-300">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 7.5h18M7.5 3v18M16.5 3v18M3 16.5h18"/>
-                        </svg>
+                <div class="mt-8 grid gap-4 md:grid-cols-3">
+                    <div class="rounded-3xl border border-white/10 bg-white/5 p-5 text-center">
+                        <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-500/15 text-sky-300">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 24 24" fill="none"
+                                 stroke="currentColor" stroke-width="1.8">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                      d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 01.553-.894L9 2m0 18l6-2m-6 2V2m6 16l5.447-2.724A1 1 0 0021 14.382V3.618a1 1 0 00-.553-.894L15 0m0 18V0"/>
+                            </svg>
+                        </div>
+                        <h3 class="mt-4 text-sm font-bold text-white">Vue cartographique</h3>
+                        <p class="mt-2 text-xs leading-6 text-slate-400">
+                            Accès protégé aux cartes, parcelles et superpositions visuelles.
+                        </p>
                     </div>
-                    <h3 class="mt-4 text-sm font-bold text-white">Données sensibles</h3>
-                    <p class="mt-2 text-xs leading-6 text-slate-400">
-                        Certaines informations financières, commerciales ou techniques sont restreintes.
-                    </p>
+
+                    <div class="rounded-3xl border border-white/10 bg-white/5 p-5 text-center">
+                        <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/15 text-amber-300">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 24 24" fill="none"
+                                 stroke="currentColor" stroke-width="1.8">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                      d="M3 7.5h18M7.5 3v18M16.5 3v18M3 16.5h18"/>
+                            </svg>
+                        </div>
+                        <h3 class="mt-4 text-sm font-bold text-white">Données sensibles</h3>
+                        <p class="mt-2 text-xs leading-6 text-slate-400">
+                            Certaines informations financières, commerciales ou techniques sont restreintes.
+                        </p>
+                    </div>
+
+                    <div class="rounded-3xl border border-white/10 bg-white/5 p-5 text-center">
+                        <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-300">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 24 24" fill="none"
+                                 stroke="currentColor" stroke-width="1.8">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                      d="M12 11c1.657 0 3-1.567 3-3.5S13.657 4 12 4 9 5.567 9 7.5 10.343 11 12 11zm0 0c-3.314 0-6 2.239-6 5v1h12v-1c0-2.761-2.686-5-6-5z"/>
+                            </svg>
+                        </div>
+                        <h3 class="mt-4 text-sm font-bold text-white">Gestion des droits</h3>
+                        <p class="mt-2 text-xs leading-6 text-slate-400">
+                            Contactez un administrateur pour obtenir le rôle ou le groupe approprié.
+                        </p>
+                    </div>
                 </div>
 
-                <div class="rounded-3xl border border-white/10 bg-white/5 p-5 text-center">
-                    <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-300">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 11c1.657 0 3-1.567 3-3.5S13.657 4 12 4 9 5.567 9 7.5 10.343 11 12 11zm0 0c-3.314 0-6 2.239-6 5v1h12v-1c0-2.761-2.686-5-6-5z"/>
-                        </svg>
-                    </div>
-                    <h3 class="mt-4 text-sm font-bold text-white">Gestion des droits</h3>
-                    <p class="mt-2 text-xs leading-6 text-slate-400">
-                        Contactez un administrateur pour obtenir le rôle ou le groupe approprié.
-                    </p>
+                <div class="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
+                    <a href="javascript:history.back()"
+                       class="inline-flex items-center justify-center rounded-2xl bg-white px-5 py-3 text-sm font-bold text-slate-900 shadow-lg transition hover:scale-[1.02]">
+                        Retour
+                    </a>
+
+                    <a href="/"
+                       class="inline-flex items-center justify-center rounded-2xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-bold text-white transition hover:bg-white/10">
+                        Aller à l’accueil
+                    </a>
                 </div>
-            </div>
 
-            <div class="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
-                <a href="javascript:history.back()"
-                   class="inline-flex items-center justify-center rounded-2xl bg-white px-5 py-3 text-sm font-bold text-slate-900 shadow-lg transition hover:scale-[1.02]">
-                    Retour
-                </a>
-
-                <a href="/"
-                   class="inline-flex items-center justify-center rounded-2xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-bold text-white transition hover:bg-white/10">
-                    Aller à l’accueil
-                </a>
-            </div>
-
-            <div class="mt-8 rounded-2xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-center text-xs text-amber-200">
-                Votre compte ne possède pas actuellement la permission requise pour afficher le parcellaire.
+                <div class="mt-8 rounded-2xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-center text-xs text-amber-200">
+                    Votre compte ne possède pas actuellement la permission requise pour afficher le parcellaire.
+                </div>
             </div>
         </div>
     </div>
-</div>
 {% endif %}
 <script>
     function estateMapApp() {
@@ -889,9 +971,9 @@
             initialized: false,
 
             summaries: [
-                { label: 'Actifs', value: '0' },
-                { label: 'Réservés/Vendus', value: '0' },
-                { label: 'CA potentiel', value: '0 FCFA' },
+                {label: 'Actifs', value: '0'},
+                {label: 'Réservés/Vendus', value: '0'},
+                {label: 'CA potentiel', value: '0 FCFA'},
             ],
 
             get filteredProgramOptions() {
@@ -1023,7 +1105,7 @@
 
             async loadData() {
                 const response = await fetch("{% url 'api-map-assets' %}", {
-                    headers: { "X-Requested-With": "XMLHttpRequest" }
+                    headers: {"X-Requested-With": "XMLHttpRequest"}
                 });
 
                 if (!response.ok) throw new Error("Impossible de charger les données de la carte.");
@@ -1147,20 +1229,20 @@
                 let priorityDotClass = 'background:#94a3b8;';
                 let priorityBlockClass = 'priority-low';
 
-    if (priority === 'LOW') {
-        priorityDotClass = 'background:#22c55e;';
-        priorityBlockClass = 'priority-low';
-    }
+                if (priority === 'LOW') {
+                    priorityDotClass = 'background:#22c55e;';
+                    priorityBlockClass = 'priority-low';
+                }
 
-    if (priority === 'MEDIUM') {
-        priorityDotClass = 'background:#f59e0b;';
-        priorityBlockClass = 'priority-medium';
-    }
+                if (priority === 'MEDIUM') {
+                    priorityDotClass = 'background:#f59e0b;';
+                    priorityBlockClass = 'priority-medium';
+                }
 
-    if (priority === 'HIGH') {
-        priorityDotClass = 'background:#ef4444;';
-        priorityBlockClass = 'priority-high';
-    }
+                if (priority === 'HIGH') {
+                    priorityDotClass = 'background:#ef4444;';
+                    priorityBlockClass = 'priority-high';
+                }
 
                 return `
         <div class="parcel-label ${priorityBlockClass}">
@@ -1215,7 +1297,7 @@
                 if (this.geojsonLayer && this.showParcels) {
                     const bounds = this.geojsonLayer.getBounds();
                     if (bounds && bounds.isValid()) {
-                        this.map.fitBounds(bounds.pad(0.25), { maxZoom: 20 });
+                        this.map.fitBounds(bounds.pad(0.25), {maxZoom: 20});
                         return;
                     }
                 }
@@ -1226,7 +1308,7 @@
 
                 if (points.length) {
                     const bounds = L.latLngBounds(points);
-                    this.map.fitBounds(bounds.pad(0.25), { maxZoom: 20 });
+                    this.map.fitBounds(bounds.pad(0.25), {maxZoom: 20});
                 }
             },
 
@@ -1309,11 +1391,11 @@
                         <div class="popup-carousel" data-carousel="${asset.id}" data-index="0">
                             ${slides || `<img src="${firstImg}" alt="${asset.name}" />`}
                             ${(asset.images || []).length > 1
-                                ? `<button class="popup-carousel-btn left" data-action="prev">‹</button><button class="popup-carousel-btn right" data-action="next">›</button>`
-                                : ''}
+                    ? `<button class="popup-carousel-btn left" data-action="prev">‹</button><button class="popup-carousel-btn right" data-action="next">›</button>`
+                    : ''}
                             ${(asset.images || []).length > 1
-                                ? `<div class="popup-dots">${dots}</div>`
-                                : ''}
+                    ? `<div class="popup-dots">${dots}</div>`
+                    : ''}
                         </div>
 
                         <div style="font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#fdba74;font-weight:700">
@@ -1417,13 +1499,13 @@
                     .filter(asset => asset.geometry)
                     .map(asset => ({
                         type: 'Feature',
-                        properties: { ...asset },
+                        properties: {...asset},
                         geometry: asset.geometry
                     }));
 
                 if (features.length && this.showParcels) {
                     this.geojsonLayer = L.geoJSON(
-                        { type: 'FeatureCollection', features },
+                        {type: 'FeatureCollection', features},
                         {
                             style: feature => this.getStyle(feature.properties, false),
                             onEachFeature: (feature, layer) => {
