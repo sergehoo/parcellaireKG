@@ -173,3 +173,13 @@ EXTERNAL_LOTS_API_URL = os.environ.get("EXTERNAL_LOTS_API_URL")
 EXTERNAL_LOTS_API_KEY = os.environ.get("EXTERNAL_LOTS_API_KEY")
 EXTERNAL_LOTS_API_USERNAME = os.environ.get("EXTERNAL_LOTS_API_USERNAME")
 EXTERNAL_LOTS_API_PASSWORD = os.environ.get("EXTERNAL_LOTS_API_PASSWORD")
+
+
+
+SAP_BASE_URL = os.getenv("SAP_BASE_URL", "").rstrip("/")
+SAP_TOKEN_URL = os.getenv("SAP_TOKEN_URL", "")
+SAP_CLIENT_ID = os.getenv("SAP_CLIENT_ID", "")
+SAP_CLIENT_SECRET = os.getenv("SAP_CLIENT_SECRET", "")
+SAP_TIMEOUT = int(os.getenv("SAP_TIMEOUT", "60"))
+SAP_VERIFY_SSL = os.getenv("SAP_VERIFY_SSL", "true").lower() == "true"
+

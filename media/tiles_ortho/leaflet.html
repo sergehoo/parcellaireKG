@@ -3,7 +3,7 @@
           <head>
             <meta charset="utf-8">
             <meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no' />
-            <title>Ortho_BR1_web.tif</title>
+            <title>KOTIBE_web.tif</title>
 
             <!-- Leaflet -->
             <link rel="stylesheet" href="https://unpkg.com/leaflet@0.7.5/dist/leaflet.css" />
@@ -54,7 +54,7 @@
 
         // Map
         var map = L.map('map', {
-            center: [5.422858376292719, -3.971445443467114],
+            center: [4.818262743366832, -6.623763757884284],
             zoom: 22,
             minZoom: 15,
             maxZoom: 22,
@@ -72,7 +72,7 @@
             return this._div;
         };
         title.update = function(props) {
-            this._div.innerHTML = "Ortho_BR1_web.tif";
+            this._div.innerHTML = "KOTIBE_web.tif";
         };
         title.addTo(map);
 
@@ -94,7 +94,7 @@
         L.control.layers(basemaps, overlaymaps, {collapsed: false}).addTo(map);
 
         // Fit to overlay bounds (SW and NE points with (lat, lon))
-        map.fitBounds([[5.42071242058543, -3.969340112934228], [5.425004332000008, -3.9735507739999996]]);
+        map.fitBounds([[4.8153705727336575, -6.620419122768568], [4.821154914000007, -6.627108393]]);
 
         </script>
 
