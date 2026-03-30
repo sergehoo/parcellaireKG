@@ -39,6 +39,7 @@ from parcelaire.views import HomeView, MapView, ParcellaireDashboardView, Projet
 urlpatterns = [
                   path('admin/', admin.site.urls),
                   path("api/", include("parcelaire.api.urls")),
+                  path("ai/", include("ai_construction.urls")),
                   path('home', HomeView.as_view(), name='home'),
                   path('map', MapView.as_view(), name='map'),
                   path('accounts/', include('allauth.urls')),

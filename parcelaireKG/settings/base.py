@@ -69,7 +69,8 @@ INSTALLED_APPS = [
     "csp",
     'drf_spectacular',
     'corsheaders',
-    'parcelaire'
+    'parcelaire',
+    'ai_construction'
 ]
 
 MIDDLEWARE = [
