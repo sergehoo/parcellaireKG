@@ -42,6 +42,8 @@
             backdrop-filter: blur(18px);
             -webkit-backdrop-filter: blur(18px);
         }
+        
+        [x-cloak] { display: none !important; }
 
         .leaflet-container {
             background: linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%);
@@ -390,7 +392,7 @@
 
                 search: '',
                 activeFilter: 'Tous',
-                filters: ['Tous', 'Disponibles', 'Réservés', 'Vendus', 'En construction'],
+                filters: ['Tous'],
 
                 projectFilter: '',
                 programFilter: '',
@@ -537,11 +539,7 @@
                 initMap() {
                     const mapEl = document.getElementById('map');
                     if (!mapEl) throw new Error('Conteneur de carte introuvable.');
-
-                    if (mapEl._leaflet_id) {
-                        mapEl._leaflet_id = null;
-                        mapEl.innerHTML = '';
-                    }
+                    
 
                     if (this.map) {
                         this.map.off();
@@ -579,7 +577,7 @@
                             console.warn('Erreur tuile ortho:', e?.tile?.src || 'tuile inconnue');
                         }
 
-                        if (this.orthoErrorCount === 8 && this.mapMode !== 'osm') {
+                        if (this.orthoErrorCount >= 8 && this.mapMode !== 'osm')  {
                             console.warn("Bascule automatique sur OSM : orthophoto indisponible.");
                             this.mapMode = 'osm';
                             this.applyBaseLayers();
@@ -708,7 +706,9 @@
                     });
 
                     this.summaries = data.summaries || this.summaries;
-                    this.filters = data.filters || this.filters;
+                    this.filters = Array.isArray(data.filters) && data.filters.length
+                        ? data.filters
+                        : ['Tous'];
 
                     this.projectOptions = Array.from(new Set(this.assets.map(a => a.project).filter(Boolean)))
                         .sort((a, b) => a.localeCompare(b));
@@ -719,7 +719,7 @@
                     this.visibleAssets = [...this.assets];
                     this.selectedAsset = this.assets.length ? this.assets[0] : {};
                     this.sidebarImageIndex = 0;
-                    this.sidebarOpen = !!this.selectedAsset?.id;
+                    this.sidebarOpen = false
                 },
 
                 setMapMode(mode) {
@@ -957,8 +957,20 @@
                     this.sidebarImageIndex = this.lightboxIndex;
                     this.lightboxImage = imgs[this.lightboxIndex];
                 },
+                escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, function (m) {
+        return {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        }[m];
+    });
+},
 
                 buildPopup(asset) {
+
                     const firstImg = asset.images?.[0] || 'https://artemisconstruction-ci.com/assets/images/portfolio/symphonia/7.jpg';
 
                     const slides = (asset.images || []).map((img, idx) => `
@@ -978,6 +990,7 @@
                         : '';
 
                     return `
+
                         <div style="width:270px">
                             <div class="popup-carousel" data-carousel="${asset.id}" data-index="0">
                                 ${slides || `<img src="${firstImg}" alt="${asset.name}" />`}
@@ -988,10 +1001,10 @@
                             </div>
 
                             <div style="font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#fdba74;font-weight:700">
-                                ${asset.project || '—'}
+                                ${this.escapeHtml(asset.project || '—')}
                             </div>
-                            <div style="margin-top:3px;font-size:12px;color:#d1d5db">${asset.program || '—'}</div>
-                            <div style="margin-top:6px;font-size:18px;font-weight:800">${asset.name || '—'}</div>
+                            <div style="margin-top:3px;font-size:12px;color:#d1d5db">${this.escapeHtml(asset.program || '—')}</div>
+                            <div style="margin-top:6px;font-size:18px;font-weight:800">${this.escapeHtml(asset.name || '—')}</div>
                             <div style="margin-top:6px;font-size:13px;color:#e5e7eb">${natureLabel}</div>
 
                             <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
@@ -1008,7 +1021,7 @@
 
                             <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center;font-size:12px">
                                 <span style="color:#d1d5db">Client</span>
-                                <strong>${asset.client || '—'}</strong>
+                                <strong>${this.escapeHtml(asset.client || '—')}</strong>
                             </div>
 
                             <div style="margin-top:8px;font-size:11px;color:#cbd5e1">
@@ -1406,12 +1419,13 @@
                     });
 
                     if (!this.visibleAssets.find(a => a.id === this.selectedAsset.id)) {
-                        this.selectedAsset = this.visibleAssets.length ? this.visibleAssets[0] : {};
+                        this.selectedAsset = {};
                         this.sidebarImageIndex = 0;
+                        this.sidebarOpen = false;
                         this.applySelectedStyle();
                     }
 
-                    this.sidebarOpen = !!this.selectedAsset?.id;
+                    this.sidebarOpen = false
                     this.drawAssets();
                     this.fitToVisibleAssets();
                 },
@@ -1426,9 +1440,8 @@
 <body>
 {% if perms.parcelaire.view_parcellaire %}
     <div x-data="estateMapApp()"
-         x-init="init()"
-         @keydown.window.escape="lightboxOpen ? closeLightbox() : sidebarOpen = false"
-         class="relative h-screen w-screen overflow-hidden">
+         x-init="init()"  @keydown.window.escape="lightboxOpen ? closeLightbox() : sidebarOpen = false"
+         class="relative h-screen w-screen overflow-hidden" >
         <div id="map" class="absolute inset-0 z-0"></div>
         <div class="top-fade absolute inset-x-0 top-0 z-10 h-36"></div>
 
@@ -1538,16 +1551,16 @@
                     </div>
                 </div>
 
-                <div class="flex flex-wrap items-center gap-2">
-                    <template x-for="f in filters" :key="f">
-                        <button
-                                @click="activeFilter = f; refreshMapStyles();"
-                                :class="activeFilter === f ? 'bg-slate-900 text-white border-slate-900' : 'bg-white/80 text-slate-700 border-white/40 hover:bg-white'"
-                                class="glass rounded-2xl border px-4 py-3 text-sm font-semibold shadow-soft transition"
-                                x-text="f"
-                        ></button>
-                    </template>
-                </div>
+                {#                <div class="flex flex-wrap items-center gap-2">#}
+                {#                    <template x-for="f in filters" :key="f">#}
+                {#                        <button#}
+                {#                                @click="activeFilter = f; refreshMapStyles();"#}
+                {#                                :class="activeFilter === f ? 'bg-slate-900 text-white border-slate-900' : 'bg-white/80 text-slate-700 border-white/40 hover:bg-white'"#}
+                {#                                class="glass rounded-2xl border px-4 py-3 text-sm font-semibold shadow-soft transition"#}
+                {#                                x-text="f"#}
+                {#                        ></button>#}
+                {#                    </template>#}
+                {#                </div>#}
             </div>
         </div>
 
@@ -1603,7 +1616,7 @@
                         </div>
 
                         <div class="flex flex-col items-end gap-2">
-                            <a href="http://visiteguidee.cofr8708.odns.fr/" target="_blank"
+                            <a href="http://visiteguidee.cofr8708.odns.fr/" target="_blank" rel="noopener noreferrer"
                                class="rounded-full px-3 py-1 text-xs font-bold bg-slate-100 text-slate-700">
                                 Visite Guidée
                             </a>
@@ -1875,7 +1888,7 @@
                                     </div>
                                 </div>
 
-                                <div class="mt-4 grid grid-cols-3 gap-3 text-sm">
+                                {% comment %} <div class="mt-4 grid grid-cols-3 gap-3 text-sm">
                                     <div class="rounded-2xl bg-white/8 p-4 text-center">
                                         <p class="text-white/50">Disponibles</p>
                                         <p class="mt-1 font-semibold"
@@ -1891,7 +1904,7 @@
                                         <p class="mt-1 font-semibold"
                                            x-text="selectedAsset.building_data?.sold_units ?? 0"></p>
                                     </div>
-                                </div>
+                                </div>{% endcomment %}
                             </div>
 
                             <div class="mt-5 rounded-[28px] bg-gradient-to-br from-premium-900 via-slate-900 to-slate-950 p-5 text-white shadow-premium">
