@@ -570,19 +570,29 @@
                         attribution: 'Orthophoto Kaydan Group'
                     });
 
-                    this.orthoLayer.on('tileerror', (e) => {
-                        this.orthoErrorCount += 1;
+                   this.orthoLayer.on('tileerror', (e) => {
+    if (this.orthoFallbackDone) return;
 
-                        if (this.orthoErrorCount <= 3) {
-                            console.warn('Erreur tuile ortho:', e?.tile?.src || 'tuile inconnue');
-                        }
+    this.orthoErrorCount += 1;
 
-                        if (this.orthoErrorCount >= 8 && this.mapMode !== 'osm')  {
-                            console.warn("Bascule automatique sur OSM : orthophoto indisponible.");
-                            this.mapMode = 'osm';
-                            this.applyBaseLayers();
-                        }
-                    });
+    if (this.orthoErrorCount <= 3) {
+        console.warn('Erreur tuile ortho:', e?.tile?.src || 'tuile inconnue');
+    }
+
+    if (this.orthoErrorCount >= 8) {
+        this.orthoFallbackDone = true;
+        console.warn("Bascule automatique sur OSM : orthophoto indisponible.");
+        this.mapMode = 'osm';
+
+        try {
+            if (this.map && this.map.hasLayer(this.orthoLayer)) {
+                this.map.removeLayer(this.orthoLayer);
+            }
+        } catch (err) {}
+
+        this.applyBaseLayers();
+    }
+});
 
                     this.markersLayer = L.markerClusterGroup({
                         showCoverageOnHover: false,
@@ -717,9 +727,9 @@
                         .sort((a, b) => a.localeCompare(b));
 
                     this.visibleAssets = [...this.assets];
-                    this.selectedAsset = this.assets.length ? this.assets[0] : {};
+                    this.selectedAsset = {};
                     this.sidebarImageIndex = 0;
-                    this.sidebarOpen = false
+                    this.sidebarOpen = false;
                 },
 
                 setMapMode(mode) {
@@ -1425,9 +1435,10 @@
                         this.applySelectedStyle();
                     }
 
-                    this.sidebarOpen = false
                     this.drawAssets();
-                    this.fitToVisibleAssets();
+                    if (!this.selectedAsset?.id) {
+                        this.fitToVisibleAssets();
+                    }
                 },
 
                 refreshMapStyles() {
@@ -1566,6 +1577,7 @@
 
         <div class="pointer-events-none absolute inset-y-0 right-0 z-20 flex w-full justify-end p-4 lg:p-12">
             <aside
+                    x-cloak
                     x-show="sidebarOpen"
                     x-transition:enter="transition ease-out duration-300"
                     x-transition:enter-start="opacity-0 translate-x-8"
