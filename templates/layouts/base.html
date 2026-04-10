@@ -209,132 +209,165 @@
                     </div>
                 </div>
 
-                <!-- Main nav -->
-                <div class="mt-6 space-y-3">
-                    <a href="{% url 'parcelaire_dashboard' %}"
-                       class="menu-item {% if request.resolver_match.url_name == 'parcelaire_dashboard' %}menu-item-active{% else %}bg-white/80 text-slate-700{% endif %} flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold">
-                        <i class="fa-solid fa-chart-pie w-5"></i>
-                        <span>Dashboard exécutif</span>
-                    </a>
 
-                    <a href="{% url 'map' %}"
-                       class="menu-item {% if request.resolver_match.url_name == 'map' %}menu-item-parcel{% else %}bg-slate-800 text-white{% endif %} flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold">
-                        <i class="fa-solid fa-map-location-dot w-5"></i>
-                        <span>Parcellaire</span>
-                    </a>
+               <!-- Main nav -->
+<div class="mt-6 space-y-3">
 
-                    <!-- Référentiel -->
-                    <div class="rounded-2xl bg-white/85 soft-ring" x-data="{open:true}">
-                        <button @click="open=!open" class="flex w-full items-center justify-between px-4 py-3 text-left">
-                            <div class="flex items-center gap-3">
-                                <i class="fa-solid fa-layer-group text-slate-600"></i>
-                                <span class="text-sm font-bold text-slate-800">Référentiel foncier</span>
-                            </div>
-                            <i class="fa-solid text-xs text-slate-500" :class="open ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
-                        </button>
-                        <div x-show="open" x-transition class="space-y-1 px-3 pb-3">
-                            <a href="{% url 'project_list' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
-                                <i class="fa-solid fa-diagram-project w-4 text-premium-600"></i>
-                                <span>Projets immobiliers</span>
-                            </a>
-                            <a href="{% url 'program_list' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
-                                <i class="fa-solid fa-map-location-dot w-4 text-premium-600"></i>
-                                <span>Programmes</span>
-                            </a>
-                            <a href="{% url 'phase_list' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
-                                <i class="fa-solid fa-timeline w-4 text-premium-600"></i>
-                                <span>Phases</span>
-                            </a>
-                            <a href="{% url 'block_list' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
-                                <i class="fa-solid fa-border-all w-4 text-premium-600"></i>
-                                <span>Îlots</span>
-                            </a>
-                            <a href="{% url 'parcel_list' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
-                                <i class="fa-solid fa-draw-polygon w-4 text-premium-600"></i>
-                                <span>Parcelles / Lots</span>
-                            </a>
-                            <a href="{% url 'asset_list' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
-                                <i class="fa-solid fa-house w-4 text-premium-600"></i>
-                                <span>Actifs immobiliers</span>
-                            </a>
-                        </div>
-                    </div>
+    <a href="{% url 'parcelaire_dashboard' %}"
+   class="menu-item {% if request.resolver_match.url_name == 'parcelaire_dashboard' %}menu-item-active{% else %}bg-white/80 text-slate-700{% endif %} flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold">
+    <i class="fa-solid fa-chart-pie w-5"></i>
+    <span>Dashboard exécutif</span>
+</a>
 
-                    <!-- Commercial -->
-                    <div class="rounded-2xl bg-white/85 soft-ring" x-data="{open:true}">
-                        <button @click="open=!open" class="flex w-full items-center justify-between px-4 py-3 text-left">
-                            <div class="flex items-center gap-3">
-                                <i class="fa-solid fa-briefcase text-slate-600"></i>
-                                <span class="text-sm font-bold text-slate-800">Commercial</span>
-                            </div>
-                            <i class="fa-solid text-xs text-slate-500" :class="open ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
-                        </button>
-                        <div x-show="open" x-transition class="space-y-1 px-3 pb-3">
-                            <a href="{% url 'customer_list' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
-                                <i class="fa-solid fa-users w-4 text-premium-600"></i>
-                                <span>Clients</span>
-                            </a>
-                            <a href="{% url 'lead_list' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
-                                <i class="fa-solid fa-bullseye w-4 text-premium-600"></i>
-                                <span>Leads</span>
-                            </a>
-                            <a href="{% url 'reservation_list' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
-                                <i class="fa-solid fa-thumbtack w-4 text-premium-600"></i>
-                                <span>Réservations</span>
-                            </a>
-                            <a href="{% url 'sale_list' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
-                                <i class="fa-solid fa-file-signature w-4 text-premium-600"></i>
-                                <span>Ventes</span>
-                            </a>
-                            <a href="{% url 'payment_list' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
-                                <i class="fa-solid fa-credit-card w-4 text-premium-600"></i>
-                                <span>Paiements</span>
-                            </a>
-                        </div>
-                    </div>
+{% if perms.parcelaire.view_parcellaire %}
+    <a href="{% url 'map' %}"
+       class="menu-item {% if request.resolver_match.url_name == 'map' %}menu-item-parcel{% else %}bg-slate-800 text-white{% endif %} flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold">
+        <i class="fa-solid fa-map-location-dot w-5"></i>
+        <span>Parcellaire OPC</span>
+    </a>
+{% endif %}
 
-                    <!-- Construction -->
-                    <div class="rounded-2xl bg-white/85 soft-ring" x-data="{open:true}">
-                        <button @click="open=!open" class="flex w-full items-center justify-between px-4 py-3 text-left">
-                            <div class="flex items-center gap-3">
-                                <i class="fa-solid fa-helmet-safety text-slate-600"></i>
-                                <span class="text-sm font-bold text-slate-800">Construction</span>
-                            </div>
-                            <i class="fa-solid text-xs text-slate-500" :class="open ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
-                        </button>
-                        <div x-show="open" x-transition class="space-y-1 px-3 pb-3">
-                            <a href="{% url 'construction_project_list' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
-                                <i class="fa-solid fa-building-circle-arrow-right w-4 text-premium-600"></i>
-                                <span>Chantiers</span>
-                            </a>
-                            <a href="{% url 'construction_update_add' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
-                                <i class="fa-solid fa-clipboard-list w-4 text-premium-600"></i>
-                                <span>Mises à jour</span>
-                            </a>
-                            <a href="{% url 'construction_photo_add' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
-                                <i class="fa-solid fa-camera-retro w-4 text-premium-600"></i>
-                                <span>Photos chantier</span>
-                            </a>
-                        </div>
-                    </div>
+{% if perms.parcelaire.view_commercial_map %}
+    <a href="#"
+       class="menu-item bg-blue-800 text-white flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold">
+        <i class="fa-solid fa-map-location-dot w-5"></i>
+        <span>Parcellaire Sales</span>
+    </a>
+{% endif %}
 
-                    <!-- Administration -->
-                    <div class="rounded-2xl bg-white/85 soft-ring" x-data="{open:false}">
-                        <button @click="open=!open" class="flex w-full items-center justify-between px-4 py-3 text-left">
-                            <div class="flex items-center gap-3">
-                                <i class="fa-solid fa-gear text-slate-600"></i>
-                                <span class="text-sm font-bold text-slate-800">Administration</span>
-                            </div>
-                            <i class="fa-solid text-xs text-slate-500" :class="open ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
-                        </button>
-                        <div x-show="open" x-transition class="space-y-1 px-3 pb-3">
-                            <a href="{% url 'dataset_list' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
-                                <i class="fa-solid fa-database w-4 text-premium-600"></i>
-                                <span>Datasets</span>
-                            </a>
-                        </div>
-                    </div>
+
+
+    {% if perms.parcelaire.view_parcellaire %}
+        <!-- Référentiel -->
+        <div class="rounded-2xl bg-white/85 soft-ring" x-data="{open:true}">
+            <button @click="open=!open" class="flex w-full items-center justify-between px-4 py-3 text-left">
+                <div class="flex items-center gap-3">
+                    <i class="fa-solid fa-layer-group text-slate-600"></i>
+                    <span class="text-sm font-bold text-slate-800">Référentiel foncier</span>
                 </div>
+                <i class="fa-solid text-xs text-slate-500" :class="open ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+            </button>
+
+            <div x-show="open" x-transition class="space-y-1 px-3 pb-3">
+                <a href="{% url 'project_list' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
+                    <i class="fa-solid fa-diagram-project w-4 text-premium-600"></i>
+                    <span>Projets immobiliers</span>
+                </a>
+                <a href="{% url 'program_list' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
+                    <i class="fa-solid fa-map-location-dot w-4 text-premium-600"></i>
+                    <span>Programmes</span>
+                </a>
+                <a href="{% url 'phase_list' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
+                    <i class="fa-solid fa-timeline w-4 text-premium-600"></i>
+                    <span>Phases</span>
+                </a>
+                <a href="{% url 'block_list' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
+                    <i class="fa-solid fa-border-all w-4 text-premium-600"></i>
+                    <span>Îlots</span>
+                </a>
+                <a href="{% url 'parcel_list' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
+                    <i class="fa-solid fa-draw-polygon w-4 text-premium-600"></i>
+                    <span>Parcelles / Lots</span>
+                </a>
+                <a href="{% url 'asset_list' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
+                    <i class="fa-solid fa-house w-4 text-premium-600"></i>
+                    <span>Actifs immobiliers</span>
+                </a>
+            </div>
+        </div>
+    {% endif %}
+
+    {% if perms.parcelaire.view_patient_data or perms.parcelaire.view_financial_data %}
+        <!-- Commercial -->
+        <div class="rounded-2xl bg-white/85 soft-ring" x-data="{open:true}">
+            <button @click="open=!open" class="flex w-full items-center justify-between px-4 py-3 text-left">
+                <div class="flex items-center gap-3">
+                    <i class="fa-solid fa-briefcase text-slate-600"></i>
+                    <span class="text-sm font-bold text-slate-800">Commercial</span>
+                </div>
+                <i class="fa-solid text-xs text-slate-500" :class="open ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+            </button>
+
+            <div x-show="open" x-transition class="space-y-1 px-3 pb-3">
+
+                {% if perms.parcelaire.view_patient_data %}
+                    <a href="{% url 'customer_list' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
+                        <i class="fa-solid fa-users w-4 text-premium-600"></i>
+                        <span>Clients</span>
+                    </a>
+                    <a href="{% url 'lead_list' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
+                        <i class="fa-solid fa-bullseye w-4 text-premium-600"></i>
+                        <span>Leads</span>
+                    </a>
+                    <a href="{% url 'reservation_list' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
+                        <i class="fa-solid fa-thumbtack w-4 text-premium-600"></i>
+                        <span>Réservations</span>
+                    </a>
+                    <a href="{% url 'sale_list' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
+                        <i class="fa-solid fa-file-signature w-4 text-premium-600"></i>
+                        <span>Ventes</span>
+                    </a>
+                {% endif %}
+
+                {% if perms.parcelaire.view_financial_data %}
+                    <a href="{% url 'payment_list' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
+                        <i class="fa-solid fa-credit-card w-4 text-premium-600"></i>
+                        <span>Paiements</span>
+                    </a>
+                {% endif %}
+
+            </div>
+        </div>
+    {% endif %}
+
+    {% if perms.parcelaire.view_construction_data %}
+        <!-- Construction -->
+        <div class="rounded-2xl bg-white/85 soft-ring" x-data="{open:true}">
+            <button @click="open=!open" class="flex w-full items-center justify-between px-4 py-3 text-left">
+                <div class="flex items-center gap-3">
+                    <i class="fa-solid fa-helmet-safety text-slate-600"></i>
+                    <span class="text-sm font-bold text-slate-800">Construction</span>
+                </div>
+                <i class="fa-solid text-xs text-slate-500" :class="open ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+            </button>
+
+            <div x-show="open" x-transition class="space-y-1 px-3 pb-3">
+                <a href="{% url 'construction_project_list' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
+                    <i class="fa-solid fa-building-circle-arrow-right w-4 text-premium-600"></i>
+                    <span>Chantiers</span>
+                </a>
+                <a href="{% url 'construction_update_add' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
+                    <i class="fa-solid fa-clipboard-list w-4 text-premium-600"></i>
+                    <span>Mises à jour</span>
+                </a>
+                <a href="{% url 'construction_photo_add' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
+                    <i class="fa-solid fa-camera-retro w-4 text-premium-600"></i>
+                    <span>Photos chantier</span>
+                </a>
+            </div>
+        </div>
+    {% endif %}
+
+    {% if request.user.is_staff or request.user.is_superuser %}
+        <!-- Administration -->
+        <div class="rounded-2xl bg-white/85 soft-ring" x-data="{open:false}">
+            <button @click="open=!open" class="flex w-full items-center justify-between px-4 py-3 text-left">
+                <div class="flex items-center gap-3">
+                    <i class="fa-solid fa-gear text-slate-600"></i>
+                    <span class="text-sm font-bold text-slate-800">Administration</span>
+                </div>
+                <i class="fa-solid text-xs text-slate-500" :class="open ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+            </button>
+            <div x-show="open" x-transition class="space-y-1 px-3 pb-3">
+                <a href="{% url 'dataset_list' %}" class="submenu-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-700">
+                    <i class="fa-solid fa-database w-4 text-premium-600"></i>
+                    <span>Datasets</span>
+                </a>
+            </div>
+        </div>
+    {% endif %}
+
+</div>
 
                 <!-- Footer card -->
                 <div class="mt-auto pt-8">

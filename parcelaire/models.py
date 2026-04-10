@@ -516,6 +516,7 @@ class Parcel(TimeStampedModel, SoftDeleteModel):
         ]
         permissions = [
             ("view_financial_data", "Peut voir les données financières"),
+            ("view_commercial_map", "Peut voir la cartographie commercial"),
             ("view_patient_data", "Peut voir les données patient/client"),
             ("view_construction_data", "Peut voir les données de construction"),
             ("view_parcellaire", "Peut voir le parcellaire"),
