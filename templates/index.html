@@ -177,6 +177,7 @@
     </script>
 </head>
 <body>
+{% if perms.parcelaire.view_commercial_map %}
 <div x-data="landingPage()" x-init="init()" class="min-h-screen">
 
     <!-- HEADER -->
@@ -675,7 +676,7 @@
 
     </main>
 </div>
-
+{% endif %}
 <script>
     function landingPage() {
         return {
