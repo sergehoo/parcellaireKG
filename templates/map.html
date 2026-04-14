@@ -1555,7 +1555,7 @@
                         <div class="glass rounded-2xl border border-white/20 bg-white/80 px-3 py-2 shadow-soft">
                             <select x-model="tagFilter" @change="filterAssets()"
                                     class="bg-transparent text-sm font-semibold text-slate-700 outline-none">
-                                <option value="">Tous les tags</option>
+                                <option value="">Sous Projet</option>
                                 <template x-for="tag in tagOptions" :key="tag.slug">
                                     <option :value="tag.slug" x-text="tag.name"></option>
                                 </template>
