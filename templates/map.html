@@ -51,6 +51,7 @@
             background: linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%);
             font-family: 'Inter', sans-serif;
         }
+        
 
         .leaflet-popup-content-wrapper,
         .leaflet-popup-tip {
@@ -553,12 +554,15 @@
                         this.map = null;
                     }
 
-                    this.map = L.map(mapEl, {
-                        zoomControl: true,
-                        preferCanvas: true,
-                        maxZoom: 23,
-                        zoomSnap: 1
-                    }).setView([5.3588, -3.9860], 17);
+                   this.map = L.map(mapEl, {
+    zoomControl: true,
+    preferCanvas: true,
+    maxZoom: 23,
+    zoomSnap: 1,
+    zoomAnimation: false,
+    fadeAnimation: false,
+    markerZoomAnimation: false
+}).setView([5.3588, -3.9860], 17);
 
                     this.tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                         maxZoom: 23,
