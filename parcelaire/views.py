@@ -24,6 +24,9 @@ class HomeView(TemplateView):
 class MapView(TemplateView):
     template_name = "map.html"
 
+class MapCommercialView(TemplateView):
+    template_name = "mapcommercial.html"
+
 
 class RealEstateMap3DView(TemplateView):
     template_name = "map_3d.html"

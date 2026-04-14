@@ -15,7 +15,7 @@ from parcelaire.models import (
     PropertyAsset,
     PropertyUnit,
     Reservation,
-    SaleFile,
+    SaleFile, ParcelTag,
 )
 
 
@@ -29,7 +29,33 @@ def user_can_view_patient_data(user):
 
 def user_can_view_construction_data(user):
     return user.is_superuser or user.has_perm("parcelaire.view_construction_data")
+# =========================================================
+# TAGS HELPERS
+# =========================================================
 
+def serialize_tag(self, tag):
+    return {
+        "id": tag.id,
+        "name": tag.name,
+        "slug": tag.slug,
+        "color": tag.color or "#64748b",
+    }
+
+
+
+def get_available_tags_payload(self, params):
+    qs = ParcelTag.objects.filter(is_active=True)
+
+    if params.get("program_id"):
+        qs = qs.filter(parcels__program_id=params["program_id"])
+
+    if params.get("project_id"):
+        qs = qs.filter(parcels__program__project_id=params["project_id"])
+
+    return [
+        self.serialize_tag(tag)
+        for tag in qs.distinct().order_by("name")
+    ]
 
 class RealEstateMapAPIView(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
@@ -126,6 +152,7 @@ class RealEstateMapAPIView(APIView):
             "program_id": request.GET.get("program"),
             "project_id": request.GET.get("project"),
             "status": request.GET.get("status"),
+            "tag": (request.GET.get("tag") or "").strip(),
             "search": (request.GET.get("search") or "").strip(),
             "bbox": self.parse_bbox(request.GET.get("bbox")),
             "zoom": zoom,
@@ -851,6 +878,19 @@ class RealEstateMapAPIView(APIView):
         last_day = date(year, month, calendar.monthrange(year, month)[1])
         return first_day, last_day
 
+    def get_parcel_tags_payload(self, parcel):
+        try:
+            return [
+                {
+                    "id": tag.id,
+                    "name": tag.name,
+                    "slug": tag.slug,
+                    "color": tag.color or "#64748b",
+                }
+                for tag in parcel.tags.filter(is_active=True).order_by("name")
+            ]
+        except Exception:
+            return []
     def get_parcel_or_asset_construction_project(self, parcel=None, asset=None):
         if asset:
             qs = asset.construction_projects.all().order_by("-created_at")
@@ -1406,6 +1446,8 @@ class RealEstateMapAPIView(APIView):
     # FILTERS
     # =========================================================
 
+
+
     def apply_common_filters_assets(self, queryset, params):
         if params["program_id"]:
             queryset = queryset.filter(program_id=params["program_id"])
@@ -1415,6 +1457,9 @@ class RealEstateMapAPIView(APIView):
 
         if params["status"]:
             queryset = queryset.filter(status=params["status"])
+
+        if params.get("tag"):
+            queryset = queryset.filter(parcel__tags__slug=params["tag"])
 
         if params["bbox"]:
             queryset = queryset.filter(
@@ -1435,6 +1480,8 @@ class RealEstateMapAPIView(APIView):
                 | Q(asset_category__label__icontains=q)
                 | Q(units__label__icontains=q)
                 | Q(units__code__icontains=q)
+                | Q(parcel__tags__name__icontains=q)
+                | Q(parcel__tags__slug__icontains=q)
             ).distinct()
 
         return queryset
@@ -1448,6 +1495,9 @@ class RealEstateMapAPIView(APIView):
 
         if params["status"]:
             queryset = queryset.filter(commercial_status=params["status"])
+
+        if params.get("tag"):
+            queryset = queryset.filter(tags__slug=params["tag"])
 
         if params["bbox"]:
             queryset = queryset.filter(
@@ -1464,9 +1514,11 @@ class RealEstateMapAPIView(APIView):
                 | Q(program__name__icontains=q)
                 | Q(program__project__nom__icontains=q)
                 | Q(block__code__icontains=q)
+                | Q(tags__name__icontains=q)
+                | Q(tags__slug__icontains=q)
                 | Q(metadata__crm_projection__display_customer_name__icontains=q)
                 | Q(metadata__crm_lot_sync__asset_label__icontains=q)
-            )
+            ).distinct()
 
         return queryset
 
@@ -2066,6 +2118,7 @@ class RealEstateMapAPIView(APIView):
                 "project": asset.program.project.nom if asset.program and getattr(asset.program, "project", None) else "—",
                 "name": asset.label,
                 "program": asset.program.name if asset.program else "—",
+                "tags": self.get_parcel_tags_payload(parcel) if parcel else [],
                 "type": asset.property_type.label if asset.property_type else "Actif immobilier",
                 "asset_category": asset.asset_category.label if asset.asset_category else "—",
                 "asset_nature": self.get_asset_nature_label(asset),
@@ -2274,6 +2327,7 @@ class RealEstateMapAPIView(APIView):
                         else f"Lot {crm_parent['lot'] or parcel.lot_number or parcel.parcel_code or parcel.id}"
                     ),
                     "program": parcel.program.name if parcel.program else "—",
+                    "tags": self.get_parcel_tags_payload(parcel),
                     "type": crm_asset_label if sidebar_mode == self.SIDEBAR_MODE_BUILDING else "Parcelle",
                     "asset_category": "—",
                     "asset_nature": "Immeuble CRM" if sidebar_mode == self.SIDEBAR_MODE_BUILDING else "Parcelle CRM",
@@ -2422,6 +2476,7 @@ class RealEstateMapAPIView(APIView):
                 "project": parcel.program.project.nom if parcel.program and getattr(parcel.program, "project", None) else "—",
                 "name": f"Lot {parcel.lot_number or parcel.parcel_code or parcel.id}",
                 "program": parcel.program.name if parcel.program else "—",
+                "tags": self.get_parcel_tags_payload(parcel),
                 "type": "Parcelle",
                 "asset_category": "—",
                 "asset_nature": "Parcelle",
@@ -2497,7 +2552,21 @@ class RealEstateMapAPIView(APIView):
     # =========================================================
     # GET
     # =========================================================
+    def get_tag_filters(self, parcels_queryset=None):
+        qs = ParcelTag.objects.filter(is_active=True).order_by("name")
 
+        if parcels_queryset is not None:
+            qs = qs.filter(parcels__in=parcels_queryset).distinct()
+
+        return [
+            {
+                "id": tag.id,
+                "name": tag.name,
+                "slug": tag.slug,
+                "color": tag.color or "#64748b",
+            }
+            for tag in qs
+        ]
     def get(self, request, *args, **kwargs):
         self.user_rights = self.get_user_rights(request)
         params = self.normalize_query(request)
@@ -2515,9 +2584,12 @@ class RealEstateMapAPIView(APIView):
                 "photos",
                 "updates",
                 "parcel__documents",
+                "parcel__tags",
                 "units",
                 "units__unit_type",
                 "construction_projects",
+                "construction_projects__updates",
+                "construction_projects__photos",
             )
             .filter(is_active=True)
             .order_by("code")
@@ -2532,6 +2604,7 @@ class RealEstateMapAPIView(APIView):
                 "block",
             )
             .prefetch_related(
+                "tags",
                 "documents",
                 "construction_projects__photos",
                 "construction_projects__updates",
@@ -2585,18 +2658,26 @@ class RealEstateMapAPIView(APIView):
             {"label": "Réservés/Vendus", "value": str(reserved_or_sold)},
             {"label": "CA potentiel", "value": self.money_display(total_ca) if can_view_financial else "Masqué"},
         ]
+        all_relevant_parcel_ids = set(
+            asset_queryset.exclude(parcel_id__isnull=True).values_list("parcel_id", flat=True)
+        ) | set(parcel_queryset.values_list("id", flat=True))
 
+        tag_filters = self.get_tag_filters(
+            Parcel.objects.filter(id__in=all_relevant_parcel_ids)
+        )
         return Response({
             "source": "mixed",
             "assets": combined_assets,
             "summaries": summaries,
             "filters": self.FILTERS,
+            "tag_filters": tag_filters,
             "user_rights": rights,
             "counts": {
                 "assets_count": len(asset_items),
                 "parcels_count": len(parcel_items),
                 "total_count": len(combined_assets),
             },
+
             "map_context": {
                 "zoom": params["zoom"],
                 "bbox_applied": bool(params["bbox"]),

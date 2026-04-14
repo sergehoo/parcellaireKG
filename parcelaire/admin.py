@@ -40,10 +40,14 @@ from .models import (
     ConstructionProject,
     ConstructionUpdate,
     ConstructionPhoto,
-    ConstructionMedia, IntegrationLog,
+    ConstructionMedia, IntegrationLog, ParcelTag,
 )
 
-
+@admin.register(ParcelTag)
+class ParcelTagAdmin(admin.ModelAdmin):
+    list_display = ("name", "slug", "color", "is_active")
+    list_filter = ("is_active",)
+    search_fields = ("name", "slug")
 # =========================================================
 # IMPORT / EXPORT RESOURCES
 # =========================================================
@@ -218,7 +222,7 @@ class ParcelInline(admin.TabularInline):
         "official_area_m2",
         "is_active",
     )
-    autocomplete_fields = ("phase", "block", "dataset", "land_use")
+    autocomplete_fields = ("phase", "block", "dataset", "land_use","tags")
     show_change_link = True
 
 
@@ -570,6 +574,7 @@ class ParcelDatasetAdmin(BaseAdminMixin, ImportExportModelAdmin):
         "imported_by",
         "is_active",
         "created_at",
+
     )
     list_filter = ("is_current", "program", "phase", "is_active")
     search_fields = ("name", "source_code", "source_file_name", "program__name", "phase__name", "imported_by")
@@ -602,6 +607,7 @@ class ParcelAdmin(BaseAdminMixin, ImportExportModelAdmin):
         "has_road_access",
         "is_corner",
         "is_active",
+        "display_tags",
     )
     list_filter = (
         "commercial_status",
@@ -616,6 +622,7 @@ class ParcelAdmin(BaseAdminMixin, ImportExportModelAdmin):
         "geometry_valid",
         "duplicate_flag",
         "is_active",
+        "tags",
     )
     search_fields = (
         "lot_number",
@@ -627,8 +634,11 @@ class ParcelAdmin(BaseAdminMixin, ImportExportModelAdmin):
         "program__code",
         "phase__name",
         "block__code",
+        "tags__name",
+        "tags__slug",
     )
     autocomplete_fields = ("dataset", "program", "phase", "block", "land_use")
+    filter_horizontal = ("tags",)
     inlines = [
         ParcelGeometryHistoryInline,
         ParcelDocumentInline,
@@ -675,6 +685,7 @@ class ParcelAdmin(BaseAdminMixin, ImportExportModelAdmin):
                 "zoning",
                 "valeur_hypothecaire",
                 "crm_last_synced_at",
+                "tags",
             )
         }),
         ("Géospatial", {
@@ -688,10 +699,23 @@ class ParcelAdmin(BaseAdminMixin, ImportExportModelAdmin):
         }),
     )
 
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.select_related(
+            "program",
+            "phase",
+            "block",
+            "dataset",
+            "land_use",
+        ).prefetch_related("tags")
+
     @admin.display(description="Parcelle")
     def display_name(self, obj):
         return obj.lot_number or obj.parcel_code or f"Parcelle #{obj.pk}"
 
+    @admin.display(description="Tags")
+    def display_tags(self, obj):
+        return ", ".join(obj.tags.values_list("name", flat=True)) or "—"
 
 @admin.register(ParcelGeometryHistory)
 class ParcelGeometryHistoryAdmin(BaseAdminMixin, admin.ModelAdmin):

@@ -442,7 +442,30 @@ class ProgramBlock(TimeStampedModel, SoftDeleteModel):
     def __str__(self):
         return f"Îlot {self.code}--{self.program.name}"
 
+class ParcelTag(TimeStampedModel):
+    name = models.CharField(max_length=80, unique=True, verbose_name="Nom")
+    slug = models.SlugField(max_length=100, unique=True, blank=True, verbose_name="Slug")
+    color = models.CharField(max_length=20, blank=True, null=True, default="#64748b", verbose_name="Couleur")
+    is_active = models.BooleanField(default=True, verbose_name="Actif")
 
+    class Meta:
+        ordering = ["name"]
+        verbose_name = "Tag parcelle"
+        verbose_name_plural = "Tags parcelles"
+
+    def save(self, *args, **kwargs):
+        if not self.slug and self.name:
+            base_slug = slugify(self.name)
+            slug = base_slug
+            i = 1
+            while ParcelTag.objects.filter(slug=slug).exclude(pk=self.pk).exists():
+                i += 1
+                slug = f"{base_slug}-{i}"
+            self.slug = slug
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.name
 class Parcel(TimeStampedModel, SoftDeleteModel):
     TECHNICAL_STATUS_CHOICES = [
         ("RAW", "Brut importé"),
@@ -505,7 +528,12 @@ class Parcel(TimeStampedModel, SoftDeleteModel):
     metadata = models.JSONField(default=dict, blank=True, verbose_name="Métadonnées")
     crm_last_synced_at = models.DateTimeField(blank=True, null=True, verbose_name="Dernière synchro CRM")
     valeur_hypothecaire = models.DecimalField(max_digits=16, decimal_places=2, blank=True, null=True, verbose_name="Valeur hypothécaire")
-
+    tags = models.ManyToManyField(
+        "ParcelTag",
+        blank=True,
+        related_name="parcels",
+        verbose_name="Tags"
+    )
     class Meta:
         ordering = ["block__code", "lot_number"]
         indexes = [

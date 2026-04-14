@@ -34,7 +34,7 @@ from parcelaire.views import HomeView, MapView, ParcellaireDashboardView, Projet
     ConstructionPhotoCreateView, ConstructionPhotoUpdateView, ConstructionMediaCreateView, ProgramByProjectAjaxView, \
     PhaseByProgramAjaxView, BlockByProgramAjaxView, ParcelByBlockAjaxView, ProgramStatsAjaxView, LeadListView, \
     LeadUpdateView, LeadCreateView, PropertyAssetDeleteView, PropertyAssetListView, PropertyAssetCreateView, \
-    PropertyAssetDetailView, PropertyAssetUpdateView
+    PropertyAssetDetailView, PropertyAssetUpdateView, MapCommercialView
 
 urlpatterns = [
                   path('admin/', admin.site.urls),
@@ -42,6 +42,7 @@ urlpatterns = [
                   path("ai/", include("ai_construction.urls")),
                   path('home', HomeView.as_view(), name='home'),
                   path('map', MapView.as_view(), name='map'),
+                  path('map_commercial', MapCommercialView.as_view(), name='map_commercial'),
                   path('accounts/', include('allauth.urls')),
 
                   path("", ParcellaireDashboardView.as_view(), name="parcelaire_dashboard"),
