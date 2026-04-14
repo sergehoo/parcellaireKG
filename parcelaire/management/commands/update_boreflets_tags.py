@@ -1,7 +1,5 @@
 import re
 from typing import Optional
-
-import self
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils.text import slugify
