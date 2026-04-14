@@ -195,15 +195,16 @@ services:
       - ADMINER_DEFAULT_SERVER=parcelairedb
     networks:
       - default
+      - proxy
     labels:
-      - traefik.enable=true
-      - traefik.docker.network=proxy
-      - traefik.http.routers.parcelaireadminer.rule=Host(`adminer.${DOMAIN}`)
-      - traefik.http.routers.parcelaireadminer.entrypoints=websecure
-      - traefik.http.routers.parcelaireadminer.tls=true
-      - traefik.http.routers.parcelaireadminer.tls.certresolver=lets
-      - traefik.http.services.parcelaireadminer.loadbalancer.server.port=8080
-      - traefik.http.services.parcelaireadminer.loadbalancer.server.scheme=http
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.parcelaireadminer.rule=Host(`adminer.${DOMAIN}`)"
+      - "traefik.http.routers.parcelaireadminer.entrypoints=websecure"
+      - "traefik.http.routers.parcelaireadminer.tls=true"
+      - "traefik.http.routers.parcelaireadminer.tls.certresolver=lets"
+      - "traefik.http.services.parcelaireadminer.loadbalancer.server.port=8080"
+      - "traefik.http.services.parcelaireadminer.loadbalancer.server.scheme=http"
 
 volumes:
   postgres_data:
