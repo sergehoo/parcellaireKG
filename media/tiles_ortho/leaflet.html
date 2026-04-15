@@ -3,7 +3,7 @@
           <head>
             <meta charset="utf-8">
             <meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no' />
-            <title>BOREAL_2_MARS_2026_3857.tif</title>
+            <title>CALLISTO_MARS_2026_3857.tif</title>
 
             <!-- Leaflet -->
             <link rel="stylesheet" href="https://unpkg.com/leaflet@0.7.5/dist/leaflet.css" />
@@ -54,7 +54,7 @@
 
         // Map
         var map = L.map('map', {
-            center: [5.426112898977275, -3.9745223677147887],
+            center: [5.241105093544181, -3.8010822575496395],
             zoom: 22,
             minZoom: 15,
             maxZoom: 22,
@@ -72,7 +72,7 @@
             return this._div;
         };
         title.update = function(props) {
-            this._div.innerHTML = "BOREAL_2_MARS_2026_3857.tif";
+            this._div.innerHTML = "CALLISTO_MARS_2026_3857.tif";
         };
         title.addTo(map);
 
@@ -94,7 +94,7 @@
         L.control.layers(basemaps, overlaymaps, {collapsed: false}).addTo(map);
 
         // Fit to overlay bounds (SW and NE points with (lat, lon))
-        map.fitBounds([[5.42385044155039, -3.972325433023527], [5.4283753564041595, -3.97671930240605]]);
+        map.fitBounds([[5.238701738463993, -3.797826914655341], [5.243508448624371, -3.8043376004439384]]);
 
         </script>
 
