@@ -443,13 +443,27 @@ class ProgramBlock(TimeStampedModel, SoftDeleteModel):
         return f"Îlot {self.code}--{self.program.name}"
 
 class ParcelTag(TimeStampedModel):
-    name = models.CharField(max_length=80, unique=True, verbose_name="Nom")
-    slug = models.SlugField(max_length=100, unique=True, blank=True, verbose_name="Slug")
-    color = models.CharField(max_length=20, blank=True, null=True, default="#64748b", verbose_name="Couleur")
+    program = models.ForeignKey(
+        "RealEstateProgram",
+        on_delete=models.CASCADE,
+        related_name="tags",
+        verbose_name="Programme"
+    )
+
+    name = models.CharField(max_length=80, verbose_name="Nom")
+    slug = models.SlugField(max_length=100, blank=True, verbose_name="Slug")
+    color = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        default="#64748b",
+        verbose_name="Couleur"
+    )
     is_active = models.BooleanField(default=True, verbose_name="Actif")
 
     class Meta:
         ordering = ["name"]
+        unique_together = [("program", "slug")]  # ⚠️ important
         verbose_name = "Tag parcelle"
         verbose_name_plural = "Tags parcelles"
 
@@ -458,14 +472,20 @@ class ParcelTag(TimeStampedModel):
             base_slug = slugify(self.name)
             slug = base_slug
             i = 1
-            while ParcelTag.objects.filter(slug=slug).exclude(pk=self.pk).exists():
+
+            while ParcelTag.objects.filter(
+                program=self.program,
+                slug=slug
+            ).exclude(pk=self.pk).exists():
                 i += 1
                 slug = f"{base_slug}-{i}"
+
             self.slug = slug
+
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return self.name
+        return f"{self.name}"
 class Parcel(TimeStampedModel, SoftDeleteModel):
     TECHNICAL_STATUS_CHOICES = [
         ("RAW", "Brut importé"),
@@ -570,6 +590,12 @@ class Parcel(TimeStampedModel, SoftDeleteModel):
         if self.block and self.phase and self.block.phase_id and self.block.phase_id != self.phase_id:
             raise ValidationError({"block": "L’îlot ne correspond pas à la phase sélectionnée."})
 
+        if self.pk:
+            invalid_tags = self.tags.exclude(program_id=self.program_id)
+            if invalid_tags.exists():
+                raise ValidationError({
+                    "tags": "Tous les tags doivent appartenir au même programme que la parcelle."
+                })
         numeric_fields = {
             "official_area_m2": self.official_area_m2,
             "computed_area_m2": self.computed_area_m2,

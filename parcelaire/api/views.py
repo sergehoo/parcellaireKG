@@ -4,7 +4,7 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 
 from django.contrib.gis.geos import Polygon
-from django.db.models import Q, Sum
+from django.db.models import Q, Sum, F
 from django.db.models.functions import Coalesce
 from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
@@ -33,28 +33,22 @@ def user_can_view_construction_data(user):
 # TAGS HELPERS
 # =========================================================
 
-def serialize_tag(self, tag):
-    return {
-        "id": tag.id,
-        "name": tag.name,
-        "slug": tag.slug,
-        "color": tag.color or "#64748b",
-    }
+
 
 
 
 def get_available_tags_payload(self, params):
-    qs = ParcelTag.objects.filter(is_active=True)
+    qs = ParcelTag.objects.filter(is_active=True).select_related("program", "program__project")
 
     if params.get("program_id"):
-        qs = qs.filter(parcels__program_id=params["program_id"])
+        qs = qs.filter(program_id=params["program_id"])
 
-    if params.get("project_id"):
-        qs = qs.filter(parcels__program__project_id=params["project_id"])
+    elif params.get("project_id"):
+        qs = qs.filter(program__project_id=params["project_id"])
 
     return [
         self.serialize_tag(tag)
-        for tag in qs.distinct().order_by("name")
+        for tag in qs.order_by("name")
     ]
 
 class RealEstateMapAPIView(APIView):
@@ -89,7 +83,17 @@ class RealEstateMapAPIView(APIView):
     # =========================================================
     # QUERY PARAMS / MAP PARAMS
     # =========================================================
-
+    def serialize_tag(self, tag):
+        return {
+            "id": tag.id,
+            "name": tag.name,
+            "slug": tag.slug,
+            "color": tag.color or "#64748b",
+            "program_id": tag.program_id,
+            "program_name": getattr(tag.program, "name", ""),
+            "project_id": getattr(tag.program, "project_id", None),
+            "project_name": getattr(getattr(tag.program, "project", None), "nom", ""),
+        }
     def parse_int(self, value, default=0):
         try:
             return int(value)
@@ -881,13 +885,11 @@ class RealEstateMapAPIView(APIView):
     def get_parcel_tags_payload(self, parcel):
         try:
             return [
-                {
-                    "id": tag.id,
-                    "name": tag.name,
-                    "slug": tag.slug,
-                    "color": tag.color or "#64748b",
-                }
-                for tag in parcel.tags.filter(is_active=True).order_by("name")
+                self.serialize_tag(tag)
+                for tag in parcel.tags.filter(
+                    is_active=True,
+                    program_id=parcel.program_id,
+                ).select_related("program", "program__project").order_by("name")
             ]
         except Exception:
             return []
@@ -1459,7 +1461,10 @@ class RealEstateMapAPIView(APIView):
             queryset = queryset.filter(status=params["status"])
 
         if params.get("tag"):
-            queryset = queryset.filter(parcel__tags__slug=params["tag"])
+            queryset = queryset.filter(
+                parcel__tags__slug=params["tag"],
+                parcel__tags__program_id=F("program_id"),
+            )
 
         if params["bbox"]:
             queryset = queryset.filter(
@@ -1480,8 +1485,8 @@ class RealEstateMapAPIView(APIView):
                 | Q(asset_category__label__icontains=q)
                 | Q(units__label__icontains=q)
                 | Q(units__code__icontains=q)
-                | Q(parcel__tags__name__icontains=q)
-                | Q(parcel__tags__slug__icontains=q)
+                | Q(parcel__tags__name__icontains=q, parcel__tags__program_id=F("program_id"))
+                | Q(parcel__tags__slug__icontains=q, parcel__tags__program_id=F("program_id"))
             ).distinct()
 
         return queryset
@@ -1497,7 +1502,10 @@ class RealEstateMapAPIView(APIView):
             queryset = queryset.filter(commercial_status=params["status"])
 
         if params.get("tag"):
-            queryset = queryset.filter(tags__slug=params["tag"])
+            queryset = queryset.filter(
+                tags__slug=params["tag"],
+                tags__program_id=F("program_id"),
+            )
 
         if params["bbox"]:
             queryset = queryset.filter(
@@ -1514,8 +1522,8 @@ class RealEstateMapAPIView(APIView):
                 | Q(program__name__icontains=q)
                 | Q(program__project__nom__icontains=q)
                 | Q(block__code__icontains=q)
-                | Q(tags__name__icontains=q)
-                | Q(tags__slug__icontains=q)
+                | Q(tags__name__icontains=q, tags__program_id=F("program_id"))
+                | Q(tags__slug__icontains=q, tags__program_id=F("program_id"))
                 | Q(metadata__crm_projection__display_customer_name__icontains=q)
                 | Q(metadata__crm_lot_sync__asset_label__icontains=q)
             ).distinct()
@@ -2552,21 +2560,20 @@ class RealEstateMapAPIView(APIView):
     # =========================================================
     # GET
     # =========================================================
-    def get_tag_filters(self, parcels_queryset=None):
-        qs = ParcelTag.objects.filter(is_active=True).order_by("name")
+    def get_tag_filters(self, parcels_queryset=None, program_id=None, project_id=None):
+        qs = ParcelTag.objects.filter(is_active=True).select_related("program", "program__project")
 
-        if parcels_queryset is not None:
-            qs = qs.filter(parcels__in=parcels_queryset).distinct()
+        if program_id:
+            qs = qs.filter(program_id=program_id)
 
-        return [
-            {
-                "id": tag.id,
-                "name": tag.name,
-                "slug": tag.slug,
-                "color": tag.color or "#64748b",
-            }
-            for tag in qs
-        ]
+        elif project_id:
+            qs = qs.filter(program__project_id=project_id)
+
+        elif parcels_queryset is not None:
+            program_ids = parcels_queryset.values_list("program_id", flat=True).distinct()
+            qs = qs.filter(program_id__in=program_ids)
+
+        return [self.serialize_tag(tag) for tag in qs.order_by("name")]
     def get(self, request, *args, **kwargs):
         self.user_rights = self.get_user_rights(request)
         params = self.normalize_query(request)
@@ -2663,7 +2670,9 @@ class RealEstateMapAPIView(APIView):
         ) | set(parcel_queryset.values_list("id", flat=True))
 
         tag_filters = self.get_tag_filters(
-            Parcel.objects.filter(id__in=all_relevant_parcel_ids)
+            parcels_queryset=Parcel.objects.filter(id__in=all_relevant_parcel_ids),
+            program_id=params.get("program_id"),
+            project_id=params.get("project_id"),
         )
         return Response({
             "source": "mixed",
