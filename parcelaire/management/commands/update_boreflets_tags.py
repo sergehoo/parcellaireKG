@@ -13,12 +13,12 @@ class Command(BaseCommand):
         "'LES RESIDENCES BO REFLETS' selon les plages de numéros."
     )
 
-    PROGRAM_NAME = "LES RESIDENCES BO REFLETS"
+    PROGRAM_NAME = "Callisto BNETD"
 
     TAG_RULES = [
-        ((1, 128), "boreflet"),
-        ((130, 164), "bocenter"),
-        ((167, 319), "boreal"),
+        ((1, 800), "Callisto BNETD"),
+        # ((130, 164), "bocenter"),
+        # ((167, 319), "boreal"),
     ]
 
     def add_arguments(self, parser):
