@@ -6,7 +6,7 @@ services:
     volumes:
       - .:/app
       - static_volume:/app/staticfiles
-      - media_volume:/app/media
+      - ./media:/app/media
     environment:
       - DEBUG=${DEBUG:-False}
       - DJANGO_SETTINGS_MODULE=parcelaireKG.settings
