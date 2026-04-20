@@ -12,6 +12,7 @@ services:
       - DJANGO_SETTINGS_MODULE=parcelaireKG.settings
       - STATIC_ROOT=/app/staticfiles
       - MEDIA_ROOT=/app/media
+      - ORTHO_ROOT=/app/media/tiles_ortho
 
       # Base de données
       - DB_ENGINE=django.contrib.gis.db.backends.postgis
@@ -82,7 +83,7 @@ services:
       - DJANGO_SETTINGS_MODULE=parcelaireKG.settings
       - STATIC_ROOT=/app/staticfiles
       - MEDIA_ROOT=/app/media
-
+      - ORTHO_ROOT=/app/media/tiles_ortho
       # Base de données
       - DB_ENGINE=django.contrib.gis.db.backends.postgis
       - DB_NAME=${DB_NAME}
@@ -121,11 +122,13 @@ services:
       - .:/app
       - media_volume:/app/media
       - static_volume:/app/staticfiles
+      - ORTHO_ROOT=/app/media/tiles_ortho
     environment:
       - DEBUG=${DEBUG:-False}
       - DJANGO_SETTINGS_MODULE=parcelaireKG.settings
       - STATIC_ROOT=/app/staticfiles
       - MEDIA_ROOT=/app/media
+      - ORTHO_ROOT=/app/media/tiles_ortho
 
       # Base de données
       - DB_ENGINE=django.contrib.gis.db.backends.postgis
