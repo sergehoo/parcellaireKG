@@ -1,5 +1,6 @@
 from django.contrib import admin
 from django.db.models import Sum
+from django.utils.html import format_html
 from import_export import resources
 from import_export.admin import ImportExportModelAdmin
 
@@ -40,7 +41,7 @@ from .models import (
     ConstructionProject,
     ConstructionUpdate,
     ConstructionPhoto,
-    ConstructionMedia, IntegrationLog, ParcelTag,
+    ConstructionMedia, IntegrationLog, ParcelTag, ProgramOrthophoto,
 )
 
 @admin.register(ParcelTag)
@@ -725,6 +726,153 @@ class ParcelGeometryHistoryAdmin(BaseAdminMixin, admin.ModelAdmin):
     ordering = ("-created_at",)
 
 
+
+
+@admin.register(ProgramOrthophoto)
+class ProgramOrthophotoAdmin(admin.ModelAdmin):
+    list_display = (
+        "program",
+        "period_display",
+        "version",
+        "is_current",
+        "is_active",
+        "min_zoom",
+        "max_zoom",
+        "tiles_folder",
+        "tiles_preview",
+        "created_at",
+    )
+    list_filter = (
+        "is_current",
+        "is_active",
+        "reference_year",
+        "reference_month",
+        "program",
+    )
+    search_fields = (
+        "program__name",
+        "program__code",
+        "program__slug",
+        "name",
+        "slug",
+        "period_label",
+        "version",
+        "tiles_folder",
+        "tiles_url",
+    )
+    readonly_fields = (
+        "slug",
+        "tiles_url",
+        "tiles_folder",
+        "period_display_readonly",
+        "created_at",
+        "updated_at",
+    )
+    autocomplete_fields = ("program",)
+    ordering = ("program__name", "-reference_year", "-reference_month", "-capture_date", "-created_at")
+    list_per_page = 50
+    save_on_top = True
+
+    fieldsets = (
+        ("Programme", {
+            "fields": (
+                "program",
+                "name",
+                "slug",
+            )
+        }),
+        ("Source & tuiles", {
+            "fields": (
+                "source_file",
+                "tiles_folder",
+                "tiles_url",
+            )
+        }),
+        ("Zoom & emprise", {
+            "fields": (
+                ("min_zoom", "max_zoom", "max_native_zoom"),
+                "bounds",
+                "centroid",
+            )
+        }),
+        ("Versionnement", {
+            "fields": (
+                "capture_date",
+                ("reference_year", "reference_month"),
+                "period_label",
+                "version",
+                "period_display_readonly",
+            )
+        }),
+        ("Statut", {
+            "fields": (
+                ("is_current", "is_active"),
+            )
+        }),
+        ("Métadonnées", {
+            "fields": (
+                "metadata",
+            )
+        }),
+        ("Audit", {
+            "classes": ("collapse",),
+            "fields": (
+                "created_at",
+                "updated_at",
+            )
+        }),
+    )
+
+    actions = ("mark_as_current", "activate_selected", "deactivate_selected")
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.select_related("program")
+
+    @admin.display(description="Période")
+    def period_display(self, obj):
+        if obj.period_label:
+            return obj.period_label
+        if obj.reference_year and obj.reference_month:
+            return f"{obj.reference_month:02d}/{obj.reference_year}"
+        if obj.capture_date:
+            return obj.capture_date.strftime("%d/%m/%Y")
+        return "—"
+
+    @admin.display(description="Période")
+    def period_display_readonly(self, obj):
+        if not obj:
+            return "—"
+        return self.period_display(obj)
+
+    @admin.display(description="Tuiles")
+    def tiles_preview(self, obj):
+        if obj.tiles_url:
+            return format_html(
+                '<a href="{}" target="_blank" style="font-weight:600;">Ouvrir</a>',
+                obj.tiles_url.replace("{z}/{x}/{y}.png", "")
+            )
+        return "—"
+
+    @admin.action(description="Définir comme orthophoto courante")
+    def mark_as_current(self, request, queryset):
+        count = 0
+        for orthophoto in queryset:
+            ProgramOrthophoto.objects.filter(program=orthophoto.program).update(is_current=False)
+            orthophoto.is_current = True
+            orthophoto.save(update_fields=["is_current", "updated_at"])
+            count += 1
+        self.message_user(request, f"{count} orthophoto(s) définie(s) comme courante(s).")
+
+    @admin.action(description="Activer les orthophotos sélectionnées")
+    def activate_selected(self, request, queryset):
+        updated = queryset.update(is_active=True)
+        self.message_user(request, f"{updated} orthophoto(s) activée(s).")
+
+    @admin.action(description="Désactiver les orthophotos sélectionnées")
+    def deactivate_selected(self, request, queryset):
+        updated = queryset.update(is_active=False)
+        self.message_user(request, f"{updated} orthophoto(s) désactivée(s).")
 # =========================================================
 # CLIENTS / CRM
 # =========================================================

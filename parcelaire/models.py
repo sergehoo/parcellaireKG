@@ -273,6 +273,16 @@ class RealEstateProgram(TimeStampedModel, SoftDeleteModel):
         return ancestors
 
     @property
+    def current_orthophoto(self):
+        return self.orthophotos.filter(is_active=True, is_current=True).first()
+
+    @property
+    def latest_orthophoto(self):
+        qs = self.orthophotos.filter(is_active=True).order_by(
+            "-reference_year", "-reference_month", "-capture_date", "-created_at"
+        )
+        return qs.first()
+    @property
     def quartier(self):
         for place in self.get_ancestors():
             if place.type == "QUARTIER":
@@ -301,6 +311,186 @@ class RealEstateProgram(TimeStampedModel, SoftDeleteModel):
         return None
 
 
+class ProgramOrthophoto(TimeStampedModel):
+    program = models.ForeignKey(
+        "RealEstateProgram",
+        on_delete=models.CASCADE,
+        related_name="orthophotos",
+        verbose_name="Programme"
+    )
+
+    name = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name="Nom"
+    )
+    slug = models.SlugField(
+        max_length=255,
+        blank=True,
+        verbose_name="Slug"
+    )
+
+    source_file = models.FileField(
+        upload_to="orthophotos/sources/",
+        blank=True,
+        null=True,
+        verbose_name="Fichier source"
+    )
+
+    tiles_folder = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name="Dossier de tuiles"
+    )
+    tiles_url = models.CharField(
+        max_length=500,
+        blank=True,
+        null=True,
+        verbose_name="URL des tuiles"
+    )
+
+    min_zoom = models.PositiveSmallIntegerField(default=15, verbose_name="Zoom min")
+    max_zoom = models.PositiveSmallIntegerField(default=22, verbose_name="Zoom max")
+    max_native_zoom = models.PositiveSmallIntegerField(default=22, verbose_name="Zoom natif max")
+
+    bounds = gis_models.PolygonField(
+        srid=4326,
+        blank=True,
+        null=True,
+        verbose_name="Emprise"
+    )
+    centroid = gis_models.PointField(
+        srid=4326,
+        blank=True,
+        null=True,
+        verbose_name="Centroïde"
+    )
+
+    # =========================
+    # VERSIONNEMENT TEMPOREL
+    # =========================
+    capture_date = models.DateField(
+        blank=True,
+        null=True,
+        verbose_name="Date de prise de vue"
+    )
+    reference_year = models.PositiveIntegerField(
+        blank=True,
+        null=True,
+        verbose_name="Année de référence"
+    )
+    reference_month = models.PositiveSmallIntegerField(
+        blank=True,
+        null=True,
+        verbose_name="Mois de référence"
+    )
+    period_label = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        verbose_name="Libellé période"
+    )
+    version = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        verbose_name="Version"
+    )
+
+    is_current = models.BooleanField(
+        default=False,
+        verbose_name="Orthophoto courante"
+    )
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name="Actif"
+    )
+
+    metadata = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Métadonnées"
+    )
+
+    class Meta:
+        verbose_name = "Orthophoto programme"
+        verbose_name_plural = "Orthophotos programmes"
+        ordering = ["program__name", "-reference_year", "-reference_month", "-capture_date", "-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["program", "reference_year", "reference_month"],
+                name="uniq_program_orthophoto_month",
+                condition=Q(reference_year__isnull=False, reference_month__isnull=False),
+            ),
+            models.UniqueConstraint(
+                fields=["program"],
+                condition=Q(is_current=True),
+                name="uniq_current_orthophoto_per_program",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["program", "is_current"]),
+            models.Index(fields=["program", "reference_year", "reference_month"]),
+            models.Index(fields=["program", "capture_date"]),
+            models.Index(fields=["is_active"]),
+        ]
+
+    def clean(self):
+        super().clean()
+
+        if self.min_zoom and self.max_zoom and self.min_zoom > self.max_zoom:
+            raise ValidationError({
+                "min_zoom": "Le zoom minimum ne peut pas être supérieur au zoom maximum."
+            })
+
+        if self.reference_month is not None and not (1 <= self.reference_month <= 12):
+            raise ValidationError({
+                "reference_month": "Le mois de référence doit être compris entre 1 et 12."
+            })
+
+        if (self.reference_year and not self.reference_month) or (self.reference_month and not self.reference_year):
+            raise ValidationError({
+                "reference_year": "L’année et le mois de référence doivent être renseignés ensemble.",
+                "reference_month": "L’année et le mois de référence doivent être renseignés ensemble.",
+            })
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            base = (
+                self.name
+                or self.period_label
+                or self.version
+                or f"{getattr(self.program, 'slug', 'program')}-{self.reference_year or ''}-{self.reference_month or ''}"
+            )
+            self.slug = slugify(base)
+
+        if not self.tiles_folder and self.program_id:
+            if self.reference_year and self.reference_month:
+                self.tiles_folder = f"tiles_ortho/{self.program.slug}/{self.reference_year}/{self.reference_month:02d}"
+            else:
+                self.tiles_folder = f"tiles_ortho/{self.program.slug}/{self.slug}"
+
+        if not self.tiles_url and self.tiles_folder:
+            self.tiles_url = f"/media/{self.tiles_folder}/{{z}}/{{x}}/{{y}}.png"
+
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+        if self.is_current:
+            self.__class__.objects.filter(program=self.program).exclude(pk=self.pk).update(is_current=False)
+
+    def __str__(self):
+        label = self.period_label
+        if not label and self.reference_year and self.reference_month:
+            label = f"{self.reference_month:02d}/{self.reference_year}"
+        if not label and self.capture_date:
+            label = self.capture_date.strftime("%d/%m/%Y")
+        if not label:
+            label = self.version or f"Orthophoto #{self.pk}"
+
+        return f"{self.program.name} - {label}"
 class ProgramPhase(TimeStampedModel, SoftDeleteModel):
     STATUS_CHOICES = [
         ("PLANNED", "Planifiée"),

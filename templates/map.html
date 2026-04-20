@@ -345,17 +345,17 @@
             box-shadow: 0 18px 35px rgba(15, 23, 42, 0.25);
         }
     </style>
-<style>
-    .leaflet-tile-pane,
-    .leaflet-layer,
-    .leaflet-tile-container {
-        background: transparent !important;
-    }
+    <style>
+        .leaflet-tile-pane,
+        .leaflet-layer,
+        .leaflet-tile-container {
+            background: transparent !important;
+        }
 
-    .leaflet-tile {
-        background: transparent !important;
-    }
-</style>
+        .leaflet-tile {
+            background: transparent !important;
+        }
+    </style>
     <script>
         tailwind.config = {
             theme: {
@@ -386,15 +386,17 @@
         }
     </script>
 
-<script>
+    <script>
     function estateMapApp() {
         return {
             map: null,
             tileLayer: null,
-            orthoLayer: null,
             geojsonLayer: null,
             markersLayer: null,
             parcelLabelsLayer: null,
+
+            activeOrthoLayer: null,
+            orthophotos: [],
 
             mapMode: 'mixed',
             showParcels: true,
@@ -410,10 +412,12 @@
             projectFilter: '',
             programFilter: '',
             tagFilter: '',
+            orthoPeriodFilter: '',
 
             projectOptions: [],
             programOptions: [],
             tagOptions: [],
+            orthoPeriodOptions: [],
 
             selectedAsset: {},
             selectedLayer: null,
@@ -439,11 +443,8 @@
             isZooming: false,
             isDraggingMap: false,
 
-            // =========================
-            // MULTI EMPRISES ORTHO
-            // =========================
-            orthoRegions: [],        // [{program_id, program, project, bounds}]
-            orthoGlobalBounds: null, // union de toutes les emprises
+            orthoRegions: [],
+            orthoGlobalBounds: null,
 
             summaries: [
                 {label: 'Actifs', value: '0'},
@@ -491,6 +492,32 @@
 
                 return Array.from(uniq.values()).sort((a, b) =>
                     String(a.name || '').localeCompare(String(b.name || ''))
+                );
+            },
+
+            get filteredOrthoPeriodOptions() {
+                let options = [...this.orthoPeriodOptions];
+
+                if (this.projectFilter) {
+                    options = options.filter(o => !o.project || o.project === this.projectFilter);
+                }
+
+                if (this.programFilter) {
+                    const selectedProgramId = String(this.getProgramIdByName(this.programFilter) || '');
+                    options = options.filter(o =>
+                        (o.program && o.program === this.programFilter) ||
+                        String(o.program_id || '') === selectedProgramId
+                    );
+                }
+
+                const uniq = new Map();
+                options.forEach(o => {
+                    if (!o.value) return;
+                    uniq.set(`${o.program_id || 'na'}::${o.value}`, o);
+                });
+
+                return Array.from(uniq.values()).sort((a, b) =>
+                    String(a.label || '').localeCompare(String(b.label || ''))
                 );
             },
 
@@ -543,6 +570,11 @@
                     tag?.program === programName || tag?.program_name === programName
                 );
                 if (matchFromTags?.program_id) return matchFromTags.program_id;
+
+                const matchFromOrthos = this.orthophotos.find(o =>
+                    o?.program === programName || o?.program_name === programName
+                );
+                if (matchFromOrthos?.program_id) return matchFromOrthos.program_id;
 
                 return null;
             },
@@ -651,9 +683,6 @@
                 }, delay);
             },
 
-            // =========================
-            // ORTHO HELPERS
-            // =========================
             parseBoundsCandidate(candidate) {
                 try {
                     if (!candidate) return null;
@@ -696,31 +725,107 @@
                 }
             },
 
-            normalizeOrthoRegions(rawData = {}) {
-                const rawRegions = [
-                    ...(Array.isArray(rawData.ortho_regions) ? rawData.ortho_regions : []),
-                    ...(Array.isArray(rawData.map_context?.ortho_regions) ? rawData.map_context.ortho_regions : [])
-                ];
+            getOrthophotoPeriodValue(ortho) {
+                if (!ortho) return '';
 
-                const normalized = rawRegions
-                    .map(region => {
-                        const bounds = this.parseBoundsCandidate(region?.bounds || region);
-                        if (!bounds || !bounds.isValid()) return null;
+                if (ortho.period_label) return String(ortho.period_label).trim();
 
-                        return {
-                            ...region,
-                            bounds,
-                            project: region?.project || region?.project_name || '',
-                            program: region?.program || region?.program_name || '',
-                            program_id: region?.program_id || null,
-                        };
-                    })
-                    .filter(Boolean);
+                if (ortho.reference_year && ortho.reference_month) {
+                    return `${String(ortho.reference_month).padStart(2, '0')}/${ortho.reference_year}`;
+                }
 
-                return normalized;
+                if (ortho.capture_date) {
+                    return String(ortho.capture_date);
+                }
+
+                if (ortho.version) return String(ortho.version).trim();
+                if (ortho.name) return String(ortho.name).trim();
+
+                return '';
             },
 
-            rebuildOrthoGlobalBounds() {
+            getOrthophotoPeriodLabel(ortho) {
+                return this.getOrthophotoPeriodValue(ortho) || 'Période inconnue';
+            },
+
+            normalizeOrthophoto(rawOrtho, asset = null) {
+
+            if (!rawOrtho || !rawOrtho.tiles_url) return null;
+
+            const bounds = this.parseBoundsCandidate(rawOrtho.bounds || rawOrtho.boundary || null);
+
+            const projectName = rawOrtho.project || rawOrtho.project_name || asset?.project || '';
+
+            const programName = rawOrtho.program || rawOrtho.program_name || asset?.program || '';
+
+            const programId = rawOrtho.program_id || asset?.program_id || null;
+
+            const periodValue = this.getOrthophotoPeriodValue(rawOrtho);
+
+            const periodLabel = this.getOrthophotoPeriodLabel(rawOrtho);
+
+            return {
+
+                ...rawOrtho,
+
+                id: rawOrtho.id || `${programId || 'na'}-${rawOrtho.slug || periodValue || 'ortho'}`,
+
+                project: projectName,
+
+                project_name: projectName,
+
+                program: programName,
+
+                program_name: programName,
+
+                program_id: programId,
+
+                period_value: periodValue,
+
+                period_label_resolved: periodLabel,
+
+                bounds,
+
+            };
+
+        },
+
+            buildOrthophotoCatalogFromAssets() {
+                const map = new Map();
+
+                this.assets.forEach(asset => {
+                    const currentOrtho = this.normalizeOrthophoto(asset.orthophoto, asset);
+                    const versions = Array.isArray(asset.orthophotos) ? asset.orthophotos : [];
+
+                    [currentOrtho, ...versions.map(o => this.normalizeOrthophoto(o, asset))]
+                        .filter(Boolean)
+                        .forEach(ortho => {
+                            const key = [
+                                ortho.program_id || ortho.program || 'na',
+                                ortho.period_value || ortho.slug || ortho.id || 'current'
+                            ].join('::');
+
+                            if (!map.has(key)) {
+                                map.set(key, ortho);
+                            }
+                        });
+                });
+
+                return Array.from(map.values());
+            },
+
+            rebuildOrthoRegions() {
+                this.orthoRegions = this.orthophotos
+                    .filter(o => o.bounds && o.bounds.isValid())
+                    .map(o => ({
+                        program_id: o.program_id || null,
+                        program: o.program || o.program_name || '',
+                        project: o.project || o.project_name || '',
+                        bounds: o.bounds,
+                        period_value: o.period_value || '',
+                        period_label: o.period_label_resolved || '',
+                    }));
+
                 if (!this.orthoRegions.length) {
                     this.orthoGlobalBounds = null;
                     return;
@@ -735,32 +840,60 @@
                 this.orthoGlobalBounds = union && union.isValid() ? union : null;
             },
 
-            getRelevantOrthoBounds() {
-                if (!this.orthoRegions.length) return null;
+            buildOrthoPeriodOptions() {
+                const map = new Map();
 
-                let filtered = [...this.orthoRegions];
+                this.orthophotos.forEach(o => {
+                    const value = o.period_value || '';
+                    if (!value) return;
+
+                    const key = `${o.program_id || 'na'}::${value}`;
+                    if (!map.has(key)) {
+                        map.set(key, {
+                            value,
+                            label: o.period_label_resolved || value,
+                            project: o.project || '',
+                            program: o.program || '',
+                            program_id: o.program_id || null,
+                        });
+                    }
+                });
+
+                return Array.from(map.values()).sort((a, b) =>
+                    String(a.label || '').localeCompare(String(b.label || ''))
+                );
+            },
+
+            getFilteredOrthophotos() {
+                let items = [...this.orthophotos];
 
                 if (this.projectFilter) {
-                    filtered = filtered.filter(region =>
-                        !region.project || region.project === this.projectFilter
-                    );
+                    items = items.filter(o => !o.project || o.project === this.projectFilter);
                 }
 
                 if (this.programFilter) {
                     const selectedProgramId = String(this.getProgramIdByName(this.programFilter) || '');
-                    filtered = filtered.filter(region => {
-                        const regionProgramId = String(region.program_id || '');
-                        const regionProgramName = region.program || '';
-                        return regionProgramName === this.programFilter || regionProgramId === selectedProgramId;
-                    });
+                    items = items.filter(o =>
+                        (o.program && o.program === this.programFilter) ||
+                        String(o.program_id || '') === selectedProgramId
+                    );
                 }
 
-                const pool = filtered.length ? filtered : this.orthoRegions;
+                if (this.orthoPeriodFilter) {
+                    items = items.filter(o => (o.period_value || '') === this.orthoPeriodFilter);
+                }
+
+                return items;
+            },
+
+            getRelevantOrthoBounds() {
+                const items = this.getFilteredOrthophotos().filter(o => o.bounds && o.bounds.isValid());
+
+                if (!items.length) return this.orthoGlobalBounds;
 
                 let union = null;
-                pool.forEach(region => {
-                    if (!region?.bounds || !region.bounds.isValid()) return;
-                    union = union ? union.extend(region.bounds) : L.latLngBounds(region.bounds);
+                items.forEach(o => {
+                    union = union ? union.extend(o.bounds) : L.latLngBounds(o.bounds);
                 });
 
                 return union && union.isValid() ? union : this.orthoGlobalBounds;
@@ -769,11 +902,15 @@
             mapIntersectsAnyOrtho(bounds = null) {
                 const target = bounds || this.map?.getBounds?.();
                 if (!target) return false;
-                if (!this.orthoRegions.length) return true;
 
-                return this.orthoRegions.some(region =>
-                    region?.bounds && region.bounds.isValid() && region.bounds.intersects(target)
-                );
+                const items = this.getFilteredOrthophotos();
+                const withBounds = items.filter(o => o.bounds && o.bounds.isValid());
+
+                if (!withBounds.length) {
+                    return items.length > 0;
+                }
+
+                return withBounds.some(o => o.bounds.intersects(target));
             },
 
             async init() {
@@ -826,61 +963,6 @@
                     updateWhenZooming: false,
                     updateWhenIdle: true,
                     keepBuffer: 4
-                });
-
-                this.orthoErrorCount = 0;
-                this.orthoFallbackDone = false;
-
-                this.orthoLayer = L.tileLayer('/media/tiles_ortho/{z}/{x}/{y}.png', {
-                    minZoom: 15,
-                    maxZoom: 22,
-                    maxNativeZoom: 22,
-                    tileSize: 256,
-                    tms: false,
-                    attribution: 'Orthophoto Kaydan Group',
-                    updateWhenZooming: false,
-                    updateWhenIdle: true,
-                    keepBuffer: 6,
-                    opacity: 1,
-                    noWrap: true
-                });
-
-                this.orthoLayer.on('tileerror', (e) => {
-                    if (this.orthoFallbackDone || !this.map) return;
-
-                    const coords = e?.coords || e?.tile?.coords;
-                    const mapBounds = this.map.getBounds();
-
-                    if (coords) {
-                        const tileBounds = this.getTileLatLngBounds(coords.x, coords.y, coords.z);
-                        if (tileBounds && !this.mapIntersectsAnyOrtho(tileBounds)) {
-                            return;
-                        }
-                    } else if (!this.mapIntersectsAnyOrtho(mapBounds)) {
-                        return;
-                    }
-
-                    this.orthoErrorCount += 1;
-
-                    if (this.orthoErrorCount <= 3) {
-                        console.warn('Erreur tuile ortho dans emprise:', e?.tile?.src || 'tuile inconnue');
-                    }
-
-                    if (this.mapIntersectsAnyOrtho(mapBounds) && this.orthoErrorCount >= 12) {
-                        this.orthoFallbackDone = true;
-                        console.warn('Bascule automatique sur OSM : orthophoto indisponible dans les emprises visibles.');
-                        this.mapMode = 'osm';
-
-                        try {
-                            if (this.map.hasLayer(this.orthoLayer)) {
-                                this.map.removeLayer(this.orthoLayer);
-                            }
-                        } catch (err) {
-                            console.warn(err);
-                        }
-
-                        this.applyBaseLayers();
-                    }
                 });
 
                 this.markersLayer = L.markerClusterGroup({
@@ -945,10 +1027,103 @@
 
                 this.map.on('moveend', () => {
                     if (this.isZooming) return;
+
+                    if (this.mapMode === 'ortho' || this.mapMode === 'mixed') {
+                        this.applyOrthoLayer();
+                    }
+
                     this.scheduleRedraw(220);
                 });
 
                 this.applyBaseLayers();
+            },
+
+            applyOrthoLayer() {
+                if (!this.map) return;
+
+                if (this.activeOrthoLayer) {
+                    try {
+                        this.map.removeLayer(this.activeOrthoLayer);
+                    } catch (e) {
+                        console.warn(e);
+                    }
+                    this.activeOrthoLayer = null;
+                }
+
+                const candidates = this.getFilteredOrthophotos();
+                if (!candidates.length) return;
+
+                const mapBounds = this.map.getBounds();
+                let ortho = null;
+
+                const intersecting = candidates.find(o =>
+                    o.bounds && o.bounds.isValid() && o.bounds.intersects(mapBounds)
+                );
+
+                if (intersecting) {
+                    ortho = intersecting;
+                }
+
+                if (!ortho && this.programFilter) {
+                    const selectedProgramId = String(this.getProgramIdByName(this.programFilter) || '');
+                    ortho = candidates.find(o =>
+                        (o.program && o.program === this.programFilter) ||
+                        String(o.program_id || '') === selectedProgramId
+                    );
+                }
+
+                if (!ortho) {
+                    ortho = candidates.find(o => o.is_current) || candidates[0];
+                }
+
+                if (!ortho || !ortho.tiles_url) return;
+
+                this.orthoErrorCount = 0;
+                this.orthoFallbackDone = false;
+
+                this.activeOrthoLayer = L.tileLayer(ortho.tiles_url, {
+                    minZoom: ortho.min_zoom || 15,
+                    maxZoom: ortho.max_zoom || 22,
+                    maxNativeZoom: ortho.max_native_zoom || ortho.max_zoom || 22,
+                    tileSize: 256,
+                    tms: false,
+                    noWrap: true,
+                    opacity: this.mapMode === 'mixed' ? 0.78 : 1,
+                    attribution: `Orthophoto ${ortho.program || ''}`.trim(),
+                    updateWhenZooming: false,
+                    updateWhenIdle: true,
+                    keepBuffer: 6
+                });
+
+                this.activeOrthoLayer.on('tileerror', (e) => {
+                    if (this.orthoFallbackDone || !this.map) return;
+
+                    const coords = e?.coords || e?.tile?.coords;
+                    const mapBoundsNow = this.map.getBounds();
+
+                    if (coords) {
+                        const tileBounds = this.getTileLatLngBounds(coords.x, coords.y, coords.z);
+                        if (tileBounds && !this.mapIntersectsAnyOrtho(tileBounds)) {
+                            return;
+                        }
+                    } else if (!this.mapIntersectsAnyOrtho(mapBoundsNow)) {
+                        return;
+                    }
+
+                    this.orthoErrorCount += 1;
+
+                    if (this.orthoErrorCount <= 3) {
+                        console.warn('Erreur tuile ortho dans emprise:', e?.tile?.src || 'tuile inconnue');
+                    }
+
+                    if (this.mapIntersectsAnyOrtho(mapBoundsNow) && this.orthoErrorCount >= 12) {
+                        this.orthoFallbackDone = true;
+                        this.mapMode = 'osm';
+                        this.applyBaseLayers();
+                    }
+                });
+
+                this.activeOrthoLayer.addTo(this.map);
             },
 
             getTileLatLngBounds(x, y, z) {
@@ -988,6 +1163,11 @@
                         }))
                     : [];
 
+                const orthophoto = this.normalizeOrthophoto(asset.orthophoto, asset);
+                const orthophotos = Array.isArray(asset.orthophotos)
+                    ? asset.orthophotos.map(o => this.normalizeOrthophoto(o, asset)).filter(Boolean)
+                    : [];
+
                 return {
                     ...asset,
                     uid,
@@ -1016,6 +1196,8 @@
                     financial_stats: asset.financial_stats || {},
                     construction_stats: asset.construction_stats || {},
                     priority_stats: asset.priority_stats || {},
+                    orthophoto,
+                    orthophotos,
                     unit_summary: asset.unit_summary || {
                         total_units: 0,
                         available_units: 0,
@@ -1037,7 +1219,9 @@
                     credentials: 'same-origin'
                 });
 
-                if (!response.ok) throw new Error('Impossible de charger les données de la carte.');
+                if (!response.ok) {
+                    throw new Error('Impossible de charger les données de la carte.');
+                }
 
                 const data = await response.json();
 
@@ -1061,8 +1245,27 @@
                     return asset;
                 });
 
-                this.orthoRegions = this.normalizeOrthoRegions(data);
-                this.rebuildOrthoGlobalBounds();
+                const directOrthos = Array.isArray(data.orthophotos)
+                    ? data.orthophotos.map(o => this.normalizeOrthophoto(o, null)).filter(Boolean)
+                    : [];
+
+                const assetOrthos = this.buildOrthophotoCatalogFromAssets();
+
+                const orthoMap = new Map();
+                [...directOrthos, ...assetOrthos].forEach(o => {
+                    const key = [
+                        o.program_id || o.program || 'na',
+                        o.period_value || o.slug || o.id || 'current'
+                    ].join('::');
+
+                    if (!orthoMap.has(key)) {
+                        orthoMap.set(key, o);
+                    }
+                });
+
+                this.orthophotos = Array.from(orthoMap.values());
+                this.rebuildOrthoRegions();
+                this.orthoPeriodOptions = this.buildOrthoPeriodOptions();
 
                 this.summaries = data.summaries || this.summaries;
                 this.filters = Array.isArray(data.filters) && data.filters.length ? data.filters : ['Tous'];
@@ -1123,20 +1326,31 @@
             applyBaseLayers() {
                 if (!this.map) return;
 
-                if (this.map.hasLayer(this.tileLayer)) this.map.removeLayer(this.tileLayer);
-                if (this.map.hasLayer(this.orthoLayer)) this.map.removeLayer(this.orthoLayer);
+                if (this.map.hasLayer(this.tileLayer)) {
+                    this.map.removeLayer(this.tileLayer);
+                }
+
+                if (this.activeOrthoLayer) {
+                    try {
+                        this.map.removeLayer(this.activeOrthoLayer);
+                    } catch (e) {
+                        console.warn(e);
+                    }
+                    this.activeOrthoLayer = null;
+                }
 
                 if (this.mapMode === 'osm') {
                     this.tileLayer.setOpacity(1);
                     this.tileLayer.addTo(this.map);
                 } else if (this.mapMode === 'ortho') {
-                    this.orthoLayer.setOpacity(1);
-                    this.orthoLayer.addTo(this.map);
+                    this.applyOrthoLayer();
                 } else {
                     this.tileLayer.setOpacity(1);
-                    this.orthoLayer.setOpacity(0.78);
                     this.tileLayer.addTo(this.map);
-                    this.orthoLayer.addTo(this.map);
+                    this.applyOrthoLayer();
+                    if (this.activeOrthoLayer) {
+                        this.activeOrthoLayer.setOpacity(0.78);
+                    }
                 }
             },
 
@@ -1292,6 +1506,7 @@
                 this.projectFilter = '';
                 this.programFilter = '';
                 this.tagFilter = '';
+                this.orthoPeriodFilter = '';
                 this.filterAssets();
             },
 
@@ -1307,6 +1522,13 @@
                     }
                 }
 
+                if (this.orthoPeriodFilter) {
+                    const orthoStillValid = this.filteredOrthoPeriodOptions.some(o => o.value === this.orthoPeriodFilter);
+                    if (!orthoStillValid) {
+                        this.orthoPeriodFilter = '';
+                    }
+                }
+
                 this.filterAssets();
             },
 
@@ -1318,6 +1540,24 @@
                     }
                 }
 
+                if (this.orthoPeriodFilter) {
+                    const orthoStillValid = this.filteredOrthoPeriodOptions.some(o => o.value === this.orthoPeriodFilter);
+                    if (!orthoStillValid) {
+                        this.orthoPeriodFilter = '';
+                    }
+                }
+
+                if (this.mapMode === 'ortho' || this.mapMode === 'mixed') {
+                    this.applyOrthoLayer();
+                }
+
+                this.filterAssets();
+            },
+
+            onOrthoPeriodChange() {
+                if (this.mapMode === 'ortho' || this.mapMode === 'mixed') {
+                    this.applyOrthoLayer();
+                }
                 this.filterAssets();
             },
 
@@ -1414,6 +1654,8 @@
                     ? `<div style="margin-top:8px;font-size:12px;color:#e5e7eb">Unités : <strong>${asset.unit_summary?.total_units ?? 0}</strong> • Vendues : <strong>${asset.unit_summary?.sold_units ?? 0}</strong></div>`
                     : '';
 
+                const orthoLabel = asset.orthophoto?.period_label_resolved || asset.orthophoto?.period_label || '';
+
                 const tagsHtml = (asset.tags || []).length
                     ? `
                     <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;">
@@ -1449,6 +1691,7 @@
                         <div style="margin-top:3px;font-size:12px;color:#d1d5db">${this.escapeHtml(asset.program || '—')}</div>
                         <div style="margin-top:6px;font-size:18px;font-weight:800">${this.escapeHtml(asset.name || '—')}</div>
                         <div style="margin-top:6px;font-size:13px;color:#e5e7eb">${natureLabel}</div>
+                        ${orthoLabel ? `<div style="margin-top:6px;font-size:11px;color:#fdba74;font-weight:700;">Orthophoto : ${this.escapeHtml(orthoLabel)}</div>` : ''}
 
                         <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
                             <div><span style="color:#fdba74">Prix</span><br><strong>${asset.price || '—'}</strong></div>
@@ -1479,24 +1722,6 @@
                         </div>
                     </div>
                 `;
-            },
-
-            attachHoverPopupBehavior(layer) {
-                layer.on('mouseover', () => {
-                    if (layer.setStyle && layer.feature?.properties) {
-                        if (this.selectedAsset?.id !== layer.feature.properties.id) {
-                            layer.setStyle(this.getStyle(layer.feature.properties, true));
-                        }
-                    }
-                });
-
-                layer.on('mouseout', () => {
-                    if (layer.setStyle && layer.feature?.properties) {
-                        if (this.selectedAsset?.id !== layer.feature.properties.id) {
-                            layer.setStyle(this.getStyle(layer.feature.properties, false));
-                        }
-                    }
-                });
             },
 
             attachPopupCarouselHandlers(layer, assetId, imagesCount) {
@@ -1835,6 +2060,9 @@
                         asset.asset_nature || '',
                         asset.client || '',
                         asset.status || '',
+                        asset.orthophoto?.period_label_resolved || '',
+                        asset.orthophoto?.period_label || '',
+                        asset.orthophoto?.version || '',
                         ...(asset.tags || []).flatMap(tag => [
                             tag?.name || '',
                             tag?.slug || '',
@@ -1876,7 +2104,19 @@
 
                     const matchesTag = !this.tagFilter || assetTagSlugs.includes(this.tagFilter);
 
-                    return matchesSearch && matchesFilter && matchesProject && matchesProgram && matchesTag;
+                    let matchesOrthoPeriod = true;
+                    if (this.orthoPeriodFilter) {
+                        const assetOrthos = [
+                            asset.orthophoto,
+                            ...(Array.isArray(asset.orthophotos) ? asset.orthophotos : [])
+                        ].filter(Boolean);
+
+                        matchesOrthoPeriod = assetOrthos.some(o =>
+                            (o?.period_value || this.getOrthophotoPeriodValue(o)) === this.orthoPeriodFilter
+                        );
+                    }
+
+                    return matchesSearch && matchesFilter && matchesProject && matchesProgram && matchesTag && matchesOrthoPeriod;
                 });
 
                 if (!this.visibleAssets.find(a => a.id === this.selectedAsset?.id)) {
@@ -1884,6 +2124,10 @@
                     this.sidebarImageIndex = 0;
                     this.sidebarOpen = false;
                     this.applySelectedStyle();
+                }
+
+                if (this.mapMode === 'ortho' || this.mapMode === 'mixed') {
+                    this.applyOrthoLayer();
                 }
 
                 this.drawAssets();
@@ -1954,49 +2198,59 @@
                         </div>
 
                         <div class="glass rounded-2xl border border-white/20 bg-white/80 px-3 py-2 shadow-soft">
-                        <select x-model="programFilter" @change="onProgramChange()"
-        class="bg-transparent text-sm font-semibold text-slate-700 outline-none">
-    <option value="">Tous les programmes</option>
-    <template x-for="program in filteredProgramOptions" :key="program">
-        <option :value="program" x-text="program"></option>
-    </template>
-</select>
+                            <select x-model="programFilter" @change="onProgramChange()"
+                                    class="bg-transparent text-sm font-semibold text-slate-700 outline-none">
+                                <option value="">Tous les programmes</option>
+                                <template x-for="program in filteredProgramOptions" :key="program">
+                                    <option :value="program" x-text="program"></option>
+                                </template>
+                            </select>
                         </div>
-                      <div x-show="programFilter && filteredTagOptions.length"
-     x-transition
-     class="glass rounded-2xl border border-white/20 bg-white/80 px-3 py-3 shadow-soft">
-    <div class="flex flex-wrap items-center gap-2">
+                        <div class="glass rounded-2xl border border-white/20 bg-white/80 px-3 py-2 shadow-soft"
+     x-show="filteredOrthoPeriodOptions.length">
+    <select x-model="orthoPeriodFilter" @change="onOrthoPeriodChange()"
+            class="bg-transparent text-sm font-semibold text-slate-700 outline-none">
+        <option value="">Toutes les périodes ortho</option>
+        <template x-for="period in filteredOrthoPeriodOptions" :key="`${period.program_id || 'na'}-${period.value}`">
+            <option :value="period.value" x-text="period.label"></option>
+        </template>
+    </select>
+</div>
+                        <div x-show="programFilter && filteredTagOptions.length"
+                             x-transition
+                             class="glass rounded-2xl border border-white/20 bg-white/80 px-3 py-3 shadow-soft">
+                            <div class="flex flex-wrap items-center gap-2">
         <span class="text-xs font-extrabold uppercase tracking-[0.18em] text-slate-500">
             Sous-projets
         </span>
 
-        <button
-                type="button"
-                @click="setTagFilter('')"
-                class="rounded-full px-3 py-1.5 text-xs font-bold transition border"
-                :class="!tagFilter
+                                <button
+                                        type="button"
+                                        @click="setTagFilter('')"
+                                        class="rounded-full px-3 py-1.5 text-xs font-bold transition border"
+                                        :class="!tagFilter
                     ? 'bg-slate-900 text-white border-slate-900'
                     : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'">
-            Tous
-        </button>
+                                    Tous
+                                </button>
 
-        <template x-for="tag in filteredTagOptions"
-                  :key="`${tag.program_id || tag.program || 'na'}-${tag.slug}`">
-            <button
-                    type="button"
-                    @click="setTagFilter(tag.slug)"
-                    class="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold transition border"
-                    :style="getTagChipStyle(tag)"
-                    :class="tagFilter === tag.slug
+                                <template x-for="tag in filteredTagOptions"
+                                          :key="`${tag.program_id || tag.program || 'na'}-${tag.slug}`">
+                                    <button
+                                            type="button"
+                                            @click="setTagFilter(tag.slug)"
+                                            class="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold transition border"
+                                            :style="getTagChipStyle(tag)"
+                                            :class="tagFilter === tag.slug
                         ? 'ring-2 ring-offset-2 ring-slate-300 shadow-soft scale-[1.02]'
                         : 'opacity-95 hover:opacity-100 hover:scale-[1.02]'">
 
-                <span class="h-2.5 w-2.5 rounded-full bg-white/90"></span>
-                <span x-text="tag.name"></span>
-            </button>
-        </template>
-    </div>
-</div>
+                                        <span class="h-2.5 w-2.5 rounded-full bg-white/90"></span>
+                                        <span x-text="tag.name"></span>
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
                         <div class="glass rounded-2xl border border-white/20 bg-white/80 px-2 py-2 shadow-soft">
                             <div class="flex items-center gap-1">
                                 <button
