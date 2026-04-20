@@ -41,11 +41,11 @@ urlpatterns = [
                   path("api/", include("parcelaire.api.urls")),
                   path("ai/", include("ai_construction.urls")),
                   path('home', HomeView.as_view(), name='home'),
-                  path('', MapView.as_view(), name='map'),
+                  path('map/', MapView.as_view(), name='map'),
                   path('map_commercial', MapCommercialView.as_view(), name='map_commercial'),
                   path('accounts/', include('allauth.urls')),
 
-                  path("dash", ParcellaireDashboardView.as_view(), name="parcelaire_dashboard"),
+                  path("", ParcellaireDashboardView.as_view(), name="parcelaire_dashboard"),
 
                   path("projects/", ProjetImmobilierListView.as_view(), name="project_list"),
                   path("projects/add/", ProjetImmobilierCreateView.as_view(), name="project_add"),
