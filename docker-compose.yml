@@ -122,7 +122,7 @@ services:
       - .:/app
       - media_volume:/app/media
       - static_volume:/app/staticfiles
-      - ORTHO_ROOT=/app/media/tiles_ortho
+
     environment:
       - DEBUG=${DEBUG:-False}
       - DJANGO_SETTINGS_MODULE=parcelaireKG.settings
