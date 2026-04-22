@@ -235,6 +235,7 @@ class RealEstateProgram(TimeStampedModel, SoftDeleteModel):
     manager_name = models.CharField(max_length=255, blank=True, null=True, verbose_name="Nom du responsable")
     manager_phone = models.CharField(max_length=50, blank=True, null=True, verbose_name="Téléphone du responsable")
     manager_email = models.EmailField(blank=True, null=True, verbose_name="Email du responsable")
+    programm_url = models.URLField(blank=True, null=True, verbose_name="url du programme")
 
     boundary = gis_models.MultiPolygonField(srid=4326, blank=True, null=True, verbose_name="Périmètre")
     centroid = gis_models.PointField(srid=4326, blank=True, null=True, verbose_name="Centroïde")
@@ -491,6 +492,7 @@ class ProgramOrthophoto(TimeStampedModel):
             label = self.version or f"Orthophoto #{self.pk}"
 
         return f"{self.program.name} - {label}"
+
 class ProgramPhase(TimeStampedModel, SoftDeleteModel):
     STATUS_CHOICES = [
         ("PLANNED", "Planifiée"),

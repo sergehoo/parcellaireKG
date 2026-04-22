@@ -44,11 +44,14 @@ from .models import (
     ConstructionMedia, IntegrationLog, ParcelTag, ProgramOrthophoto,
 )
 
+
 @admin.register(ParcelTag)
 class ParcelTagAdmin(admin.ModelAdmin):
     list_display = ("name", "slug", "color", "is_active")
     list_filter = ("is_active",)
     search_fields = ("name", "slug")
+
+
 # =========================================================
 # IMPORT / EXPORT RESOURCES
 # =========================================================
@@ -223,7 +226,7 @@ class ParcelInline(admin.TabularInline):
         "official_area_m2",
         "is_active",
     )
-    autocomplete_fields = ("phase", "block", "dataset", "land_use","tags")
+    autocomplete_fields = ("phase", "block", "dataset", "land_use", "tags")
     show_change_link = True
 
 
@@ -519,6 +522,7 @@ class RealEstateProgramAdmin(BaseAdminMixin, ImportExportModelAdmin):
         "country",
         "place",
         "estimated_lot_count",
+        "programm_url",
         "is_active",
     )
     list_filter = ("program_type", "status", "country", "is_active")
@@ -718,14 +722,13 @@ class ParcelAdmin(BaseAdminMixin, ImportExportModelAdmin):
     def display_tags(self, obj):
         return ", ".join(obj.tags.values_list("name", flat=True)) or "—"
 
+
 @admin.register(ParcelGeometryHistory)
 class ParcelGeometryHistoryAdmin(BaseAdminMixin, admin.ModelAdmin):
     list_display = ("parcel", "reason", "changed_by", "created_at")
     search_fields = ("parcel__lot_number", "parcel__parcel_code", "reason", "changed_by")
     autocomplete_fields = ("parcel",)
     ordering = ("-created_at",)
-
-
 
 
 @admin.register(ProgramOrthophoto)
@@ -873,6 +876,8 @@ class ProgramOrthophotoAdmin(admin.ModelAdmin):
     def deactivate_selected(self, request, queryset):
         updated = queryset.update(is_active=False)
         self.message_user(request, f"{updated} orthophoto(s) désactivée(s).")
+
+
 # =========================================================
 # CLIENTS / CRM
 # =========================================================
@@ -912,7 +917,8 @@ class CustomerAdmin(BaseAdminMixin, ImportExportModelAdmin):
 @admin.register(Lead)
 class LeadAdmin(BaseAdminMixin, ImportExportModelAdmin):
     resource_class = LeadResource
-    list_display = ("id", "program", "customer", "interested_parcel", "status", "budget_min", "budget_max", "created_at")
+    list_display = (
+    "id", "program", "customer", "interested_parcel", "status", "budget_min", "budget_max", "created_at")
     list_filter = ("status", "program", "is_active")
     search_fields = (
         "customer__first_name",
@@ -1195,7 +1201,8 @@ class PaymentScheduleAdmin(BaseAdminMixin, ImportExportModelAdmin):
     resource_class = PaymentScheduleResource
     list_display = ("name", "sale_file", "total_amount", "start_date", "end_date", "is_active")
     list_filter = ("is_active", "start_date", "end_date")
-    search_fields = ("name", "sale_file__sale_number", "sale_file__customer__first_name", "sale_file__customer__last_name")
+    search_fields = (
+    "name", "sale_file__sale_number", "sale_file__customer__first_name", "sale_file__customer__last_name")
     autocomplete_fields = ("sale_file",)
     inlines = [PaymentInstallmentInline]
     ordering = ("-created_at",)
@@ -1431,7 +1438,6 @@ class ConstructionMediaAdmin(BaseAdminMixin, admin.ModelAdmin):
     search_fields = ("title", "caption", "construction_project__code", "construction_project__title")
     autocomplete_fields = ("construction_project", "update")
     ordering = ("sort_order", "-created_at")
-
 
 
 # SAP -=-=-=-=-=-=-=-=-=-=

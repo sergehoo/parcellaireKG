@@ -385,608 +385,615 @@
             }
         }
     </script>
-
     <script>
-    function estateMapApp() {
-        return {
-            map: null,
-            tileLayer: null,
-            geojsonLayer: null,
-            markersLayer: null,
-            parcelLabelsLayer: null,
+        function estateMapApp() {
+            return {
+                map: null,
+                tileLayer: null,
+                geojsonLayer: null,
+                markersLayer: null,
+                parcelLabelsLayer: null,
+                activeOrthoKey: '',
+                activeOrthoLayer: null,
+                orthophotos: [],
 
-            activeOrthoLayer: null,
-            orthophotos: [],
+                mapMode: 'mixed',
+                showParcels: true,
+                showParcelLabels: true,
+                minLabelZoom: 18,
+                minPolygonZoom: 16,
+                visiblePadRatio: 0.28,
 
-            mapMode: 'mixed',
-            showParcels: true,
-            showParcelLabels: true,
-            minLabelZoom: 18,
-            minPolygonZoom: 16,
-            visiblePadRatio: 0.28,
+                search: '',
+                activeFilter: 'Tous',
+                filters: ['Tous'],
 
-            search: '',
-            activeFilter: 'Tous',
-            filters: ['Tous'],
+                projectFilter: '',
+                programFilter: '',
+                tagFilter: '',
+                orthoPeriodFilter: '',
 
-            projectFilter: '',
-            programFilter: '',
-            tagFilter: '',
-            orthoPeriodFilter: '',
+                projectOptions: [],
+                programOptions: [],
+                tagOptions: [],
+                orthoPeriodOptions: [],
 
-            projectOptions: [],
-            programOptions: [],
-            tagOptions: [],
-            orthoPeriodOptions: [],
+                selectedAsset: {},
+                selectedLayer: null,
+                visibleAssets: [],
+                drawableAssets: [],
+                assets: [],
 
-            selectedAsset: {},
-            selectedLayer: null,
-            visibleAssets: [],
-            drawableAssets: [],
-            assets: [],
+                sidebarOpen: false,
 
-            sidebarOpen: false,
+                sidebarImageIndex: 0,
+                lightboxOpen: false,
+                lightboxImage: '',
+                lightboxIndex: 0,
 
-            sidebarImageIndex: 0,
-            lightboxOpen: false,
-            lightboxImage: '',
-            lightboxIndex: 0,
+                loading: false,
+                apiError: '',
+                initialized: false,
+                redrawTimer: null,
+                renderVersion: 0,
+                popupOpenPending: false,
+                orthoFallbackDone: false,
+                orthoErrorCount: 0,
+                isZooming: false,
+                isDraggingMap: false,
 
-            loading: false,
-            apiError: '',
-            initialized: false,
-            redrawTimer: null,
-            renderVersion: 0,
-            popupOpenPending: false,
-            orthoFallbackDone: false,
-            orthoErrorCount: 0,
-            isZooming: false,
-            isDraggingMap: false,
+                orthoRegions: [],
+                orthoGlobalBounds: null,
 
-            orthoRegions: [],
-            orthoGlobalBounds: null,
+                summaries: [
+                    {label: 'Actifs', value: '0'},
+                    {label: 'Réservés/Vendus', value: '0'},
+                    {label: 'CA potentiel', value: '0 FCFA'},
+                ],
 
-            summaries: [
-                {label: 'Actifs', value: '0'},
-                {label: 'Réservés/Vendus', value: '0'},
-                {label: 'CA potentiel', value: '0 FCFA'},
-            ],
+                get filteredProgramOptions() {
+                    if (!this.projectFilter) return this.programOptions;
 
-            get filteredProgramOptions() {
-                if (!this.projectFilter) return this.programOptions;
-
-                const options = new Set(
-                    this.assets
-                        .filter(asset => (asset.project || '') === this.projectFilter)
-                        .map(asset => asset.program)
-                        .filter(Boolean)
-                );
-
-                return Array.from(options).sort((a, b) => a.localeCompare(b));
-            },
-
-            get filteredTagOptions() {
-                let options = [...this.tagOptions];
-
-                if (this.projectFilter) {
-                    options = options.filter(tag =>
-                        (tag.project || tag.project_name || '') === this.projectFilter
-                    );
-                }
-
-                if (this.programFilter) {
-                    const selectedProgramId = String(this.getProgramIdByName(this.programFilter) || '');
-
-                    options = options.filter(tag => {
-                        const tagProgramId = String(tag.program_id || '');
-                        const tagProgramName = tag.program || tag.program_name || '';
-                        return tagProgramName === this.programFilter || tagProgramId === selectedProgramId;
-                    });
-                }
-
-                const uniq = new Map();
-                options.forEach(tag => {
-                    if (!tag?.slug) return;
-                    uniq.set(`${tag.program_id || tag.program || 'na'}::${tag.slug}`, tag);
-                });
-
-                return Array.from(uniq.values()).sort((a, b) =>
-                    String(a.name || '').localeCompare(String(b.name || ''))
-                );
-            },
-
-            get filteredOrthoPeriodOptions() {
-                let options = [...this.orthoPeriodOptions];
-
-                if (this.projectFilter) {
-                    options = options.filter(o => !o.project || o.project === this.projectFilter);
-                }
-
-                if (this.programFilter) {
-                    const selectedProgramId = String(this.getProgramIdByName(this.programFilter) || '');
-                    options = options.filter(o =>
-                        (o.program && o.program === this.programFilter) ||
-                        String(o.program_id || '') === selectedProgramId
-                    );
-                }
-
-                const uniq = new Map();
-                options.forEach(o => {
-                    if (!o.value) return;
-                    uniq.set(`${o.program_id || 'na'}::${o.value}`, o);
-                });
-
-                return Array.from(uniq.values()).sort((a, b) =>
-                    String(a.label || '').localeCompare(String(b.label || ''))
-                );
-            },
-
-            get currentSidebarImage() {
-                const imgs = this.selectedAsset?.images || [];
-                return imgs[this.sidebarImageIndex] || 'https://artemisconstruction-ci.com/assets/images/portfolio/symphonia/7.jpg';
-            },
-
-            formatPercent(value) {
-                if (value === null || value === undefined || value === '') return '0%';
-                const n = Number(value);
-                if (Number.isNaN(n)) return '0%';
-                return `${Math.round(n)}%`;
-            },
-
-            moneyDisplay(value) {
-                if (value === null || value === undefined || value === '') return '—';
-                const n = Number(value);
-                if (Number.isNaN(n)) return `${value}`;
-                return `${Math.round(n).toLocaleString('fr-FR')} FCFA`;
-            },
-
-            getTrendClass(delta) {
-                const n = Number(delta || 0);
-                if (n > 0) return 'trend-up';
-                if (n < 0) return 'trend-down';
-                return 'trend-flat';
-            },
-
-            getTrendLabel(delta) {
-                const n = Number(delta || 0);
-                if (n > 0) return `+${Math.round(n)}%`;
-                if (n < 0) return `${Math.round(n)}%`;
-                return '0%';
-            },
-
-            truncateText(value, max = 24) {
-                const text = String(value || '').trim();
-                if (!text) return 'Programme';
-                return text.length > max ? `${text.slice(0, max - 1)}…` : text;
-            },
-
-            getProgramIdByName(programName) {
-                if (!programName) return null;
-
-                const matchFromAssets = this.assets.find(asset => (asset.program || '') === programName);
-                if (matchFromAssets?.program_id) return matchFromAssets.program_id;
-
-                const matchFromTags = this.tagOptions.find(tag =>
-                    tag?.program === programName || tag?.program_name === programName
-                );
-                if (matchFromTags?.program_id) return matchFromTags.program_id;
-
-                const matchFromOrthos = this.orthophotos.find(o =>
-                    o?.program === programName || o?.program_name === programName
-                );
-                if (matchFromOrthos?.program_id) return matchFromOrthos.program_id;
-
-                return null;
-            },
-
-            normalizeTagOption(rawTag) {
-                if (!rawTag || !rawTag.slug || !rawTag.name) return null;
-
-                let projectName = rawTag.project || rawTag.project_name || '';
-                let programName = rawTag.program || rawTag.program_name || '';
-                let programId = rawTag.program_id || null;
-
-                if ((!projectName || !programName || !programId) && Array.isArray(this.assets)) {
-                    const assetWithTag = this.assets.find(asset =>
-                        Array.isArray(asset.tags) &&
-                        asset.tags.some(tag => tag?.slug === rawTag.slug)
+                    const options = new Set(
+                        this.assets
+                            .filter(asset => (asset.project || '') === this.projectFilter)
+                            .map(asset => asset.program)
+                            .filter(Boolean)
                     );
 
-                    if (assetWithTag) {
-                        projectName = projectName || assetWithTag.project || '';
-                        programName = programName || assetWithTag.program || '';
-                        programId = programId || assetWithTag.program_id || null;
+                    return Array.from(options).sort((a, b) => a.localeCompare(b));
+                },
+
+                get filteredTagOptions() {
+                    let options = [...this.tagOptions];
+
+                    if (this.projectFilter) {
+                        options = options.filter(tag =>
+                            (tag.project || tag.project_name || '') === this.projectFilter
+                        );
                     }
-                }
 
-                return {
-                    id: rawTag.id || rawTag.slug,
-                    slug: rawTag.slug,
-                    name: rawTag.name,
-                    color: rawTag.color || '#64748b',
-                    project: projectName,
-                    project_name: projectName,
-                    program: programName,
-                    program_name: programName,
-                    program_id: programId,
-                };
-            },
+                    if (this.programFilter) {
+                        const selectedProgramId = String(this.getProgramIdByName(this.programFilter) || '');
 
-            buildTagOptionsFromAssets() {
-                const map = new Map();
+                        options = options.filter(tag => {
+                            const tagProgramId = String(tag.program_id || '');
+                            const tagProgramName = tag.program || tag.program_name || '';
+                            return tagProgramName === this.programFilter || tagProgramId === selectedProgramId;
+                        });
+                    }
 
-                this.assets.forEach(asset => {
-                    (asset.tags || []).forEach(tag => {
-                        if (!tag?.slug || !tag?.name) return;
+                    const uniq = new Map();
+                    options.forEach(tag => {
+                        if (!tag?.slug) return;
+                        uniq.set(`${tag.program_id || tag.program || 'na'}::${tag.slug}`, tag);
+                    });
 
-                        const programId = asset.program_id || tag.program_id || null;
-                        const projectName = asset.project || tag.project || tag.project_name || '';
-                        const programName = asset.program || tag.program || tag.program_name || '';
-                        const key = `${programId || programName || 'na'}::${tag.slug}`;
+                    return Array.from(uniq.values()).sort((a, b) =>
+                        String(a.name || '').localeCompare(String(b.name || ''))
+                    );
+                },
 
+                get filteredOrthoPeriodOptions() {
+                    let options = [...this.orthoPeriodOptions];
+
+                    if (this.projectFilter) {
+                        options = options.filter(o => !o.project || o.project === this.projectFilter);
+                    }
+
+                    if (this.programFilter) {
+                        const selectedProgramId = String(this.getProgramIdByName(this.programFilter) || '');
+                        options = options.filter(o =>
+                            (o.program && o.program === this.programFilter) ||
+                            String(o.program_id || '') === selectedProgramId
+                        );
+                    }
+
+                    const uniq = new Map();
+                    options.forEach(o => {
+                        if (!o.value) return;
+                        uniq.set(`${o.program_id || 'na'}::${o.value}`, o);
+                    });
+
+                    return Array.from(uniq.values()).sort((a, b) =>
+                        String(a.label || '').localeCompare(String(b.label || ''))
+                    );
+                },
+
+                get currentSidebarImage() {
+                    const imgs = this.selectedAsset?.images || [];
+                    return imgs[this.sidebarImageIndex] || 'https://artemisconstruction-ci.com/assets/images/portfolio/symphonia/7.jpg';
+                },
+
+                formatPercent(value) {
+                    if (value === null || value === undefined || value === '') return '0%';
+                    const n = Number(value);
+                    if (Number.isNaN(n)) return '0%';
+                    return `${Math.round(n)}%`;
+                },
+
+                moneyDisplay(value) {
+                    if (value === null || value === undefined || value === '') return '—';
+                    const n = Number(value);
+                    if (Number.isNaN(n)) return `${value}`;
+                    return `${Math.round(n).toLocaleString('fr-FR')} FCFA`;
+                },
+
+                getTrendClass(delta) {
+                    const n = Number(delta || 0);
+                    if (n > 0) return 'trend-up';
+                    if (n < 0) return 'trend-down';
+                    return 'trend-flat';
+                },
+
+                getTrendLabel(delta) {
+                    const n = Number(delta || 0);
+                    if (n > 0) return `+${Math.round(n)}%`;
+                    if (n < 0) return `${Math.round(n)}%`;
+                    return '0%';
+                },
+
+                truncateText(value, max = 24) {
+                    const text = String(value || '').trim();
+                    if (!text) return 'Programme';
+                    return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+                },
+
+                getProgramIdByName(programName) {
+                    if (!programName) return null;
+
+                    const matchFromAssets = this.assets.find(asset => (asset.program || '') === programName);
+                    if (matchFromAssets?.program_id) return matchFromAssets.program_id;
+
+                    const matchFromTags = this.tagOptions.find(tag =>
+                        tag?.program === programName || tag?.program_name === programName
+                    );
+                    if (matchFromTags?.program_id) return matchFromTags.program_id;
+
+                    const matchFromOrthos = this.orthophotos.find(o =>
+                        o?.program === programName || o?.program_name === programName
+                    );
+                    if (matchFromOrthos?.program_id) return matchFromOrthos.program_id;
+
+                    return null;
+                },
+
+                normalizeTagOption(rawTag) {
+                    if (!rawTag || !rawTag.slug || !rawTag.name) return null;
+
+                    let projectName = rawTag.project || rawTag.project_name || '';
+                    let programName = rawTag.program || rawTag.program_name || '';
+                    let programId = rawTag.program_id || null;
+
+                    if ((!projectName || !programName || !programId) && Array.isArray(this.assets)) {
+                        const assetWithTag = this.assets.find(asset =>
+                            Array.isArray(asset.tags) &&
+                            asset.tags.some(tag => tag?.slug === rawTag.slug)
+                        );
+
+                        if (assetWithTag) {
+                            projectName = projectName || assetWithTag.project || '';
+                            programName = programName || assetWithTag.program || '';
+                            programId = programId || assetWithTag.program_id || null;
+                        }
+                    }
+
+                    return {
+                        id: rawTag.id || rawTag.slug,
+                        slug: rawTag.slug,
+                        name: rawTag.name,
+                        color: rawTag.color || '#64748b',
+                        project: projectName,
+                        project_name: projectName,
+                        program: programName,
+                        program_name: programName,
+                        program_id: programId,
+                    };
+                },
+
+                buildTagOptionsFromAssets() {
+                    const map = new Map();
+
+                    this.assets.forEach(asset => {
+                        (asset.tags || []).forEach(tag => {
+                            if (!tag?.slug || !tag?.name) return;
+
+                            const programId = asset.program_id || tag.program_id || null;
+                            const projectName = asset.project || tag.project || tag.project_name || '';
+                            const programName = asset.program || tag.program || tag.program_name || '';
+                            const key = `${programId || programName || 'na'}::${tag.slug}`;
+
+                            if (!map.has(key)) {
+                                map.set(key, {
+                                    id: tag.id || key,
+                                    slug: tag.slug,
+                                    name: tag.name,
+                                    color: tag.color || '#64748b',
+                                    project: projectName,
+                                    project_name: projectName,
+                                    program: programName,
+                                    program_name: programName,
+                                    program_id: programId,
+                                });
+                            }
+                        });
+                    });
+
+                    return Array.from(map.values()).sort((a, b) =>
+                        String(a.name || '').localeCompare(String(b.name || ''))
+                    );
+                },
+
+                getClusterProgramLabel(cluster) {
+                    try {
+                        const children = cluster.getAllChildMarkers();
+                        const counters = {};
+
+                        children.forEach(marker => {
+                            const program = marker?.options?.programName || 'Programme';
+                            counters[program] = (counters[program] || 0) + 1;
+                        });
+
+                        const ordered = Object.entries(counters).sort((a, b) => b[1] - a[1]);
+                        const topName = ordered.length ? ordered[0][0] : 'Programme';
+                        const topCount = ordered.length ? ordered[0][1] : 0;
+
+                        return {
+                            name: this.truncateText(topName, 24),
+                            count: topCount
+                        };
+                    } catch (e) {
+                        return {name: 'Programme', count: 0};
+                    }
+                },
+
+                safeRequestFrame(fn) {
+                    if (window.requestAnimationFrame) {
+                        return window.requestAnimationFrame(fn);
+                    }
+                    return setTimeout(fn, 16);
+                },
+
+                scheduleRedraw(delay = 250) {
+                    clearTimeout(this.redrawTimer);
+                    this.redrawTimer = setTimeout(() => {
+                        if (!this.map || this.isZooming) return;
+                        this.drawAssets();
+                    }, delay);
+
+                },
+
+                parseBoundsCandidate(candidate) {
+                    try {
+                        if (!candidate) return null;
+
+                        if (Array.isArray(candidate) && candidate.length === 2) {
+                            return L.latLngBounds(candidate);
+                        }
+
+                        if (candidate.southWest && candidate.northEast) {
+                            return L.latLngBounds(candidate.southWest, candidate.northEast);
+                        }
+
+                        if (
+                            candidate.min_lat !== undefined &&
+                            candidate.min_lng !== undefined &&
+                            candidate.max_lat !== undefined &&
+                            candidate.max_lng !== undefined
+                        ) {
+                            return L.latLngBounds(
+                                [candidate.min_lat, candidate.min_lng],
+                                [candidate.max_lat, candidate.max_lng]
+                            );
+                        }
+
+                        if (
+                            candidate.south !== undefined &&
+                            candidate.west !== undefined &&
+                            candidate.north !== undefined &&
+                            candidate.east !== undefined
+                        ) {
+                            return L.latLngBounds(
+                                [candidate.south, candidate.west],
+                                [candidate.north, candidate.east]
+                            );
+                        }
+
+                        return null;
+                    } catch (e) {
+                        return null;
+                    }
+                },
+
+                getOrthophotoPeriodValue(ortho) {
+                    if (!ortho) return '';
+
+                    if (ortho.period_label) return String(ortho.period_label).trim();
+
+                    if (ortho.reference_year && ortho.reference_month) {
+                        return `${String(ortho.reference_month).padStart(2, '0')}/${ortho.reference_year}`;
+                    }
+
+                    if (ortho.capture_date) {
+                        return String(ortho.capture_date);
+                    }
+
+                    if (ortho.version) return String(ortho.version).trim();
+                    if (ortho.name) return String(ortho.name).trim();
+
+                    return '';
+                },
+
+                getOrthophotoPeriodLabel(ortho) {
+                    return this.getOrthophotoPeriodValue(ortho) || 'Période inconnue';
+                },
+
+                normalizeOrthophoto(rawOrtho, asset = null) {
+
+                    if (!rawOrtho || !rawOrtho.tiles_url) return null;
+
+                    const bounds = this.parseBoundsCandidate(rawOrtho.bounds || rawOrtho.boundary || null);
+
+                    const projectName = rawOrtho.project || rawOrtho.project_name || asset?.project || '';
+
+                    const programName = rawOrtho.program || rawOrtho.program_name || asset?.program || '';
+
+                    const programId = rawOrtho.program_id || asset?.program_id || null;
+
+                    const periodValue = this.getOrthophotoPeriodValue(rawOrtho);
+
+                    const periodLabel = this.getOrthophotoPeriodLabel(rawOrtho);
+
+                    return {
+
+                        ...rawOrtho,
+
+                        id: rawOrtho.id || `${programId || 'na'}-${rawOrtho.slug || periodValue || 'ortho'}`,
+
+                        project: projectName,
+
+                        project_name: projectName,
+
+                        program: programName,
+
+                        program_name: programName,
+
+                        program_id: programId,
+
+                        period_value: periodValue,
+
+                        period_label_resolved: periodLabel,
+
+                        bounds,
+
+                    };
+
+                },
+
+                buildOrthophotoCatalogFromAssets() {
+                    const map = new Map();
+
+                    this.assets.forEach(asset => {
+                        const currentOrtho = this.normalizeOrthophoto(asset.orthophoto, asset);
+                        const versions = Array.isArray(asset.orthophotos) ? asset.orthophotos : [];
+
+                        [currentOrtho, ...versions.map(o => this.normalizeOrthophoto(o, asset))]
+                            .filter(Boolean)
+                            .forEach(ortho => {
+                                const key = [
+                                    ortho.program_id || ortho.program || 'na',
+                                    ortho.period_value || ortho.slug || ortho.id || 'current'
+                                ].join('::');
+
+                                if (!map.has(key)) {
+                                    map.set(key, ortho);
+                                }
+                            });
+                    });
+
+                    return Array.from(map.values());
+                },
+
+                rebuildOrthoRegions() {
+                    this.orthoRegions = this.orthophotos
+                        .filter(o => o.bounds && o.bounds.isValid())
+                        .map(o => ({
+                            program_id: o.program_id || null,
+                            program: o.program || o.program_name || '',
+                            project: o.project || o.project_name || '',
+                            bounds: o.bounds,
+                            period_value: o.period_value || '',
+                            period_label: o.period_label_resolved || '',
+                        }));
+
+                    if (!this.orthoRegions.length) {
+                        this.orthoGlobalBounds = null;
+                        return;
+                    }
+
+                    let union = null;
+                    this.orthoRegions.forEach(region => {
+                        if (!region?.bounds || !region.bounds.isValid()) return;
+                        union = union ? union.extend(region.bounds) : L.latLngBounds(region.bounds);
+                    });
+
+                    this.orthoGlobalBounds = union && union.isValid() ? union : null;
+                },
+
+                buildOrthoPeriodOptions() {
+                    const map = new Map();
+
+                    this.orthophotos.forEach(o => {
+                        const value = o.period_value || '';
+                        if (!value) return;
+
+                        const sortYear = Number(o.reference_year || 0);
+                        const sortMonth = Number(o.reference_month || 0);
+
+                        const key = `${o.program_id || 'na'}::${value}`;
                         if (!map.has(key)) {
                             map.set(key, {
-                                id: tag.id || key,
-                                slug: tag.slug,
-                                name: tag.name,
-                                color: tag.color || '#64748b',
-                                project: projectName,
-                                project_name: projectName,
-                                program: programName,
-                                program_name: programName,
-                                program_id: programId,
+                                value,
+                                label: o.period_label_resolved || value,
+                                project: o.project || '',
+                                program: o.program || '',
+                                program_id: o.program_id || null,
+                                sort_year: sortYear,
+                                sort_month: sortMonth,
                             });
                         }
                     });
-                });
 
-                return Array.from(map.values()).sort((a, b) =>
-                    String(a.name || '').localeCompare(String(b.name || ''))
-                );
-            },
+                    return Array.from(map.values()).sort((a, b) => {
+                        if (a.sort_year !== b.sort_year) return b.sort_year - a.sort_year;
+                        if (a.sort_month !== b.sort_month) return b.sort_month - a.sort_month;
+                        return String(a.label || '').localeCompare(String(b.label || ''));
+                    });
+                },
 
-            getClusterProgramLabel(cluster) {
-                try {
-                    const children = cluster.getAllChildMarkers();
-                    const counters = {};
+                getFilteredOrthophotos() {
+                    let items = [...this.orthophotos];
 
-                    children.forEach(marker => {
-                        const program = marker?.options?.programName || 'Programme';
-                        counters[program] = (counters[program] || 0) + 1;
+                    if (this.projectFilter) {
+                        items = items.filter(o => !o.project || o.project === this.projectFilter);
+                    }
+
+                    if (this.programFilter) {
+                        const selectedProgramId = String(this.getProgramIdByName(this.programFilter) || '');
+                        items = items.filter(o =>
+                            (o.program && o.program === this.programFilter) ||
+                            String(o.program_id || '') === selectedProgramId
+                        );
+                    }
+
+                    if (this.orthoPeriodFilter) {
+                        items = items.filter(o => (o.period_value || '') === this.orthoPeriodFilter);
+                    }
+
+                    return items;
+                },
+
+                getRelevantOrthoBounds() {
+                    const items = this.getFilteredOrthophotos().filter(o => o.bounds && o.bounds.isValid());
+
+                    if (!items.length) return this.orthoGlobalBounds;
+
+                    let union = null;
+                    items.forEach(o => {
+                        union = union ? union.extend(o.bounds) : L.latLngBounds(o.bounds);
                     });
 
-                    const ordered = Object.entries(counters).sort((a, b) => b[1] - a[1]);
-                    const topName = ordered.length ? ordered[0][0] : 'Programme';
-                    const topCount = ordered.length ? ordered[0][1] : 0;
+                    return union && union.isValid() ? union : this.orthoGlobalBounds;
+                },
 
-                    return {
-                        name: this.truncateText(topName, 24),
-                        count: topCount
-                    };
-                } catch (e) {
-                    return {name: 'Programme', count: 0};
-                }
-            },
+                mapIntersectsAnyOrtho(bounds = null) {
+                    const target = bounds || this.map?.getBounds?.();
+                    if (!target) return false;
 
-            safeRequestFrame(fn) {
-                if (window.requestAnimationFrame) {
-                    return window.requestAnimationFrame(fn);
-                }
-                return setTimeout(fn, 16);
-            },
+                    const items = this.getFilteredOrthophotos();
+                    const withBounds = items.filter(o => o.bounds && o.bounds.isValid());
 
-            scheduleRedraw(delay = 180) {
-                clearTimeout(this.redrawTimer);
-                this.redrawTimer = setTimeout(() => {
-                    if (!this.map || this.isZooming) return;
-                    this.drawAssets();
-                }, delay);
-            },
-
-            parseBoundsCandidate(candidate) {
-                try {
-                    if (!candidate) return null;
-
-                    if (Array.isArray(candidate) && candidate.length === 2) {
-                        return L.latLngBounds(candidate);
+                    if (!withBounds.length) {
+                        return items.length > 0;
                     }
 
-                    if (candidate.southWest && candidate.northEast) {
-                        return L.latLngBounds(candidate.southWest, candidate.northEast);
+                    return withBounds.some(o => o.bounds.intersects(target));
+                },
+
+                async init() {
+                    if (this.initialized) return;
+                    this.initialized = true;
+
+                    this.loading = true;
+                    this.apiError = '';
+
+                    try {
+                        this.initMap();
+                        await this.loadData();
+                        this.drawAssets();
+                        this.fitToVisibleAssets();
+                    } catch (error) {
+                        console.error(error);
+                        this.apiError = error?.message || 'Erreur de chargement.';
+                        this.assets = [];
+                        this.visibleAssets = [];
+                        this.selectedAsset = {};
+                        this.sidebarOpen = false;
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                initMap() {
+                    const mapEl = document.getElementById('map');
+                    if (!mapEl) throw new Error('Conteneur de carte introuvable.');
+
+                    if (this.map) {
+                        this.map.off();
+                        this.map.remove();
+                        this.map = null;
                     }
 
-                    if (
-                        candidate.min_lat !== undefined &&
-                        candidate.min_lng !== undefined &&
-                        candidate.max_lat !== undefined &&
-                        candidate.max_lng !== undefined
-                    ) {
-                        return L.latLngBounds(
-                            [candidate.min_lat, candidate.min_lng],
-                            [candidate.max_lat, candidate.max_lng]
-                        );
-                    }
-
-                    if (
-                        candidate.south !== undefined &&
-                        candidate.west !== undefined &&
-                        candidate.north !== undefined &&
-                        candidate.east !== undefined
-                    ) {
-                        return L.latLngBounds(
-                            [candidate.south, candidate.west],
-                            [candidate.north, candidate.east]
-                        );
-                    }
-
-                    return null;
-                } catch (e) {
-                    return null;
-                }
-            },
-
-            getOrthophotoPeriodValue(ortho) {
-                if (!ortho) return '';
-
-                if (ortho.period_label) return String(ortho.period_label).trim();
-
-                if (ortho.reference_year && ortho.reference_month) {
-                    return `${String(ortho.reference_month).padStart(2, '0')}/${ortho.reference_year}`;
-                }
-
-                if (ortho.capture_date) {
-                    return String(ortho.capture_date);
-                }
-
-                if (ortho.version) return String(ortho.version).trim();
-                if (ortho.name) return String(ortho.name).trim();
-
-                return '';
-            },
-
-            getOrthophotoPeriodLabel(ortho) {
-                return this.getOrthophotoPeriodValue(ortho) || 'Période inconnue';
-            },
-
-            normalizeOrthophoto(rawOrtho, asset = null) {
-
-            if (!rawOrtho || !rawOrtho.tiles_url) return null;
-
-            const bounds = this.parseBoundsCandidate(rawOrtho.bounds || rawOrtho.boundary || null);
-
-            const projectName = rawOrtho.project || rawOrtho.project_name || asset?.project || '';
-
-            const programName = rawOrtho.program || rawOrtho.program_name || asset?.program || '';
-
-            const programId = rawOrtho.program_id || asset?.program_id || null;
-
-            const periodValue = this.getOrthophotoPeriodValue(rawOrtho);
-
-            const periodLabel = this.getOrthophotoPeriodLabel(rawOrtho);
-
-            return {
-
-                ...rawOrtho,
-
-                id: rawOrtho.id || `${programId || 'na'}-${rawOrtho.slug || periodValue || 'ortho'}`,
-
-                project: projectName,
-
-                project_name: projectName,
-
-                program: programName,
-
-                program_name: programName,
-
-                program_id: programId,
-
-                period_value: periodValue,
-
-                period_label_resolved: periodLabel,
-
-                bounds,
-
-            };
-
-        },
-
-            buildOrthophotoCatalogFromAssets() {
-                const map = new Map();
-
-                this.assets.forEach(asset => {
-                    const currentOrtho = this.normalizeOrthophoto(asset.orthophoto, asset);
-                    const versions = Array.isArray(asset.orthophotos) ? asset.orthophotos : [];
-
-                    [currentOrtho, ...versions.map(o => this.normalizeOrthophoto(o, asset))]
-                        .filter(Boolean)
-                        .forEach(ortho => {
-                            const key = [
-                                ortho.program_id || ortho.program || 'na',
-                                ortho.period_value || ortho.slug || ortho.id || 'current'
-                            ].join('::');
-
-                            if (!map.has(key)) {
-                                map.set(key, ortho);
-                            }
-                        });
-                });
-
-                return Array.from(map.values());
-            },
-
-            rebuildOrthoRegions() {
-                this.orthoRegions = this.orthophotos
-                    .filter(o => o.bounds && o.bounds.isValid())
-                    .map(o => ({
-                        program_id: o.program_id || null,
-                        program: o.program || o.program_name || '',
-                        project: o.project || o.project_name || '',
-                        bounds: o.bounds,
-                        period_value: o.period_value || '',
-                        period_label: o.period_label_resolved || '',
-                    }));
-
-                if (!this.orthoRegions.length) {
-                    this.orthoGlobalBounds = null;
-                    return;
-                }
-
-                let union = null;
-                this.orthoRegions.forEach(region => {
-                    if (!region?.bounds || !region.bounds.isValid()) return;
-                    union = union ? union.extend(region.bounds) : L.latLngBounds(region.bounds);
-                });
-
-                this.orthoGlobalBounds = union && union.isValid() ? union : null;
-            },
-
-            buildOrthoPeriodOptions() {
-                const map = new Map();
-
-                this.orthophotos.forEach(o => {
-                    const value = o.period_value || '';
-                    if (!value) return;
-
-                    const key = `${o.program_id || 'na'}::${value}`;
-                    if (!map.has(key)) {
-                        map.set(key, {
-                            value,
-                            label: o.period_label_resolved || value,
-                            project: o.project || '',
-                            program: o.program || '',
-                            program_id: o.program_id || null,
-                        });
-                    }
-                });
-
-                return Array.from(map.values()).sort((a, b) =>
-                    String(a.label || '').localeCompare(String(b.label || ''))
-                );
-            },
-
-            getFilteredOrthophotos() {
-                let items = [...this.orthophotos];
-
-                if (this.projectFilter) {
-                    items = items.filter(o => !o.project || o.project === this.projectFilter);
-                }
-
-                if (this.programFilter) {
-                    const selectedProgramId = String(this.getProgramIdByName(this.programFilter) || '');
-                    items = items.filter(o =>
-                        (o.program && o.program === this.programFilter) ||
-                        String(o.program_id || '') === selectedProgramId
-                    );
-                }
-
-                if (this.orthoPeriodFilter) {
-                    items = items.filter(o => (o.period_value || '') === this.orthoPeriodFilter);
-                }
-
-                return items;
-            },
-
-            getRelevantOrthoBounds() {
-                const items = this.getFilteredOrthophotos().filter(o => o.bounds && o.bounds.isValid());
-
-                if (!items.length) return this.orthoGlobalBounds;
-
-                let union = null;
-                items.forEach(o => {
-                    union = union ? union.extend(o.bounds) : L.latLngBounds(o.bounds);
-                });
-
-                return union && union.isValid() ? union : this.orthoGlobalBounds;
-            },
-
-            mapIntersectsAnyOrtho(bounds = null) {
-                const target = bounds || this.map?.getBounds?.();
-                if (!target) return false;
-
-                const items = this.getFilteredOrthophotos();
-                const withBounds = items.filter(o => o.bounds && o.bounds.isValid());
-
-                if (!withBounds.length) {
-                    return items.length > 0;
-                }
-
-                return withBounds.some(o => o.bounds.intersects(target));
-            },
-
-            async init() {
-                if (this.initialized) return;
-                this.initialized = true;
-
-                this.loading = true;
-                this.apiError = '';
-
-                try {
-                    this.initMap();
-                    await this.loadData();
-                    this.drawAssets();
-                    this.fitToVisibleAssets();
-                } catch (error) {
-                    console.error(error);
-                    this.apiError = error?.message || 'Erreur de chargement.';
-                    this.assets = [];
-                    this.visibleAssets = [];
-                    this.selectedAsset = {};
-                    this.sidebarOpen = false;
-                } finally {
-                    this.loading = false;
-                }
-            },
-
-            initMap() {
-                const mapEl = document.getElementById('map');
-                if (!mapEl) throw new Error('Conteneur de carte introuvable.');
-
-                if (this.map) {
-                    this.map.off();
-                    this.map.remove();
-                    this.map = null;
-                }
-
-                this.map = L.map(mapEl, {
-                    zoomControl: true,
-                    preferCanvas: true,
-                    maxZoom: 23,
-                    zoomSnap: 1,
-                    zoomAnimation: false,
-                    fadeAnimation: false,
-                    markerZoomAnimation: false
-                }).setView([5.46771, -3.96454], 17);
-
-                this.tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    maxZoom: 23,
-                    attribution: '&copy; PARCELLAIRE KAYDAN GROUPE',
-                    updateWhenZooming: false,
-                    updateWhenIdle: true,
-                    keepBuffer: 4
-                });
-
-                this.markersLayer = L.markerClusterGroup({
-                    showCoverageOnHover: false,
-                    spiderfyOnMaxZoom: true,
-                    zoomToBoundsOnClick: true,
-                    removeOutsideVisibleBounds: true,
-                    animate: false,
-                    animateAddingMarkers: false,
-                    chunkedLoading: true,
-                    chunkInterval: 120,
-                    chunkDelay: 30,
-                    maxClusterRadius: (zoom) => {
-                        if (zoom >= 18) return 24;
-                        if (zoom >= 16) return 34;
-                        if (zoom >= 14) return 46;
-                        return 60;
-                    },
-                    iconCreateFunction: (cluster) => {
-                        const count = cluster.getChildCount();
-                        const label = this.getClusterProgramLabel(cluster);
-
-                        return L.divIcon({
-                            html: `
+                    this.map = L.map(mapEl, {
+                        zoomControl: true,
+                        preferCanvas: true,
+                        maxZoom: 23,
+                        zoomSnap: 1,
+                        zoomAnimation: false,
+                        fadeAnimation: false,
+                        markerZoomAnimation: false
+                    }).setView([5.46771, -3.96454], 17);
+
+                    this.tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        maxZoom: 23,
+                        attribution: '&copy; PARCELLAIRE KAYDAN GROUPE',
+                        updateWhenZooming: false,
+                        updateWhenIdle: true,
+                        keepBuffer: 4
+                    });
+
+                    this.markersLayer = L.markerClusterGroup({
+                        showCoverageOnHover: false,
+                        spiderfyOnMaxZoom: true,
+                        zoomToBoundsOnClick: true,
+                        removeOutsideVisibleBounds: true,
+                        animate: false,
+                        animateAddingMarkers: false,
+                        chunkedLoading: true,
+                        chunkInterval: 120,
+                        chunkDelay: 30,
+                        maxClusterRadius: (zoom) => {
+                            if (zoom >= 18) return 24;
+                            if (zoom >= 16) return 34;
+                            if (zoom >= 14) return 46;
+                            return 60;
+                        },
+                        iconCreateFunction: (cluster) => {
+                            const count = cluster.getChildCount();
+                            const label = this.getClusterProgramLabel(cluster);
+
+                            return L.divIcon({
+                                html: `
                                 <div class="cluster-shell">
                                     <div class="cluster-pin">${count}</div>
                                     <div class="cluster-program-label">
@@ -995,417 +1002,441 @@
                                     </div>
                                 </div>
                             `,
-                            className: '',
-                            iconSize: [225, 62],
-                            iconAnchor: [32, 31]
-                        });
-                    }
-                });
-
-                this.parcelLabelsLayer = L.layerGroup();
-
-                this.map.addLayer(this.markersLayer);
-                this.map.addLayer(this.parcelLabelsLayer);
-
-                this.map.on('zoomstart', () => {
-                    this.isZooming = true;
-                    clearTimeout(this.redrawTimer);
-                });
-
-                this.map.on('zoomend', () => {
-                    this.isZooming = false;
-                    this.scheduleRedraw(220);
-                });
-
-                this.map.on('dragstart', () => {
-                    this.isDraggingMap = true;
-                });
-
-                this.map.on('dragend', () => {
-                    this.isDraggingMap = false;
-                });
-
-                this.map.on('moveend', () => {
-                    if (this.isZooming) return;
-
-                    if (this.mapMode === 'ortho' || this.mapMode === 'mixed') {
-                        this.applyOrthoLayer();
-                    }
-
-                    this.scheduleRedraw(220);
-                });
-
-                this.applyBaseLayers();
-            },
-
-            applyOrthoLayer() {
-                if (!this.map) return;
-
-                if (this.activeOrthoLayer) {
-                    try {
-                        this.map.removeLayer(this.activeOrthoLayer);
-                    } catch (e) {
-                        console.warn(e);
-                    }
-                    this.activeOrthoLayer = null;
-                }
-
-                const candidates = this.getFilteredOrthophotos();
-                if (!candidates.length) return;
-
-                const mapBounds = this.map.getBounds();
-                let ortho = null;
-
-                const intersecting = candidates.find(o =>
-                    o.bounds && o.bounds.isValid() && o.bounds.intersects(mapBounds)
-                );
-
-                if (intersecting) {
-                    ortho = intersecting;
-                }
-
-                if (!ortho && this.programFilter) {
-                    const selectedProgramId = String(this.getProgramIdByName(this.programFilter) || '');
-                    ortho = candidates.find(o =>
-                        (o.program && o.program === this.programFilter) ||
-                        String(o.program_id || '') === selectedProgramId
-                    );
-                }
-
-                if (!ortho) {
-                    ortho = candidates.find(o => o.is_current) || candidates[0];
-                }
-
-                if (!ortho || !ortho.tiles_url) return;
-
-                this.orthoErrorCount = 0;
-                this.orthoFallbackDone = false;
-
-                this.activeOrthoLayer = L.tileLayer(ortho.tiles_url, {
-                    minZoom: ortho.min_zoom || 15,
-                    maxZoom: ortho.max_zoom || 22,
-                    maxNativeZoom: ortho.max_native_zoom || ortho.max_zoom || 22,
-                    tileSize: 256,
-                    tms: false,
-                    noWrap: true,
-                    opacity: this.mapMode === 'mixed' ? 0.78 : 1,
-                    attribution: `Orthophoto ${ortho.program || ''}`.trim(),
-                    updateWhenZooming: false,
-                    updateWhenIdle: true,
-                    keepBuffer: 6
-                });
-
-                this.activeOrthoLayer.on('tileerror', (e) => {
-                    if (this.orthoFallbackDone || !this.map) return;
-
-                    const coords = e?.coords || e?.tile?.coords;
-                    const mapBoundsNow = this.map.getBounds();
-
-                    if (coords) {
-                        const tileBounds = this.getTileLatLngBounds(coords.x, coords.y, coords.z);
-                        if (tileBounds && !this.mapIntersectsAnyOrtho(tileBounds)) {
-                            return;
+                                className: '',
+                                iconSize: [225, 62],
+                                iconAnchor: [32, 31]
+                            });
                         }
-                    } else if (!this.mapIntersectsAnyOrtho(mapBoundsNow)) {
+                    });
+
+                    this.parcelLabelsLayer = L.layerGroup();
+
+                    this.map.addLayer(this.markersLayer);
+                    this.map.addLayer(this.parcelLabelsLayer);
+
+                    this.map.on('zoomstart', () => {
+                        this.isZooming = true;
+                        clearTimeout(this.redrawTimer);
+                    });
+
+                    this.map.on('zoomend', () => {
+                        this.isZooming = false;
+                        this.scheduleRedraw(220);
+                    });
+
+                    this.map.on('dragstart', () => {
+                        this.isDraggingMap = true;
+                    });
+
+                    this.map.on('dragend', () => {
+                        this.isDraggingMap = false;
+                    });
+
+                    this.map.on('moveend', () => {
+                        if (this.isZooming) return;
+
+                        if (this.mapMode === 'ortho' || this.mapMode === 'mixed') {
+                            this.applyOrthoLayer();
+                        }
+
+                        this.scheduleRedraw(300);
+                    });
+
+                    this.applyBaseLayers();
+                },
+
+                applyOrthoLayer() {
+                    if (!this.map) return;
+
+                    const candidates = this.getFilteredOrthophotos();
+                    if (!candidates.length) {
+                        if (this.activeOrthoLayer) {
+                            this.map.removeLayer(this.activeOrthoLayer);
+                            this.activeOrthoLayer = null;
+                            this.activeOrthoKey = '';
+                        }
+                        if (this.mapMode !== 'ortho' && !this.map.hasLayer(this.tileLayer)) {
+                            this.tileLayer.addTo(this.map);
+                        }
                         return;
                     }
 
-                    this.orthoErrorCount += 1;
-
-                    if (this.orthoErrorCount <= 3) {
-                        console.warn('Erreur tuile ortho dans emprise:', e?.tile?.src || 'tuile inconnue');
-                    }
-
-                    if (this.mapIntersectsAnyOrtho(mapBoundsNow) && this.orthoErrorCount >= 12) {
-                        this.orthoFallbackDone = true;
-                        this.mapMode = 'osm';
-                        this.applyBaseLayers();
-                    }
-                });
-
-                this.activeOrthoLayer.addTo(this.map);
-            },
-
-            getTileLatLngBounds(x, y, z) {
-                try {
-                    const nwPoint = L.point(x * 256, y * 256);
-                    const sePoint = L.point((x + 1) * 256, (y + 1) * 256);
-
-                    const nw = this.map.unproject(nwPoint, z);
-                    const se = this.map.unproject(sePoint, z);
-
-                    return L.latLngBounds(
-                        [se.lat, nw.lng],
-                        [nw.lat, se.lng]
+                    const mapBounds = this.map.getBounds();
+                    let ortho = candidates.find(o =>
+                        o.bounds && o.bounds.isValid() && o.bounds.intersects(mapBounds)
                     );
-                } catch (e) {
-                    return null;
-                }
-            },
 
-            sanitizeAsset(asset) {
-                const safeType = String(asset.type || 'asset').replace(/\s+/g, '-').toLowerCase();
-                const safeProject = String(asset.project || 'na').replace(/\s+/g, '-').toLowerCase();
-                const safeProgram = String(asset.program || 'na').replace(/\s+/g, '-').toLowerCase();
-                const uid = asset.uid || `${safeType}-${asset.id ?? 'x'}-${safeProject}-${safeProgram}`;
-
-                const normalizedTags = Array.isArray(asset.tags)
-                    ? asset.tags
-                        .filter(Boolean)
-                        .map(tag => ({
-                            ...tag,
-                            color: tag.color || '#64748b',
-                            project: tag.project || tag.project_name || asset.project || '',
-                            project_name: tag.project_name || tag.project || asset.project || '',
-                            program: tag.program || tag.program_name || asset.program || '',
-                            program_name: tag.program_name || tag.program || asset.program || '',
-                            program_id: tag.program_id || asset.program_id || null,
-                        }))
-                    : [];
-
-                const orthophoto = this.normalizeOrthophoto(asset.orthophoto, asset);
-                const orthophotos = Array.isArray(asset.orthophotos)
-                    ? asset.orthophotos.map(o => this.normalizeOrthophoto(o, asset)).filter(Boolean)
-                    : [];
-
-                return {
-                    ...asset,
-                    uid,
-                    sidebar_mode: asset.sidebar_mode || 'SINGLE',
-                    single_data: asset.single_data || null,
-                    building_data: asset.building_data || null,
-                    building_units: Array.isArray(asset.building_units) ? asset.building_units : [],
-                    project: asset.project || '—',
-                    project_id: asset.project_id || null,
-                    program: asset.program || '—',
-                    program_id: asset.program_id || null,
-                    type: asset.type || '—',
-                    status: asset.status || '—',
-                    statusBadge: asset.statusBadge || 'bg-slate-100 text-slate-700',
-                    statusKey: asset.statusKey || 'Tous',
-                    color: asset.color || '#38bdf8',
-                    fillOpacity: asset.fillOpacity ?? 0.78,
-                    asset_category: asset.asset_category || '—',
-                    asset_nature: asset.asset_nature || asset.type || 'Actif immobilier',
-                    is_multi_unit: !!asset.is_multi_unit,
-                    tags: normalizedTags,
-                    images: Array.isArray(asset.images) ? asset.images.filter(Boolean) : [],
-                    details: Array.isArray(asset.details) ? asset.details : [],
-                    metrics: Array.isArray(asset.metrics) ? asset.metrics : [],
-                    timeline: Array.isArray(asset.timeline) ? asset.timeline : [],
-                    financial_stats: asset.financial_stats || {},
-                    construction_stats: asset.construction_stats || {},
-                    priority_stats: asset.priority_stats || {},
-                    orthophoto,
-                    orthophotos,
-                    unit_summary: asset.unit_summary || {
-                        total_units: 0,
-                        available_units: 0,
-                        reserved_units: 0,
-                        sold_units: 0,
-                        blocked_units: 0,
-                        sales_count: 0,
-                        reservations_count: 0,
-                    },
-                    customers: asset.customers || {count: 0, items: []},
-                    sales_summary: Array.isArray(asset.sales_summary) ? asset.sales_summary : [],
-                    units_preview: Array.isArray(asset.units_preview) ? asset.units_preview : [],
-                };
-            },
-
-            async loadData() {
-                const response = await fetch("{% url 'api-map-assets' %}", {
-                    headers: {'X-Requested-With': 'XMLHttpRequest'},
-                    credentials: 'same-origin'
-                });
-
-                if (!response.ok) {
-                    throw new Error('Impossible de charger les données de la carte.');
-                }
-
-                const data = await response.json();
-
-                this.assets = (data.assets || []).map(raw => {
-                    const asset = this.sanitizeAsset(raw);
-
-                    if ((!asset.project || asset.project === '—') && Array.isArray(asset.details)) {
-                        const detailProject = asset.details.find(d => d.label === 'Projet');
-                        if (detailProject && detailProject.value) {
-                            asset.project = detailProject.value;
-                        }
+                    if (!ortho && this.programFilter) {
+                        const selectedProgramId = String(this.getProgramIdByName(this.programFilter) || '');
+                        ortho = candidates.find(o =>
+                            (o.program && o.program === this.programFilter) ||
+                            String(o.program_id || '') === selectedProgramId
+                        );
                     }
 
-                    if ((!asset.program || asset.program === '—') && Array.isArray(asset.details)) {
-                        const detailProgram = asset.details.find(d => d.label === 'Programme');
-                        if (detailProgram && detailProgram.value) {
-                            asset.program = detailProgram.value;
-                        }
+                    if (!ortho) {
+                        ortho = candidates.find(o => o.is_current) || candidates[0];
                     }
 
-                    return asset;
-                });
+                    if (!ortho || !ortho.tiles_url) return;
 
-                const directOrthos = Array.isArray(data.orthophotos)
-                    ? data.orthophotos.map(o => this.normalizeOrthophoto(o, null)).filter(Boolean)
-                    : [];
-
-                const assetOrthos = this.buildOrthophotoCatalogFromAssets();
-
-                const orthoMap = new Map();
-                [...directOrthos, ...assetOrthos].forEach(o => {
-                    const key = [
-                        o.program_id || o.program || 'na',
-                        o.period_value || o.slug || o.id || 'current'
+                    const nextKey = [
+                        ortho.program_id || 'na',
+                        ortho.period_value || ortho.slug || ortho.id || 'current',
+                        this.mapMode
                     ].join('::');
 
-                    if (!orthoMap.has(key)) {
-                        orthoMap.set(key, o);
+                    if (this.activeOrthoLayer && this.activeOrthoKey === nextKey) {
+                        this.activeOrthoLayer.setOpacity(this.mapMode === 'mixed' ? 0.78 : 1);
+                        return;
                     }
-                });
 
-                this.orthophotos = Array.from(orthoMap.values());
-                this.rebuildOrthoRegions();
-                this.orthoPeriodOptions = this.buildOrthoPeriodOptions();
-
-                this.summaries = data.summaries || this.summaries;
-                this.filters = Array.isArray(data.filters) && data.filters.length ? data.filters : ['Tous'];
-
-                const apiTagOptions = Array.isArray(data.tag_filters)
-                    ? data.tag_filters.map(tag => this.normalizeTagOption(tag)).filter(Boolean)
-                    : [];
-
-                const assetTagOptions = this.buildTagOptionsFromAssets();
-
-                const mergedTags = new Map();
-                [...apiTagOptions, ...assetTagOptions].forEach(tag => {
-                    const key = `${tag.program_id || tag.program || tag.program_name || 'na'}::${tag.slug}`;
-                    if (!mergedTags.has(key)) {
-                        mergedTags.set(key, tag);
+                    if (this.activeOrthoLayer) {
+                        try {
+                            this.map.removeLayer(this.activeOrthoLayer);
+                        } catch (e) {
+                            console.warn(e);
+                        }
+                        this.activeOrthoLayer = null;
                     }
-                });
 
-                this.tagOptions = Array.from(mergedTags.values()).sort((a, b) =>
-                    String(a.name || '').localeCompare(String(b.name || ''))
-                );
+                    this.orthoErrorCount = 0;
+                    this.orthoFallbackDone = false;
 
-                this.projectOptions = Array.from(new Set(this.assets.map(a => a.project).filter(Boolean)))
-                    .sort((a, b) => a.localeCompare(b));
+                    this.activeOrthoLayer = L.tileLayer(ortho.tiles_url, {
+                        minZoom: ortho.min_zoom || 15,
+                        maxZoom: ortho.max_zoom || 22,
+                        maxNativeZoom: ortho.max_native_zoom || ortho.max_zoom || 22,
+                        tileSize: 256,
+                        tms: false,
+                        noWrap: true,
+                        opacity: this.mapMode === 'mixed' ? 0.78 : 1,
+                        attribution: `Orthophoto ${ortho.program || ''}`.trim(),
+                        updateWhenZooming: false,
+                        updateWhenIdle: true,
+                        keepBuffer: 6
+                    });
 
-                this.programOptions = Array.from(new Set(this.assets.map(a => a.program).filter(Boolean)))
-                    .sort((a, b) => a.localeCompare(b));
+                    this.activeOrthoLayer.on('tileerror', (e) => {
+                        if (this.orthoFallbackDone || !this.map) return;
 
-                this.visibleAssets = [...this.assets];
-                this.selectedAsset = {};
-                this.sidebarImageIndex = 0;
-                this.sidebarOpen = false;
-            },
+                        const coords = e?.coords || e?.tile?.coords;
+                        const mapBoundsNow = this.map.getBounds();
 
-            setMapMode(mode) {
-                this.mapMode = mode;
-                this.applyBaseLayers();
+                        if (coords) {
+                            const tileBounds = this.getTileLatLngBounds(coords.x, coords.y, coords.z);
+                            if (tileBounds && !this.mapIntersectsAnyOrtho(tileBounds)) return;
+                        } else if (!this.mapIntersectsAnyOrtho(mapBoundsNow)) {
+                            return;
+                        }
 
-                if (mode === 'ortho' && this.map) {
-                    const targetBounds = this.getRelevantOrthoBounds();
-                    if (targetBounds && targetBounds.isValid()) {
-                        const currentBounds = this.map.getBounds();
-                        if (!targetBounds.intersects(currentBounds)) {
-                            this.map.fitBounds(targetBounds, {
-                                animate: false,
-                                padding: [20, 20],
-                                maxZoom: 19
-                            });
+                        this.orthoErrorCount += 1;
+
+                        if (this.orthoErrorCount >= 12) {
+                            this.orthoFallbackDone = true;
+                            this.mapMode = 'osm';
+                            this.applyBaseLayers();
+                        }
+                    });
+
+                    this.activeOrthoLayer.addTo(this.map);
+                    this.activeOrthoKey = nextKey;
+                },
+
+                getTileLatLngBounds(x, y, z) {
+                    try {
+                        const nwPoint = L.point(x * 256, y * 256);
+                        const sePoint = L.point((x + 1) * 256, (y + 1) * 256);
+
+                        const nw = this.map.unproject(nwPoint, z);
+                        const se = this.map.unproject(sePoint, z);
+
+                        return L.latLngBounds(
+                            [se.lat, nw.lng],
+                            [nw.lat, se.lng]
+                        );
+                    } catch (e) {
+                        return null;
+                    }
+                },
+
+                sanitizeAsset(asset) {
+                    const safeType = String(asset.type || 'asset').replace(/\s+/g, '-').toLowerCase();
+                    const safeProject = String(asset.project || 'na').replace(/\s+/g, '-').toLowerCase();
+                    const safeProgram = String(asset.program || 'na').replace(/\s+/g, '-').toLowerCase();
+                    const uid = asset.uid || `${safeType}-${asset.id ?? 'x'}-${safeProject}-${safeProgram}`;
+
+                    const normalizedTags = Array.isArray(asset.tags)
+                        ? asset.tags
+                            .filter(Boolean)
+                            .map(tag => ({
+                                ...tag,
+                                color: tag.color || '#64748b',
+                                project: tag.project || tag.project_name || asset.project || '',
+                                project_name: tag.project_name || tag.project || asset.project || '',
+                                program: tag.program || tag.program_name || asset.program || '',
+                                program_name: tag.program_name || tag.program || asset.program || '',
+                                program_id: tag.program_id || asset.program_id || null,
+                            }))
+                        : [];
+
+                    const orthophoto = this.normalizeOrthophoto(asset.orthophoto, asset);
+                    const orthophotos = Array.isArray(asset.orthophotos)
+                        ? asset.orthophotos.map(o => this.normalizeOrthophoto(o, asset)).filter(Boolean)
+                        : [];
+
+                    return {
+                        ...asset,
+                        uid,
+                        sidebar_mode: asset.sidebar_mode || 'SINGLE',
+                        single_data: asset.single_data || null,
+                        building_data: asset.building_data || null,
+                        building_units: Array.isArray(asset.building_units) ? asset.building_units : [],
+                        project: asset.project || '—',
+                        project_id: asset.project_id || null,
+                        program: asset.program || '—',
+                        program_id: asset.program_id || null,
+
+                        program_url: asset.program_url || asset.programm_url || asset.program_url_display || '',
+
+                        program_url_display: asset.program_url_display || asset.program_url || asset.programm_url || '',
+
+                        type: asset.type || '—',
+                        status: asset.status || '—',
+                        statusBadge: asset.statusBadge || 'bg-slate-100 text-slate-700',
+                        statusKey: asset.statusKey || 'Tous',
+                        color: asset.color || '#38bdf8',
+                        fillOpacity: asset.fillOpacity ?? 0.78,
+                        asset_category: asset.asset_category || '—',
+                        asset_nature: asset.asset_nature || asset.type || 'Actif immobilier',
+                        is_multi_unit: !!asset.is_multi_unit,
+                        tags: normalizedTags,
+                        images: Array.isArray(asset.images) ? asset.images.filter(Boolean) : [],
+                        details: Array.isArray(asset.details) ? asset.details : [],
+                        metrics: Array.isArray(asset.metrics) ? asset.metrics : [],
+                        timeline: Array.isArray(asset.timeline) ? asset.timeline : [],
+                        financial_stats: asset.financial_stats || {},
+                        construction_stats: asset.construction_stats || {},
+                        priority_stats: asset.priority_stats || {},
+                        orthophoto,
+                        orthophotos,
+                        unit_summary: asset.unit_summary || {
+                            total_units: 0,
+                            available_units: 0,
+                            reserved_units: 0,
+                            sold_units: 0,
+                            blocked_units: 0,
+                            sales_count: 0,
+                            reservations_count: 0,
+                        },
+                        customers: asset.customers || {count: 0, items: []},
+                        sales_summary: Array.isArray(asset.sales_summary) ? asset.sales_summary : [],
+                        units_preview: Array.isArray(asset.units_preview) ? asset.units_preview : [],
+                    };
+                },
+
+                async loadData() {
+                    const response = await fetch("{% url 'api-map-assets' %}", {
+                        headers: {'X-Requested-With': 'XMLHttpRequest'},
+                        credentials: 'same-origin'
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Impossible de charger les données de la carte.');
+                    }
+
+                    const data = await response.json();
+
+                    this.assets = (data.assets || []).map(raw => {
+                        const asset = this.sanitizeAsset(raw);
+
+                        if ((!asset.project || asset.project === '—') && Array.isArray(asset.details)) {
+                            const detailProject = asset.details.find(d => d.label === 'Projet');
+                            if (detailProject && detailProject.value) {
+                                asset.project = detailProject.value;
+                            }
+                        }
+
+                        if ((!asset.program || asset.program === '—') && Array.isArray(asset.details)) {
+                            const detailProgram = asset.details.find(d => d.label === 'Programme');
+                            if (detailProgram && detailProgram.value) {
+                                asset.program = detailProgram.value;
+                            }
+                        }
+
+                        return asset;
+                    });
+
+                    const directOrthos = Array.isArray(data.orthophotos)
+                        ? data.orthophotos.map(o => this.normalizeOrthophoto(o, null)).filter(Boolean)
+                        : [];
+
+                    const assetOrthos = this.buildOrthophotoCatalogFromAssets();
+
+                    const orthoMap = new Map();
+                    [...directOrthos, ...assetOrthos].forEach(o => {
+                        const key = [
+                            o.program_id || o.program || 'na',
+                            o.period_value || o.slug || o.id || 'current'
+                        ].join('::');
+
+                        if (!orthoMap.has(key)) {
+                            orthoMap.set(key, o);
+                        }
+                    });
+
+                    this.orthophotos = Array.from(orthoMap.values());
+                    this.rebuildOrthoRegions();
+                    this.orthoPeriodOptions = this.buildOrthoPeriodOptions();
+
+                    this.summaries = data.summaries || this.summaries;
+                    this.filters = Array.isArray(data.filters) && data.filters.length ? data.filters : ['Tous'];
+
+                    const apiTagOptions = Array.isArray(data.tag_filters)
+                        ? data.tag_filters.map(tag => this.normalizeTagOption(tag)).filter(Boolean)
+                        : [];
+
+                    const assetTagOptions = this.buildTagOptionsFromAssets();
+
+                    const mergedTags = new Map();
+                    [...apiTagOptions, ...assetTagOptions].forEach(tag => {
+                        const key = `${tag.program_id || tag.program || tag.program_name || 'na'}::${tag.slug}`;
+                        if (!mergedTags.has(key)) {
+                            mergedTags.set(key, tag);
+                        }
+                    });
+
+                    this.tagOptions = Array.from(mergedTags.values()).sort((a, b) =>
+                        String(a.name || '').localeCompare(String(b.name || ''))
+                    );
+
+                    this.projectOptions = Array.from(new Set(this.assets.map(a => a.project).filter(Boolean)))
+                        .sort((a, b) => a.localeCompare(b));
+
+                    this.programOptions = Array.from(new Set(this.assets.map(a => a.program).filter(Boolean)))
+                        .sort((a, b) => a.localeCompare(b));
+
+                    this.visibleAssets = [...this.assets];
+                    this.selectedAsset = {};
+                    this.sidebarImageIndex = 0;
+                    this.sidebarOpen = false;
+                },
+
+                setMapMode(mode) {
+                    this.mapMode = mode;
+                    this.applyBaseLayers();
+
+                    if (mode === 'ortho' && this.map) {
+                        const targetBounds = this.getRelevantOrthoBounds();
+                        if (targetBounds && targetBounds.isValid()) {
+                            const currentBounds = this.map.getBounds();
+                            if (!targetBounds.intersects(currentBounds)) {
+                                this.map.fitBounds(targetBounds, {
+                                    animate: false,
+                                    padding: [20, 20],
+                                    maxZoom: 19
+                                });
+                            }
                         }
                     }
-                }
 
-                if (this.geojsonLayer && this.showParcels) {
-                    this.applySelectedStyle();
-                }
-            },
-
-            applyBaseLayers() {
-                if (!this.map) return;
-
-                if (this.map.hasLayer(this.tileLayer)) {
-                    this.map.removeLayer(this.tileLayer);
-                }
-
-                if (this.activeOrthoLayer) {
-                    try {
-                        this.map.removeLayer(this.activeOrthoLayer);
-                    } catch (e) {
-                        console.warn(e);
+                    if (this.geojsonLayer && this.showParcels) {
+                        this.applySelectedStyle();
                     }
-                    this.activeOrthoLayer = null;
-                }
+                },
 
-                if (this.mapMode === 'osm') {
-                    this.tileLayer.setOpacity(1);
-                    this.tileLayer.addTo(this.map);
-                } else if (this.mapMode === 'ortho') {
-                    this.applyOrthoLayer();
-                } else {
+                applyBaseLayers() {
+                    if (!this.map) return;
+
+                    if (this.map.hasLayer(this.tileLayer)) {
+                        this.map.removeLayer(this.tileLayer);
+                    }
+
+                    if (this.activeOrthoLayer) {
+                        try {
+                            this.map.removeLayer(this.activeOrthoLayer);
+                        } catch (e) {
+                            console.warn(e);
+                        }
+                        this.activeOrthoLayer = null;
+                        this.activeOrthoKey = '';
+                    }
+
+                    if (this.mapMode === 'osm') {
+                        this.tileLayer.setOpacity(1);
+                        this.tileLayer.addTo(this.map);
+                        return;
+                    }
+
+                    if (this.mapMode === 'ortho') {
+                        this.applyOrthoLayer();
+                        if (!this.activeOrthoLayer) {
+                            this.tileLayer.setOpacity(1);
+                            this.tileLayer.addTo(this.map);
+                        }
+                        return;
+                    }
+
                     this.tileLayer.setOpacity(1);
                     this.tileLayer.addTo(this.map);
                     this.applyOrthoLayer();
                     if (this.activeOrthoLayer) {
                         this.activeOrthoLayer.setOpacity(0.78);
                     }
-                }
-            },
+                },
 
-            toggleParcels() {
-                this.showParcels = !this.showParcels;
+                toggleParcels() {
+                    this.showParcels = !this.showParcels;
 
-                if (!this.map) return;
+                    if (!this.map) return;
 
-                if (this.showParcels) {
-                    this.drawAssets();
-                } else {
-                    if (this.geojsonLayer) {
-                        this.map.removeLayer(this.geojsonLayer);
-                        this.geojsonLayer = null;
+                    if (this.showParcels) {
+                        this.drawAssets();
+                    } else {
+                        if (this.geojsonLayer) {
+                            this.map.removeLayer(this.geojsonLayer);
+                            this.geojsonLayer = null;
+                        }
+                        this.selectedLayer = null;
+                        this.drawParcelLabels();
                     }
-                    this.selectedLayer = null;
+                },
+
+                toggleParcelLabels() {
+                    this.showParcelLabels = !this.showParcelLabels;
                     this.drawParcelLabels();
-                }
-            },
+                },
 
-            toggleParcelLabels() {
-                this.showParcelLabels = !this.showParcelLabels;
-                this.drawParcelLabels();
-            },
+                getBaseParcelName(asset) {
+                    if (!asset) return '';
+                    if (asset.name) return asset.name;
 
-            getBaseParcelName(asset) {
-                if (!asset) return '';
-                if (asset.name) return asset.name;
+                    const lotDetail = (asset.details || []).find(d => d.label === 'Lot');
+                    if (lotDetail?.value) return `Lot ${lotDetail.value}`;
 
-                const lotDetail = (asset.details || []).find(d => d.label === 'Lot');
-                if (lotDetail?.value) return `Lot ${lotDetail.value}`;
+                    const refDetail = (asset.details || []).find(d => d.label === 'Référence');
+                    if (refDetail?.value) return refDetail.value;
 
-                const refDetail = (asset.details || []).find(d => d.label === 'Référence');
-                if (refDetail?.value) return refDetail.value;
+                    return '';
+                },
 
-                return '';
-            },
+                getParcelLabel(asset) {
+                    if (!asset) return '';
 
-            getParcelLabel(asset) {
-                if (!asset) return '';
+                    const baseName = this.getBaseParcelName(asset);
+                    const progress = asset.construction_stats?.taux_avancement || '0%';
+                    const paiement = asset.financial_stats?.taux_paiement || '0%';
+                    const deltaValue = asset.construction_stats?.evolution_mensuelle || 0;
+                    const deltaLabel = this.getTrendLabel(deltaValue);
+                    const deltaClass = this.getTrendClass(deltaValue);
 
-                const baseName = this.getBaseParcelName(asset);
-                const progress = asset.construction_stats?.taux_avancement || '0%';
-                const paiement = asset.financial_stats?.taux_paiement || '0%';
-                const deltaValue = asset.construction_stats?.evolution_mensuelle || 0;
-                const deltaLabel = this.getTrendLabel(deltaValue);
-                const deltaClass = this.getTrendClass(deltaValue);
+                    const priority = asset.priority_stats?.priority || 'UNKNOWN';
+                    let priorityBlockClass = 'priority-low';
 
-                const priority = asset.priority_stats?.priority || 'UNKNOWN';
-                let priorityBlockClass = 'priority-low';
+                    if (priority === 'MEDIUM') priorityBlockClass = 'priority-medium';
+                    if (priority === 'HIGH') priorityBlockClass = 'priority-high';
 
-                if (priority === 'MEDIUM') priorityBlockClass = 'priority-medium';
-                if (priority === 'HIGH') priorityBlockClass = 'priority-high';
-
-                return `
+                    return `
                     <div class="parcel-label ${priorityBlockClass}">
                         <div class="parcel-label-name">${baseName}</div>
                         <div class="parcel-label-progress">
@@ -1417,247 +1448,247 @@
                         </div>
                     </div>
                 `;
-            },
+                },
 
-            isAssetVisibleInMapBounds(asset, bounds) {
-                if (!bounds) return true;
+                isAssetVisibleInMapBounds(asset, bounds) {
+                    if (!bounds) return true;
 
-                if (asset.center && Array.isArray(asset.center) && asset.center.length === 2) {
-                    try {
-                        return bounds.contains(L.latLng(asset.center[0], asset.center[1]));
-                    } catch (e) {
-                        return true;
+                    if (asset.center && Array.isArray(asset.center) && asset.center.length === 2) {
+                        try {
+                            return bounds.contains(L.latLng(asset.center[0], asset.center[1]));
+                        } catch (e) {
+                            return true;
+                        }
                     }
-                }
 
-                return true;
-            },
+                    return true;
+                },
 
-            updateDrawableAssets() {
-                if (!this.map) {
-                    this.drawableAssets = [...this.visibleAssets];
-                    return;
-                }
-
-                const zoom = this.map.getZoom();
-                const bounds = this.map.getBounds()?.pad(this.visiblePadRatio);
-
-                if (zoom < 14) {
-                    this.drawableAssets = [...this.visibleAssets];
-                    return;
-                }
-
-                this.drawableAssets = this.visibleAssets.filter(asset => this.isAssetVisibleInMapBounds(asset, bounds));
-            },
-
-            drawParcelLabels() {
-                if (!this.map || !this.parcelLabelsLayer) return;
-
-                this.parcelLabelsLayer.clearLayers();
-
-                if (!this.showParcels) return;
-                if (!this.showParcelLabels) return;
-                if (this.map.getZoom() < this.minLabelZoom) return;
-
-                this.drawableAssets
-                    .filter(asset => asset.center && Array.isArray(asset.center) && asset.center.length === 2)
-                    .forEach(asset => {
-                        const labelHtml = this.getParcelLabel(asset);
-                        if (!labelHtml) return;
-
-                        const marker = L.marker(asset.center, {
-                            interactive: false,
-                            zIndexOffset: 1000,
-                            icon: L.divIcon({
-                                className: 'parcel-label-wrapper',
-                                html: labelHtml,
-                                iconSize: null
-                            })
-                        });
-
-                        this.parcelLabelsLayer.addLayer(marker);
-                    });
-            },
-
-            fitToVisibleAssets() {
-                if (!this.map) return;
-
-                if (this.geojsonLayer && this.showParcels) {
-                    const bounds = this.geojsonLayer.getBounds();
-                    if (bounds && bounds.isValid()) {
-                        this.map.fitBounds(bounds.pad(0.25), {maxZoom: 20, animate: false});
+                updateDrawableAssets() {
+                    if (!this.map) {
+                        this.drawableAssets = [...this.visibleAssets];
                         return;
                     }
-                }
 
-                const points = this.visibleAssets
-                    .filter(asset => asset.center && Array.isArray(asset.center) && asset.center.length === 2)
-                    .map(asset => L.latLng(asset.center[0], asset.center[1]));
+                    const zoom = this.map.getZoom();
+                    const bounds = this.map.getBounds()?.pad(this.visiblePadRatio);
 
-                if (points.length) {
-                    const bounds = L.latLngBounds(points);
-                    this.map.fitBounds(bounds.pad(0.25), {maxZoom: 20, animate: false});
-                }
-            },
+                    if (zoom < 14) {
+                        this.drawableAssets = [...this.visibleAssets];
+                        return;
+                    }
 
-            resetFilters() {
-                this.search = '';
-                this.activeFilter = 'Tous';
-                this.projectFilter = '';
-                this.programFilter = '';
-                this.tagFilter = '';
-                this.orthoPeriodFilter = '';
-                this.filterAssets();
-            },
+                    this.drawableAssets = this.visibleAssets.filter(asset => this.isAssetVisibleInMapBounds(asset, bounds));
+                },
 
-            onProjectChange() {
-                if (this.programFilter && !this.filteredProgramOptions.includes(this.programFilter)) {
+                drawParcelLabels() {
+                    if (!this.map || !this.parcelLabelsLayer) return;
+
+                    this.parcelLabelsLayer.clearLayers();
+
+                    if (!this.showParcels) return;
+                    if (!this.showParcelLabels) return;
+                    if (this.map.getZoom() < this.minLabelZoom) return;
+
+                    this.drawableAssets
+                        .filter(asset => asset.center && Array.isArray(asset.center) && asset.center.length === 2)
+                        .forEach(asset => {
+                            const labelHtml = this.getParcelLabel(asset);
+                            if (!labelHtml) return;
+
+                            const marker = L.marker(asset.center, {
+                                interactive: false,
+                                zIndexOffset: 1000,
+                                icon: L.divIcon({
+                                    className: 'parcel-label-wrapper',
+                                    html: labelHtml,
+                                    iconSize: null
+                                })
+                            });
+
+                            this.parcelLabelsLayer.addLayer(marker);
+                        });
+                },
+
+                fitToVisibleAssets() {
+                    if (!this.map) return;
+
+                    if (this.geojsonLayer && this.showParcels) {
+                        const bounds = this.geojsonLayer.getBounds();
+                        if (bounds && bounds.isValid()) {
+                            this.map.fitBounds(bounds.pad(0.25), {maxZoom: 20, animate: false});
+                            return;
+                        }
+                    }
+
+                    const points = this.visibleAssets
+                        .filter(asset => asset.center && Array.isArray(asset.center) && asset.center.length === 2)
+                        .map(asset => L.latLng(asset.center[0], asset.center[1]));
+
+                    if (points.length) {
+                        const bounds = L.latLngBounds(points);
+                        this.map.fitBounds(bounds.pad(0.25), {maxZoom: 20, animate: false});
+                    }
+                },
+
+                resetFilters() {
+                    this.search = '';
+                    this.activeFilter = 'Tous';
+                    this.projectFilter = '';
                     this.programFilter = '';
-                }
+                    this.tagFilter = '';
+                    this.orthoPeriodFilter = '';
+                    this.filterAssets();
+                },
 
-                if (this.tagFilter) {
-                    const tagStillValid = this.filteredTagOptions.some(tag => tag.slug === this.tagFilter);
-                    if (!tagStillValid) {
-                        this.tagFilter = '';
+                onProjectChange() {
+                    if (this.programFilter && !this.filteredProgramOptions.includes(this.programFilter)) {
+                        this.programFilter = '';
                     }
-                }
 
-                if (this.orthoPeriodFilter) {
-                    const orthoStillValid = this.filteredOrthoPeriodOptions.some(o => o.value === this.orthoPeriodFilter);
-                    if (!orthoStillValid) {
-                        this.orthoPeriodFilter = '';
+                    if (this.tagFilter) {
+                        const tagStillValid = this.filteredTagOptions.some(tag => tag.slug === this.tagFilter);
+                        if (!tagStillValid) {
+                            this.tagFilter = '';
+                        }
                     }
-                }
 
-                this.filterAssets();
-            },
-
-            onProgramChange() {
-                if (this.tagFilter) {
-                    const tagStillValid = this.filteredTagOptions.some(tag => tag.slug === this.tagFilter);
-                    if (!tagStillValid) {
-                        this.tagFilter = '';
+                    if (this.orthoPeriodFilter) {
+                        const orthoStillValid = this.filteredOrthoPeriodOptions.some(o => o.value === this.orthoPeriodFilter);
+                        if (!orthoStillValid) {
+                            this.orthoPeriodFilter = '';
+                        }
                     }
-                }
 
-                if (this.orthoPeriodFilter) {
-                    const orthoStillValid = this.filteredOrthoPeriodOptions.some(o => o.value === this.orthoPeriodFilter);
-                    if (!orthoStillValid) {
-                        this.orthoPeriodFilter = '';
+                    this.filterAssets();
+                },
+
+                onProgramChange() {
+                    if (this.tagFilter) {
+                        const tagStillValid = this.filteredTagOptions.some(tag => tag.slug === this.tagFilter);
+                        if (!tagStillValid) {
+                            this.tagFilter = '';
+                        }
                     }
-                }
 
-                if (this.mapMode === 'ortho' || this.mapMode === 'mixed') {
-                    this.applyOrthoLayer();
-                }
+                    if (this.orthoPeriodFilter) {
+                        const orthoStillValid = this.filteredOrthoPeriodOptions.some(o => o.value === this.orthoPeriodFilter);
+                        if (!orthoStillValid) {
+                            this.orthoPeriodFilter = '';
+                        }
+                    }
 
-                this.filterAssets();
-            },
+                    if (this.mapMode === 'ortho' || this.mapMode === 'mixed') {
+                        this.applyOrthoLayer();
+                    }
 
-            onOrthoPeriodChange() {
-                if (this.mapMode === 'ortho' || this.mapMode === 'mixed') {
-                    this.applyOrthoLayer();
-                }
-                this.filterAssets();
-            },
+                    this.filterAssets();
+                },
 
-            setTagFilter(slug = '') {
-                this.tagFilter = slug || '';
-                this.filterAssets();
-            },
+                onOrthoPeriodChange() {
+                    if (this.mapMode === 'ortho' || this.mapMode === 'mixed') {
+                        this.applyOrthoLayer();
+                    }
+                    this.filterAssets();
+                },
 
-            getTagChipStyle(tag) {
-                const color = tag?.color || '#64748b';
-                const isActive = this.tagFilter === tag.slug;
+                setTagFilter(slug = '') {
+                    this.tagFilter = slug || '';
+                    this.filterAssets();
+                },
 
-                return `
+                getTagChipStyle(tag) {
+                    const color = tag?.color || '#64748b';
+                    const isActive = this.tagFilter === tag.slug;
+
+                    return `
                     background: ${isActive ? color : `${color}18`};
                     color: ${isActive ? '#ffffff' : color};
                     border-color: ${color}40;
                 `;
-            },
+                },
 
-            setSidebarImage(index) {
-                this.sidebarImageIndex = index;
-            },
+                setSidebarImage(index) {
+                    this.sidebarImageIndex = index;
+                },
 
-            nextSidebarImage() {
-                const imgs = this.selectedAsset?.images || [];
-                if (!imgs.length) return;
-                this.sidebarImageIndex = (this.sidebarImageIndex + 1) % imgs.length;
-            },
+                nextSidebarImage() {
+                    const imgs = this.selectedAsset?.images || [];
+                    if (!imgs.length) return;
+                    this.sidebarImageIndex = (this.sidebarImageIndex + 1) % imgs.length;
+                },
 
-            prevSidebarImage() {
-                const imgs = this.selectedAsset?.images || [];
-                if (!imgs.length) return;
-                this.sidebarImageIndex = (this.sidebarImageIndex - 1 + imgs.length) % imgs.length;
-            },
+                prevSidebarImage() {
+                    const imgs = this.selectedAsset?.images || [];
+                    if (!imgs.length) return;
+                    this.sidebarImageIndex = (this.sidebarImageIndex - 1 + imgs.length) % imgs.length;
+                },
 
-            openLightbox(img) {
-                const imgs = this.selectedAsset?.images || [];
-                this.lightboxImage = img;
-                this.lightboxIndex = this.sidebarImageIndex;
-                if (!imgs.length && img) this.lightboxIndex = 0;
-                this.lightboxOpen = true;
-                document.body.style.overflow = 'hidden';
-            },
+                openLightbox(img) {
+                    const imgs = this.selectedAsset?.images || [];
+                    this.lightboxImage = img;
+                    this.lightboxIndex = this.sidebarImageIndex;
+                    if (!imgs.length && img) this.lightboxIndex = 0;
+                    this.lightboxOpen = true;
+                    document.body.style.overflow = 'hidden';
+                },
 
-            closeLightbox() {
-                this.lightboxOpen = false;
-                document.body.style.overflow = '';
-            },
+                closeLightbox() {
+                    this.lightboxOpen = false;
+                    document.body.style.overflow = '';
+                },
 
-            nextLightboxImage() {
-                const imgs = this.selectedAsset?.images || [];
-                if (!imgs.length) return;
-                this.lightboxIndex = (this.lightboxIndex + 1) % imgs.length;
-                this.sidebarImageIndex = this.lightboxIndex;
-                this.lightboxImage = imgs[this.lightboxIndex];
-            },
+                nextLightboxImage() {
+                    const imgs = this.selectedAsset?.images || [];
+                    if (!imgs.length) return;
+                    this.lightboxIndex = (this.lightboxIndex + 1) % imgs.length;
+                    this.sidebarImageIndex = this.lightboxIndex;
+                    this.lightboxImage = imgs[this.lightboxIndex];
+                },
 
-            prevLightboxImage() {
-                const imgs = this.selectedAsset?.images || [];
-                if (!imgs.length) return;
-                this.lightboxIndex = (this.lightboxIndex - 1 + imgs.length) % imgs.length;
-                this.sidebarImageIndex = this.lightboxIndex;
-                this.lightboxImage = imgs[this.lightboxIndex];
-            },
+                prevLightboxImage() {
+                    const imgs = this.selectedAsset?.images || [];
+                    if (!imgs.length) return;
+                    this.lightboxIndex = (this.lightboxIndex - 1 + imgs.length) % imgs.length;
+                    this.sidebarImageIndex = this.lightboxIndex;
+                    this.lightboxImage = imgs[this.lightboxIndex];
+                },
 
-            escapeHtml(value) {
-                return String(value ?? '').replace(/[&<>"']/g, function (m) {
-                    return {
-                        '&': '&amp;',
-                        '<': '&lt;',
-                        '>': '&gt;',
-                        '"': '&quot;',
-                        "'": '&#039;'
-                    }[m];
-                });
-            },
+                escapeHtml(value) {
+                    return String(value ?? '').replace(/[&<>"']/g, function (m) {
+                        return {
+                            '&': '&amp;',
+                            '<': '&lt;',
+                            '>': '&gt;',
+                            '"': '&quot;',
+                            "'": '&#039;'
+                        }[m];
+                    });
+                },
 
-            buildPopup(asset) {
-                const firstImg = asset.images?.[0] || 'https://artemisconstruction-ci.com/assets/images/portfolio/symphonia/7.jpg';
+                buildPopup(asset) {
+                    const firstImg = asset.images?.[0] || 'https://artemisconstruction-ci.com/assets/images/portfolio/symphonia/7.jpg';
 
-                const slides = (asset.images || []).map((img, idx) => `
+                    const slides = (asset.images || []).map((img, idx) => `
                     <img src="${img}" alt="${this.escapeHtml(asset.name)} ${idx + 1}" data-slide="${idx}" style="display:${idx === 0 ? 'block' : 'none'};" />
                 `).join('');
 
-                const dots = (asset.images || []).map((_, idx) => `
+                    const dots = (asset.images || []).map((_, idx) => `
                     <span class="popup-dot ${idx === 0 ? 'active' : ''}" data-dot="${idx}"></span>
                 `).join('');
 
-                const progress = asset.construction_stats?.taux_avancement || '0%';
-                const monthlyDelta = asset.construction_stats?.evolution_mensuelle_label || '0% ce mois';
-                const ratioLabel = asset.priority_stats?.ratio_label || '—';
-                const natureLabel = this.escapeHtml(asset.asset_nature || asset.type || 'Actif immobilier');
-                const unitsLabel = asset.is_multi_unit
-                    ? `<div style="margin-top:8px;font-size:12px;color:#e5e7eb">Unités : <strong>${asset.unit_summary?.total_units ?? 0}</strong> • Vendues : <strong>${asset.unit_summary?.sold_units ?? 0}</strong></div>`
-                    : '';
+                    const progress = asset.construction_stats?.taux_avancement || '0%';
+                    const monthlyDelta = asset.construction_stats?.evolution_mensuelle_label || '0% ce mois';
+                    const ratioLabel = asset.priority_stats?.ratio_label || '—';
+                    const natureLabel = this.escapeHtml(asset.asset_nature || asset.type || 'Actif immobilier');
+                    const unitsLabel = asset.is_multi_unit
+                        ? `<div style="margin-top:8px;font-size:12px;color:#e5e7eb">Unités : <strong>${asset.unit_summary?.total_units ?? 0}</strong> • Vendues : <strong>${asset.unit_summary?.sold_units ?? 0}</strong></div>`
+                        : '';
 
-                const orthoLabel = asset.orthophoto?.period_label_resolved || asset.orthophoto?.period_label || '';
+                    const orthoLabel = asset.orthophoto?.period_label_resolved || asset.orthophoto?.period_label || '';
 
-                const tagsHtml = (asset.tags || []).length
-                    ? `
+                    const tagsHtml = (asset.tags || []).length
+                        ? `
                     <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;">
                         ${(asset.tags || []).map(tag => `
                             <span style="
@@ -1673,15 +1704,15 @@
                         `).join('')}
                     </div>
                 `
-                    : '';
+                        : '';
 
-                return `
+                    return `
                     <div style="width:270px">
                         <div class="popup-carousel" data-carousel="${asset.id}" data-index="0">
                             ${slides || `<img src="${firstImg}" alt="${this.escapeHtml(asset.name || 'Actif')}" />`}
                             ${(asset.images || []).length > 1
-                                ? `<button class="popup-carousel-btn left" data-action="prev">‹</button><button class="popup-carousel-btn right" data-action="next">›</button>`
-                                : ''}
+                        ? `<button class="popup-carousel-btn left" data-action="prev">‹</button><button class="popup-carousel-btn right" data-action="next">›</button>`
+                        : ''}
                             ${(asset.images || []).length > 1 ? `<div class="popup-dots">${dots}</div>` : ''}
                         </div>
 
@@ -1722,225 +1753,315 @@
                         </div>
                     </div>
                 `;
-            },
+                },
 
-            attachPopupCarouselHandlers(layer, assetId, imagesCount) {
-                layer.on('popupopen', (e) => {
-                    const popupEl = e?.popup?.getElement?.();
-                    if (!popupEl || imagesCount <= 1) return;
+                attachPopupCarouselHandlers(layer, assetId, imagesCount) {
+                    layer.on('popupopen', (e) => {
+                        const popupEl = e?.popup?.getElement?.();
+                        if (!popupEl || imagesCount <= 1) return;
 
-                    const carousel = popupEl.querySelector(`[data-carousel="${assetId}"]`);
-                    if (!carousel) return;
+                        const carousel = popupEl.querySelector(`[data-carousel="${assetId}"]`);
+                        if (!carousel) return;
 
-                    const slides = [...carousel.querySelectorAll('[data-slide]')];
-                    const dots = [...carousel.querySelectorAll('[data-dot]')];
-                    let current = Number(carousel.dataset.index || 0);
+                        const slides = [...carousel.querySelectorAll('[data-slide]')];
+                        const dots = [...carousel.querySelectorAll('[data-dot]')];
+                        let current = Number(carousel.dataset.index || 0);
 
-                    const render = () => {
-                        slides.forEach((s, i) => {
-                            s.style.display = i === current ? 'block' : 'none';
-                        });
-                        dots.forEach((d, i) => {
-                            d.classList.toggle('active', i === current);
-                        });
-                        carousel.dataset.index = String(current);
-                    };
-
-                    const prevBtn = carousel.querySelector('[data-action="prev"]');
-                    const nextBtn = carousel.querySelector('[data-action="next"]');
-
-                    if (prevBtn) {
-                        prevBtn.onclick = (evt) => {
-                            evt.preventDefault();
-                            evt.stopPropagation();
-                            current = (current - 1 + slides.length) % slides.length;
-                            render();
+                        const render = () => {
+                            slides.forEach((s, i) => {
+                                s.style.display = i === current ? 'block' : 'none';
+                            });
+                            dots.forEach((d, i) => {
+                                d.classList.toggle('active', i === current);
+                            });
+                            carousel.dataset.index = String(current);
                         };
-                    }
 
-                    if (nextBtn) {
-                        nextBtn.onclick = (evt) => {
-                            evt.preventDefault();
-                            evt.stopPropagation();
-                            current = (current + 1) % slides.length;
-                            render();
-                        };
-                    }
+                        const prevBtn = carousel.querySelector('[data-action="prev"]');
+                        const nextBtn = carousel.querySelector('[data-action="next"]');
 
-                    dots.forEach((dot, idx) => {
-                        dot.onclick = (evt) => {
-                            evt.preventDefault();
-                            evt.stopPropagation();
-                            current = idx;
-                            render();
-                        };
-                    });
-
-                    render();
-                });
-            },
-
-            openPopupForSelectedAsset() {
-                if (!this.selectedAsset?.id || !this.markersLayer) return false;
-
-                let opened = false;
-                this.markersLayer.eachLayer((layer) => {
-                    if (layer?.options?.assetId === this.selectedAsset.id) {
-                        try {
-                            layer.openPopup();
-                            opened = true;
-                        } catch (e) {
-                            console.warn(e);
+                        if (prevBtn) {
+                            prevBtn.onclick = (evt) => {
+                                evt.preventDefault();
+                                evt.stopPropagation();
+                                current = (current - 1 + slides.length) % slides.length;
+                                render();
+                            };
                         }
-                    }
-                });
-                return opened;
-            },
 
-            drawAssets() {
-                if (!this.map) return;
+                        if (nextBtn) {
+                            nextBtn.onclick = (evt) => {
+                                evt.preventDefault();
+                                evt.stopPropagation();
+                                current = (current + 1) % slides.length;
+                                render();
+                            };
+                        }
 
-                this.renderVersion += 1;
-                const currentVersion = this.renderVersion;
-                const zoom = this.map.getZoom();
-
-                this.updateDrawableAssets();
-
-                if (this.geojsonLayer) {
-                    this.map.removeLayer(this.geojsonLayer);
-                    this.geojsonLayer = null;
-                }
-
-                if (this.markersLayer) {
-                    this.markersLayer.clearLayers();
-                }
-
-                const markerAssets = this.drawableAssets
-                    .filter(asset => asset.center && Array.isArray(asset.center) && asset.center.length === 2);
-
-                const polygonFeatures = (
-                    this.showParcels && zoom >= this.minPolygonZoom
-                        ? this.drawableAssets
-                            .filter(asset => asset.geometry)
-                            .map(asset => ({
-                                type: 'Feature',
-                                properties: {...asset},
-                                geometry: asset.geometry
-                            }))
-                        : []
-                );
-
-                const chunkSize = zoom >= 17 ? 80 : 140;
-                let index = 0;
-
-                const addMarkerChunk = () => {
-                    if (currentVersion !== this.renderVersion) return;
-                    if (!this.map) return;
-
-                    const chunk = markerAssets.slice(index, index + chunkSize);
-
-                    chunk.forEach(asset => {
-                        const marker = L.marker(asset.center, {
-                            programName: asset.program || asset.project || 'Programme',
-                            assetId: asset.id,
-                            icon: L.divIcon({
-                                className: '',
-                                html: '<div class="marker-pin"></div>',
-                                iconSize: [18, 18],
-                                iconAnchor: [9, 9]
-                            })
+                        dots.forEach((dot, idx) => {
+                            dot.onclick = (evt) => {
+                                evt.preventDefault();
+                                evt.stopPropagation();
+                                current = idx;
+                                render();
+                            };
                         });
 
-                        marker.bindPopup(this.buildPopup(asset), {
-                            maxWidth: 320,
-                            minWidth: 270,
-                            closeButton: false,
-                            autoClose: true,
-                            closeOnClick: true
-                        });
+                        render();
+                    });
+                },
 
-                        this.attachPopupCarouselHandlers(
-                            marker,
-                            asset.id,
-                            (asset.images || []).length
-                        );
+                openPopupForSelectedAsset() {
+                    if (!this.selectedAsset?.id || !this.markersLayer) return false;
 
-                        marker.on('click', () => {
-                            if (this.isDraggingMap) return;
-                            this.selectAsset(asset.id, false);
+                    let opened = false;
+                    this.markersLayer.eachLayer((layer) => {
+                        if (layer?.options?.assetId === this.selectedAsset.id) {
                             try {
-                                marker.openPopup();
+                                layer.openPopup();
+                                opened = true;
                             } catch (e) {
                                 console.warn(e);
                             }
+                        }
+                    });
+                    return opened;
+                },
+
+                drawAssets() {
+                    if (!this.map) return;
+
+                    this.renderVersion += 1;
+                    const currentVersion = this.renderVersion;
+                    const zoom = this.map.getZoom();
+
+                    this.updateDrawableAssets();
+
+                    if (this.geojsonLayer) {
+                        this.map.removeLayer(this.geojsonLayer);
+                        this.geojsonLayer = null;
+                    }
+
+                    if (this.markersLayer) {
+                        this.markersLayer.clearLayers();
+                    }
+
+                    const markerAssets = this.drawableAssets
+                        .filter(asset => asset.center && Array.isArray(asset.center) && asset.center.length === 2);
+
+                    const polygonFeatures = (
+                        this.showParcels && zoom >= this.minPolygonZoom
+                            ? this.drawableAssets
+                                .filter(asset => asset.geometry)
+                                .map(asset => ({
+                                    type: 'Feature',
+                                    properties: {...asset},
+                                    geometry: asset.geometry
+                                }))
+                            : []
+                    );
+
+                    const chunkSize = zoom >= 17 ? 80 : 140;
+                    let index = 0;
+
+                    const addMarkerChunk = () => {
+                        if (currentVersion !== this.renderVersion) return;
+                        if (!this.map) return;
+
+                        const chunk = markerAssets.slice(index, index + chunkSize);
+
+                        chunk.forEach(asset => {
+                            const marker = L.marker(asset.center, {
+                                programName: asset.program || asset.project || 'Programme',
+                                assetId: asset.id,
+                                icon: L.divIcon({
+                                    className: '',
+                                    html: '<div class="marker-pin"></div>',
+                                    iconSize: [18, 18],
+                                    iconAnchor: [9, 9]
+                                })
+                            });
+
+                            marker.bindPopup(this.buildPopup(asset), {
+                                maxWidth: 320,
+                                minWidth: 270,
+                                closeButton: false,
+                                autoClose: true,
+                                closeOnClick: true
+                            });
+
+                            this.attachPopupCarouselHandlers(
+                                marker,
+                                asset.id,
+                                (asset.images || []).length
+                            );
+
+                            marker.on('click', () => {
+                                if (this.isDraggingMap) return;
+                                this.selectAsset(asset.id, false);
+                                try {
+                                    marker.openPopup();
+                                } catch (e) {
+                                    console.warn(e);
+                                }
+                            });
+
+                            this.markersLayer.addLayer(marker);
                         });
 
-                        this.markersLayer.addLayer(marker);
-                    });
+                        index += chunkSize;
 
-                    index += chunkSize;
+                        if (index < markerAssets.length) {
+                            this.safeRequestFrame(addMarkerChunk);
+                            return;
+                        }
 
-                    if (index < markerAssets.length) {
-                        this.safeRequestFrame(addMarkerChunk);
+                        if (currentVersion !== this.renderVersion) return;
+                        if (!this.map) return;
+
+                        if (polygonFeatures.length) {
+                            this.geojsonLayer = L.geoJSON(
+                                {type: 'FeatureCollection', features: polygonFeatures},
+                                {
+                                    style: feature => this.getStyle(feature.properties, false),
+                                    onEachFeature: (feature, layer) => {
+                                        layer.on('mouseover', () => {
+                                            if (this.selectedAsset?.id !== feature.properties.id) {
+                                                layer.setStyle(this.getStyle(feature.properties, true));
+                                            }
+                                        });
+
+                                        layer.on('mouseout', () => {
+                                            if (this.selectedAsset?.id !== feature.properties.id) {
+                                                layer.setStyle(this.getStyle(feature.properties, false));
+                                            }
+                                        });
+
+                                        layer.on('click', () => {
+                                            if (this.isDraggingMap) return;
+                                            this.selectAsset(feature.properties.id, false);
+                                            try {
+                                                layer.openPopup();
+                                            } catch (e) {
+                                                console.warn(e);
+                                            }
+                                        });
+
+                                        layer.bindPopup(this.buildPopup(feature.properties), {
+                                            maxWidth: 320,
+                                            minWidth: 270,
+                                            closeButton: false,
+                                            autoClose: true,
+                                            closeOnClick: true
+                                        });
+
+                                        this.attachPopupCarouselHandlers(
+                                            layer,
+                                            feature.properties.id,
+                                            (feature.properties.images || []).length
+                                        );
+                                    }
+                                }
+                            ).addTo(this.map);
+                        }
+
+                        this.applySelectedStyle();
+                        this.drawParcelLabels();
+
+                        if (this.popupOpenPending) {
+                            let opened = false;
+
+                            if (this.selectedLayer) {
+                                try {
+                                    this.selectedLayer.openPopup();
+                                    opened = true;
+                                } catch (e) {
+                                    console.warn(e);
+                                }
+                            }
+
+                            if (!opened) {
+                                this.openPopupForSelectedAsset();
+                            }
+
+                            this.popupOpenPending = false;
+                        }
+                    };
+
+                    this.safeRequestFrame(addMarkerChunk);
+                },
+
+                getStyle(asset, hovered = false) {
+                    const isSelected = this.selectedAsset && this.selectedAsset.id === asset.id;
+                    let baseOpacity = asset.fillOpacity || 0.75;
+
+                    if (this.mapMode === 'ortho') {
+                        baseOpacity = 0.18;
+                    } else if (this.mapMode === 'mixed') {
+                        baseOpacity = 0.32;
+                    }
+
+                    return {
+                        color: isSelected ? '#7c2d12' : hovered ? '#9a3412' : '#ffffff',
+                        weight: isSelected ? 4 : hovered ? 3 : 2,
+                        fillColor: asset.color || '#38bdf8',
+                        fillOpacity: isSelected
+                            ? Math.min(baseOpacity + 0.18, 0.92)
+                            : hovered
+                                ? Math.min(baseOpacity + 0.10, 0.85)
+                                : baseOpacity,
+                        dashArray: asset.status === 'Disponible' ? '6 4' : null
+                    };
+                },
+
+                applySelectedStyle() {
+                    if (!this.geojsonLayer || !this.showParcels) {
+                        this.selectedLayer = null;
                         return;
                     }
 
-                    if (currentVersion !== this.renderVersion) return;
-                    if (!this.map) return;
+                    this.selectedLayer = null;
 
-                    if (polygonFeatures.length) {
-                        this.geojsonLayer = L.geoJSON(
-                            {type: 'FeatureCollection', features: polygonFeatures},
-                            {
-                                style: feature => this.getStyle(feature.properties, false),
-                                onEachFeature: (feature, layer) => {
-                                    layer.on('mouseover', () => {
-                                        if (this.selectedAsset?.id !== feature.properties.id) {
-                                            layer.setStyle(this.getStyle(feature.properties, true));
-                                        }
-                                    });
+                    this.geojsonLayer.eachLayer(layer => {
+                        const p = layer?.feature?.properties;
+                        if (!p) return;
 
-                                    layer.on('mouseout', () => {
-                                        if (this.selectedAsset?.id !== feature.properties.id) {
-                                            layer.setStyle(this.getStyle(feature.properties, false));
-                                        }
-                                    });
+                        layer.setStyle(this.getStyle(p, false));
 
-                                    layer.on('click', () => {
-                                        if (this.isDraggingMap) return;
-                                        this.selectAsset(feature.properties.id, false);
-                                        try {
-                                            layer.openPopup();
-                                        } catch (e) {
-                                            console.warn(e);
-                                        }
-                                    });
+                        if (this.selectedAsset && this.selectedAsset.id === p.id) {
+                            this.selectedLayer = layer;
+                            if (layer.bringToFront) layer.bringToFront();
+                        }
+                    });
+                },
 
-                                    layer.bindPopup(this.buildPopup(feature.properties), {
-                                        maxWidth: 320,
-                                        minWidth: 270,
-                                        closeButton: false,
-                                        autoClose: true,
-                                        closeOnClick: true
-                                    });
+                selectAsset(id, recenter = true) {
+                    const found = this.assets.find(a => a.id === id);
+                    if (!found) return;
 
-                                    this.attachPopupCarouselHandlers(
-                                        layer,
-                                        feature.properties.id,
-                                        (feature.properties.images || []).length
-                                    );
-                                }
-                            }
-                        ).addTo(this.map);
-                    }
-
+                    this.selectedAsset = found;
+                    this.sidebarImageIndex = 0;
+                    this.sidebarOpen = true;
                     this.applySelectedStyle();
-                    this.drawParcelLabels();
 
-                    if (this.popupOpenPending) {
+                    if (recenter) {
+                        this.flyToSelected();
+                    }
+                },
+
+                flyToSelected() {
+                    if (!this.selectedAsset || !this.selectedAsset.center || !this.map) return;
+
+                    this.popupOpenPending = true;
+
+                    this.map.setView(this.selectedAsset.center, 18, {
+                        animate: false
+                    });
+
+                    setTimeout(() => {
                         let opened = false;
 
-                        if (this.selectedLayer) {
+                        if (this.showParcels && this.selectedLayer) {
                             try {
                                 this.selectedLayer.openPopup();
                                 opened = true;
@@ -1954,195 +2075,105 @@
                         }
 
                         this.popupOpenPending = false;
-                    }
-                };
+                    }, 180);
+                },
 
-                this.safeRequestFrame(addMarkerChunk);
-            },
+                filterAssets() {
+                    const q = (this.search || '').trim().toLowerCase();
 
-            getStyle(asset, hovered = false) {
-                const isSelected = this.selectedAsset && this.selectedAsset.id === asset.id;
-                let baseOpacity = asset.fillOpacity || 0.75;
+                    this.visibleAssets = this.assets.filter(asset => {
+                        const searchableText = [
+                            asset.name || '',
+                            asset.project || '',
+                            asset.program || '',
+                            asset.type || '',
+                            asset.asset_category || '',
+                            asset.asset_nature || '',
+                            asset.client || '',
+                            asset.status || '',
+                            asset.orthophoto?.period_label_resolved || '',
+                            asset.orthophoto?.period_label || '',
+                            asset.orthophoto?.version || '',
+                            ...(asset.tags || []).flatMap(tag => [
+                                tag?.name || '',
+                                tag?.slug || '',
+                                tag?.program || '',
+                                tag?.project || ''
+                            ]),
+                            ...(asset.details || []).map(d => `${d?.label || ''} ${d?.value || ''}`),
+                            ...(asset.units_preview || []).flatMap(u => [u?.label || '', u?.code || '', u?.type || '', u?.status || '']),
+                            ...(asset.customers?.items || []).map(c => c?.name || ''),
+                            ...(asset.sales_summary || []).flatMap(s => [s?.customer || '', s?.unit || '', s?.sale_number || '', s?.status || '']),
+                        ].join(' ').toLowerCase();
 
-                if (this.mapMode === 'ortho') {
-                    baseOpacity = 0.18;
-                } else if (this.mapMode === 'mixed') {
-                    baseOpacity = 0.32;
-                }
+                        const matchesSearch = !q || searchableText.includes(q);
+                        const matchesFilter = this.activeFilter === 'Tous' || asset.statusKey === this.activeFilter;
+                        const matchesProject = !this.projectFilter || asset.project === this.projectFilter;
+                        const matchesProgram = !this.programFilter || asset.program === this.programFilter;
 
-                return {
-                    color: isSelected ? '#7c2d12' : hovered ? '#9a3412' : '#ffffff',
-                    weight: isSelected ? 4 : hovered ? 3 : 2,
-                    fillColor: asset.color || '#38bdf8',
-                    fillOpacity: isSelected
-                        ? Math.min(baseOpacity + 0.18, 0.92)
-                        : hovered
-                            ? Math.min(baseOpacity + 0.10, 0.85)
-                            : baseOpacity,
-                    dashArray: asset.status === 'Disponible' ? '6 4' : null
-                };
-            },
+                        const assetTagSlugs = (asset.tags || [])
+                            .filter(tag => {
+                                if (!tag) return false;
 
-            applySelectedStyle() {
-                if (!this.geojsonLayer || !this.showParcels) {
-                    this.selectedLayer = null;
-                    return;
-                }
+                                const sameProject = !this.projectFilter || (
+                                    tag.project === this.projectFilter ||
+                                    tag.project_name === this.projectFilter ||
+                                    asset.project === this.projectFilter
+                                );
 
-                this.selectedLayer = null;
+                                const sameProgram = !this.programFilter || (
+                                    tag.program === this.programFilter ||
+                                    tag.program_name === this.programFilter ||
+                                    String(tag.program_id || '') === String(this.getProgramIdByName(this.programFilter) || '') ||
+                                    asset.program === this.programFilter
+                                );
 
-                this.geojsonLayer.eachLayer(layer => {
-                    const p = layer?.feature?.properties;
-                    if (!p) return;
+                                return sameProject && sameProgram;
+                            })
+                            .map(tag => tag?.slug)
+                            .filter(Boolean);
 
-                    layer.setStyle(this.getStyle(p, false));
+                        const matchesTag = !this.tagFilter || assetTagSlugs.includes(this.tagFilter);
 
-                    if (this.selectedAsset && this.selectedAsset.id === p.id) {
-                        this.selectedLayer = layer;
-                        if (layer.bringToFront) layer.bringToFront();
-                    }
-                });
-            },
+                        let matchesOrthoPeriod = true;
+                        if (this.orthoPeriodFilter) {
+                            const assetOrthos = [
+                                asset.orthophoto,
+                                ...(Array.isArray(asset.orthophotos) ? asset.orthophotos : [])
+                            ].filter(Boolean);
 
-            selectAsset(id, recenter = true) {
-                const found = this.assets.find(a => a.id === id);
-                if (!found) return;
-
-                this.selectedAsset = found;
-                this.sidebarImageIndex = 0;
-                this.sidebarOpen = true;
-                this.applySelectedStyle();
-
-                if (recenter) {
-                    this.flyToSelected();
-                }
-            },
-
-            flyToSelected() {
-                if (!this.selectedAsset || !this.selectedAsset.center || !this.map) return;
-
-                this.popupOpenPending = true;
-
-                this.map.setView(this.selectedAsset.center, 18, {
-                    animate: false
-                });
-
-                setTimeout(() => {
-                    let opened = false;
-
-                    if (this.showParcels && this.selectedLayer) {
-                        try {
-                            this.selectedLayer.openPopup();
-                            opened = true;
-                        } catch (e) {
-                            console.warn(e);
+                            const matchesOrthoPeriod = !this.orthoPeriodFilter || (
+                                (asset.orthophoto?.period_value || this.getOrthophotoPeriodValue(asset.orthophoto)) === this.orthoPeriodFilter
+                            );
                         }
+
+                        return matchesSearch && matchesFilter && matchesProject && matchesProgram && matchesTag && matchesOrthoPeriod;
+                    });
+
+                    if (!this.visibleAssets.find(a => a.id === this.selectedAsset?.id)) {
+                        this.selectedAsset = {};
+                        this.sidebarImageIndex = 0;
+                        this.sidebarOpen = false;
+                        this.applySelectedStyle();
                     }
 
-                    if (!opened) {
-                        this.openPopupForSelectedAsset();
+                    if (this.mapMode === 'ortho' || this.mapMode === 'mixed') {
+                        this.applyOrthoLayer();
                     }
 
-                    this.popupOpenPending = false;
-                }, 180);
-            },
+                    this.drawAssets();
 
-            filterAssets() {
-                const q = (this.search || '').trim().toLowerCase();
-
-                this.visibleAssets = this.assets.filter(asset => {
-                    const searchableText = [
-                        asset.name || '',
-                        asset.project || '',
-                        asset.program || '',
-                        asset.type || '',
-                        asset.asset_category || '',
-                        asset.asset_nature || '',
-                        asset.client || '',
-                        asset.status || '',
-                        asset.orthophoto?.period_label_resolved || '',
-                        asset.orthophoto?.period_label || '',
-                        asset.orthophoto?.version || '',
-                        ...(asset.tags || []).flatMap(tag => [
-                            tag?.name || '',
-                            tag?.slug || '',
-                            tag?.program || '',
-                            tag?.project || ''
-                        ]),
-                        ...(asset.details || []).map(d => `${d?.label || ''} ${d?.value || ''}`),
-                        ...(asset.units_preview || []).flatMap(u => [u?.label || '', u?.code || '', u?.type || '', u?.status || '']),
-                        ...(asset.customers?.items || []).map(c => c?.name || ''),
-                        ...(asset.sales_summary || []).flatMap(s => [s?.customer || '', s?.unit || '', s?.sale_number || '', s?.status || '']),
-                    ].join(' ').toLowerCase();
-
-                    const matchesSearch = !q || searchableText.includes(q);
-                    const matchesFilter = this.activeFilter === 'Tous' || asset.statusKey === this.activeFilter;
-                    const matchesProject = !this.projectFilter || asset.project === this.projectFilter;
-                    const matchesProgram = !this.programFilter || asset.program === this.programFilter;
-
-                    const assetTagSlugs = (asset.tags || [])
-                        .filter(tag => {
-                            if (!tag) return false;
-
-                            const sameProject = !this.projectFilter || (
-                                tag.project === this.projectFilter ||
-                                tag.project_name === this.projectFilter ||
-                                asset.project === this.projectFilter
-                            );
-
-                            const sameProgram = !this.programFilter || (
-                                tag.program === this.programFilter ||
-                                tag.program_name === this.programFilter ||
-                                String(tag.program_id || '') === String(this.getProgramIdByName(this.programFilter) || '') ||
-                                asset.program === this.programFilter
-                            );
-
-                            return sameProject && sameProgram;
-                        })
-                        .map(tag => tag?.slug)
-                        .filter(Boolean);
-
-                    const matchesTag = !this.tagFilter || assetTagSlugs.includes(this.tagFilter);
-
-                    let matchesOrthoPeriod = true;
-                    if (this.orthoPeriodFilter) {
-                        const assetOrthos = [
-                            asset.orthophoto,
-                            ...(Array.isArray(asset.orthophotos) ? asset.orthophotos : [])
-                        ].filter(Boolean);
-
-                        matchesOrthoPeriod = assetOrthos.some(o =>
-                            (o?.period_value || this.getOrthophotoPeriodValue(o)) === this.orthoPeriodFilter
-                        );
+                    if (!this.selectedAsset?.id) {
+                        this.fitToVisibleAssets();
                     }
+                },
 
-                    return matchesSearch && matchesFilter && matchesProject && matchesProgram && matchesTag && matchesOrthoPeriod;
-                });
-
-                if (!this.visibleAssets.find(a => a.id === this.selectedAsset?.id)) {
-                    this.selectedAsset = {};
-                    this.sidebarImageIndex = 0;
-                    this.sidebarOpen = false;
-                    this.applySelectedStyle();
+                refreshMapStyles() {
+                    this.filterAssets();
                 }
-
-                if (this.mapMode === 'ortho' || this.mapMode === 'mixed') {
-                    this.applyOrthoLayer();
-                }
-
-                this.drawAssets();
-
-                if (!this.selectedAsset?.id) {
-                    this.fitToVisibleAssets();
-                }
-            },
-
-            refreshMapStyles() {
-                this.filterAssets();
-            }
-        };
-    }
-</script>
+            };
+        }
+    </script>
 </head>
 <body>
 {% if perms.parcelaire.view_parcellaire %}
@@ -2207,15 +2238,16 @@
                             </select>
                         </div>
                         <div class="glass rounded-2xl border border-white/20 bg-white/80 px-3 py-2 shadow-soft"
-     x-show="filteredOrthoPeriodOptions.length">
-    <select x-model="orthoPeriodFilter" @change="onOrthoPeriodChange()"
-            class="bg-transparent text-sm font-semibold text-slate-700 outline-none">
-        <option value="">Toutes les périodes ortho</option>
-        <template x-for="period in filteredOrthoPeriodOptions" :key="`${period.program_id || 'na'}-${period.value}`">
-            <option :value="period.value" x-text="period.label"></option>
-        </template>
-    </select>
-</div>
+                             x-show="filteredOrthoPeriodOptions.length">
+                            <select x-model="orthoPeriodFilter" @change="onOrthoPeriodChange()"
+                                    class="bg-transparent text-sm font-semibold text-slate-700 outline-none">
+                                <option value="">Toutes les périodes ortho</option>
+                                <template x-for="period in filteredOrthoPeriodOptions"
+                                          :key="`${period.program_id || 'na'}-${period.value}`">
+                                    <option :value="period.value" x-text="period.label"></option>
+                                </template>
+                            </select>
+                        </div>
                         <div x-show="programFilter && filteredTagOptions.length"
                              x-transition
                              class="glass rounded-2xl border border-white/20 bg-white/80 px-3 py-3 shadow-soft">
@@ -2316,8 +2348,7 @@
         </div>
 
         <div class="pointer-events-none absolute inset-y-0 right-0 z-20 flex w-full justify-end p-4 lg:p-12">
-            <aside
-                    x-cloak
+            <aside x-cloak
                     x-show="sidebarOpen"
                     x-transition:enter="transition ease-out duration-300"
                     x-transition:enter-start="opacity-0 translate-x-8"
@@ -2325,8 +2356,7 @@
                     x-transition:leave="transition ease-in duration-200"
                     x-transition:leave-start="opacity-100 translate-x-0"
                     x-transition:leave-end="opacity-0 translate-x-8"
-                    class="pointer-events-auto mt-10 flex h-full w-full max-w-[520px] flex-col overflow-hidden rounded-[32px] border border-white/20 bg-white/78 shadow-premium glass sidebar-shadow"
-            >
+                    class="pointer-events-auto mt-10 flex h-full w-full max-w-[520px] flex-col overflow-hidden rounded-[32px] border border-white/20 bg-white/78 shadow-premium glass sidebar-shadow">
                 <div class="border-b border-slate-200/70 px-5 py-5 lg:px-6">
                     <div class="flex items-start justify-between gap-3">
                         <div class="min-w-0">
@@ -2377,16 +2407,32 @@
                         </div>
 
                         <div class="flex flex-col items-end gap-2">
-                            <a href="http://visiteguidee.cofr8708.odns.fr/" target="_blank" rel="noopener noreferrer"
-                               class="rounded-full px-3 py-1 text-xs font-bold bg-slate-100 text-slate-700">
-                                Visite Guidée
-                            </a>
-                            <button
-                                    @click="sidebarOpen = false"
+                            <template x-if="selectedAsset.program_url">
+
+                                <a
+
+                                        :href="selectedAsset.program_url"
+
+                                        target="_blank"
+
+                                        rel="noopener noreferrer"
+
+                                        class="rounded-full px-3 py-1 text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition"
+
+                                >
+
+                                    Visite Guidée
+
+                                </a>
+
+                            </template>
+
+                            <button @click="sidebarOpen = false"
                                     class="grid h-10 w-10 place-items-center rounded-full bg-white text-slate-700 shadow-soft hover:bg-slate-100"
-                                    title="Fermer"
-                            >
+                                    title="Fermer">
+
                                 ✕
+
                             </button>
                         </div>
                     </div>
