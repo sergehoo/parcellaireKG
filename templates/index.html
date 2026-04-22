@@ -368,292 +368,292 @@
         </section>
 
         <!-- KPI QUICK STRIP -->
-        <section class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <div class="metric-card rounded-[28px] slate-gradient p-5 text-white">
-                <div class="flex items-start justify-between">
-                    <div>
-                        <p class="text-[11px] uppercase tracking-[0.22em] text-white/60">Projets</p>
-                        <h3 class="mt-3 text-3xl font-black">{{ projects_count|default:"12" }}</h3>
-                        <p class="mt-1 text-sm text-white/70">Portefeuille global</p>
-                    </div>
-                    <div class="grid h-14 w-14 place-items-center rounded-2xl bg-white/10">
-                        <i class="fa-solid fa-diagram-project text-xl"></i>
-                    </div>
-                </div>
-            </div>
-
-            <div class="metric-card rounded-[28px] premium-gradient p-5 text-white">
-                <div class="flex items-start justify-between">
-                    <div>
-                        <p class="text-[11px] uppercase tracking-[0.22em] text-white/60">Programmes</p>
-                        <h3 class="mt-3 text-3xl font-black">{{ programs_count|default:"48" }}</h3>
-                        <p class="mt-1 text-sm text-white/70">Opérations actives</p>
-                    </div>
-                    <div class="grid h-14 w-14 place-items-center rounded-2xl bg-white/10">
-                        <i class="fa-solid fa-map-location-dot text-xl"></i>
-                    </div>
-                </div>
-            </div>
-
-            <div class="metric-card rounded-[28px] sky-gradient p-5 text-white">
-                <div class="flex items-start justify-between">
-                    <div>
-                        <p class="text-[11px] uppercase tracking-[0.22em] text-white/60">Parcelles</p>
-                        <h3 class="mt-3 text-3xl font-black">{{ parcels_count|default:"320" }}</h3>
-                        <p class="mt-1 text-sm text-white/70">Inventaire foncier</p>
-                    </div>
-                    <div class="grid h-14 w-14 place-items-center rounded-2xl bg-white/10">
-                        <i class="fa-solid fa-draw-polygon text-xl"></i>
-                    </div>
-                </div>
-            </div>
-
-            <div class="metric-card rounded-[28px] violet-gradient p-5 text-white">
-                <div class="flex items-start justify-between">
-                    <div>
-                        <p class="text-[11px] uppercase tracking-[0.22em] text-white/60">Actifs</p>
-                        <h3 class="mt-3 text-3xl font-black">{{ assets_count|default:"85" }}</h3>
-                        <p class="mt-1 text-sm text-white/70">Maisons, villas, immeubles</p>
-                    </div>
-                    <div class="grid h-14 w-14 place-items-center rounded-2xl bg-white/10">
-                        <i class="fa-solid fa-house-chimney text-xl"></i>
-                    </div>
-                </div>
-            </div>
-        </section>
+{#        <section class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">#}
+{#            <div class="metric-card rounded-[28px] slate-gradient p-5 text-white">#}
+{#                <div class="flex items-start justify-between">#}
+{#                    <div>#}
+{#                        <p class="text-[11px] uppercase tracking-[0.22em] text-white/60">Projets</p>#}
+{#                        <h3 class="mt-3 text-3xl font-black">{{ projects_count|default:"12" }}</h3>#}
+{#                        <p class="mt-1 text-sm text-white/70">Portefeuille global</p>#}
+{#                    </div>#}
+{#                    <div class="grid h-14 w-14 place-items-center rounded-2xl bg-white/10">#}
+{#                        <i class="fa-solid fa-diagram-project text-xl"></i>#}
+{#                    </div>#}
+{#                </div>#}
+{#            </div>#}
+{##}
+{#            <div class="metric-card rounded-[28px] premium-gradient p-5 text-white">#}
+{#                <div class="flex items-start justify-between">#}
+{#                    <div>#}
+{#                        <p class="text-[11px] uppercase tracking-[0.22em] text-white/60">Programmes</p>#}
+{#                        <h3 class="mt-3 text-3xl font-black">{{ programs_count|default:"48" }}</h3>#}
+{#                        <p class="mt-1 text-sm text-white/70">Opérations actives</p>#}
+{#                    </div>#}
+{#                    <div class="grid h-14 w-14 place-items-center rounded-2xl bg-white/10">#}
+{#                        <i class="fa-solid fa-map-location-dot text-xl"></i>#}
+{#                    </div>#}
+{#                </div>#}
+{#            </div>#}
+{##}
+{#            <div class="metric-card rounded-[28px] sky-gradient p-5 text-white">#}
+{#                <div class="flex items-start justify-between">#}
+{#                    <div>#}
+{#                        <p class="text-[11px] uppercase tracking-[0.22em] text-white/60">Parcelles</p>#}
+{#                        <h3 class="mt-3 text-3xl font-black">{{ parcels_count|default:"320" }}</h3>#}
+{#                        <p class="mt-1 text-sm text-white/70">Inventaire foncier</p>#}
+{#                    </div>#}
+{#                    <div class="grid h-14 w-14 place-items-center rounded-2xl bg-white/10">#}
+{#                        <i class="fa-solid fa-draw-polygon text-xl"></i>#}
+{#                    </div>#}
+{#                </div>#}
+{#            </div>#}
+{##}
+{#            <div class="metric-card rounded-[28px] violet-gradient p-5 text-white">#}
+{#                <div class="flex items-start justify-between">#}
+{#                    <div>#}
+{#                        <p class="text-[11px] uppercase tracking-[0.22em] text-white/60">Actifs</p>#}
+{#                        <h3 class="mt-3 text-3xl font-black">{{ assets_count|default:"85" }}</h3>#}
+{#                        <p class="mt-1 text-sm text-white/70">Maisons, villas, immeubles</p>#}
+{#                    </div>#}
+{#                    <div class="grid h-14 w-14 place-items-center rounded-2xl bg-white/10">#}
+{#                        <i class="fa-solid fa-house-chimney text-xl"></i>#}
+{#                    </div>#}
+{#                </div>#}
+{#            </div>#}
+{#        </section>#}
 
         <!-- MODULES -->
-        <section id="modules" class="section-anchor mt-8">
-            <div class="mb-6">
-                <p class="text-xs font-bold uppercase tracking-[0.24em] text-premium-600">Écosystème métier</p>
-                <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Tous les modules stratégiques réunis</h2>
-                <p class="mt-3 max-w-3xl text-sm leading-7 text-slate-500">
-                    Une architecture métier complète pour couvrir toute la chaîne de valeur immobilière.
-                </p>
-            </div>
-
-            <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <template x-for="module in modules" :key="module.title">
-                    <div class="panel card-hover rounded-[30px] p-6">
-                        <div class="mb-4 grid h-14 w-14 place-items-center rounded-2xl text-white"
-                             :class="module.bg">
-                            <i :class="module.icon + ' text-xl'"></i>
-                        </div>
-                        <h3 class="text-xl font-black text-slate-900" x-text="module.title"></h3>
-                        <p class="mt-3 text-sm leading-6 text-slate-500" x-text="module.text"></p>
-                        <div class="mt-5">
-                            <span class="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600" x-text="module.badge"></span>
-                        </div>
-                    </div>
-                </template>
-            </div>
-        </section>
+{#        <section id="modules" class="section-anchor mt-8">#}
+{#            <div class="mb-6">#}
+{#                <p class="text-xs font-bold uppercase tracking-[0.24em] text-premium-600">Écosystème métier</p>#}
+{#                <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Tous les modules stratégiques réunis</h2>#}
+{#                <p class="mt-3 max-w-3xl text-sm leading-7 text-slate-500">#}
+{#                    Une architecture métier complète pour couvrir toute la chaîne de valeur immobilière.#}
+{#                </p>#}
+{#            </div>#}
+{##}
+{#            <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">#}
+{#                <template x-for="module in modules" :key="module.title">#}
+{#                    <div class="panel card-hover rounded-[30px] p-6">#}
+{#                        <div class="mb-4 grid h-14 w-14 place-items-center rounded-2xl text-white"#}
+{#                             :class="module.bg">#}
+{#                            <i :class="module.icon + ' text-xl'"></i>#}
+{#                        </div>#}
+{#                        <h3 class="text-xl font-black text-slate-900" x-text="module.title"></h3>#}
+{#                        <p class="mt-3 text-sm leading-6 text-slate-500" x-text="module.text"></p>#}
+{#                        <div class="mt-5">#}
+{#                            <span class="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600" x-text="module.badge"></span>#}
+{#                        </div>#}
+{#                    </div>#}
+{#                </template>#}
+{#            </div>#}
+{#        </section>#}
 
         <!-- AVANTAGES -->
-        <section id="avantages" class="section-anchor mt-8 grid gap-4 xl:grid-cols-3">
-            <div class="panel rounded-[32px] p-6 xl:col-span-2">
-                <p class="text-xs font-bold uppercase tracking-[0.24em] text-premium-600">Pourquoi Kaydan</p>
-                <h2 class="mt-2 text-3xl font-black text-slate-900">Une plateforme conçue pour décider plus vite</h2>
-
-                <div class="mt-6 grid gap-4 md:grid-cols-2">
-                    <div class="rounded-[24px] bg-slate-50 p-5">
-                        <h3 class="text-lg font-black text-slate-900">Vision consolidée</h3>
-                        <p class="mt-2 text-sm leading-6 text-slate-500">
-                            Regroupez projets, programmes, parcelles, actifs, ventes et paiements dans une lecture unique.
-                        </p>
-                    </div>
-                    <div class="rounded-[24px] bg-slate-50 p-5">
-                        <h3 class="text-lg font-black text-slate-900">Exécution opérationnelle</h3>
-                        <p class="mt-2 text-sm leading-6 text-slate-500">
-                            Donnez aux équipes métier les outils pour suivre les réservations, chantiers et actions commerciales.
-                        </p>
-                    </div>
-                    <div class="rounded-[24px] bg-slate-50 p-5">
-                        <h3 class="text-lg font-black text-slate-900">Traçabilité complète</h3>
-                        <p class="mt-2 text-sm leading-6 text-slate-500">
-                            Chaque opération reste historisée : documents, statuts, médias, évolution des lots et dossiers.
-                        </p>
-                    </div>
-                    <div class="rounded-[24px] bg-slate-50 p-5">
-                        <h3 class="text-lg font-black text-slate-900">Expérience premium</h3>
-                        <p class="mt-2 text-sm leading-6 text-slate-500">
-                            Une interface élégante, claire et moderne pensée pour la direction comme pour l’exploitation.
-                        </p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="hero-card rounded-[32px] p-6 text-white">
-                <p class="text-xs uppercase tracking-[0.18em] text-white/60">Impact attendu</p>
-                <h3 class="mt-2 text-2xl font-black">Transformation immobilière pilotée par la donnée</h3>
-
-                <div class="mt-6 space-y-4">
-                    <div class="rounded-[22px] bg-white/10 p-4">
-                        <p class="text-sm font-semibold">Meilleure visibilité du portefeuille</p>
-                    </div>
-                    <div class="rounded-[22px] bg-white/10 p-4">
-                        <p class="text-sm font-semibold">Accélération du cycle commercial</p>
-                    </div>
-                    <div class="rounded-[22px] bg-white/10 p-4">
-                        <p class="text-sm font-semibold">Suivi chantier plus fiable</p>
-                    </div>
-                    <div class="rounded-[22px] bg-white/10 p-4">
-                        <p class="text-sm font-semibold">Décisions plus rapides et mieux documentées</p>
-                    </div>
-                </div>
-            </div>
-        </section>
+{#        <section id="avantages" class="section-anchor mt-8 grid gap-4 xl:grid-cols-3">#}
+{#            <div class="panel rounded-[32px] p-6 xl:col-span-2">#}
+{#                <p class="text-xs font-bold uppercase tracking-[0.24em] text-premium-600">Pourquoi Kaydan</p>#}
+{#                <h2 class="mt-2 text-3xl font-black text-slate-900">Une plateforme conçue pour décider plus vite</h2>#}
+{##}
+{#                <div class="mt-6 grid gap-4 md:grid-cols-2">#}
+{#                    <div class="rounded-[24px] bg-slate-50 p-5">#}
+{#                        <h3 class="text-lg font-black text-slate-900">Vision consolidée</h3>#}
+{#                        <p class="mt-2 text-sm leading-6 text-slate-500">#}
+{#                            Regroupez projets, programmes, parcelles, actifs, ventes et paiements dans une lecture unique.#}
+{#                        </p>#}
+{#                    </div>#}
+{#                    <div class="rounded-[24px] bg-slate-50 p-5">#}
+{#                        <h3 class="text-lg font-black text-slate-900">Exécution opérationnelle</h3>#}
+{#                        <p class="mt-2 text-sm leading-6 text-slate-500">#}
+{#                            Donnez aux équipes métier les outils pour suivre les réservations, chantiers et actions commerciales.#}
+{#                        </p>#}
+{#                    </div>#}
+{#                    <div class="rounded-[24px] bg-slate-50 p-5">#}
+{#                        <h3 class="text-lg font-black text-slate-900">Traçabilité complète</h3>#}
+{#                        <p class="mt-2 text-sm leading-6 text-slate-500">#}
+{#                            Chaque opération reste historisée : documents, statuts, médias, évolution des lots et dossiers.#}
+{#                        </p>#}
+{#                    </div>#}
+{#                    <div class="rounded-[24px] bg-slate-50 p-5">#}
+{#                        <h3 class="text-lg font-black text-slate-900">Expérience premium</h3>#}
+{#                        <p class="mt-2 text-sm leading-6 text-slate-500">#}
+{#                            Une interface élégante, claire et moderne pensée pour la direction comme pour l’exploitation.#}
+{#                        </p>#}
+{#                    </div>#}
+{#                </div>#}
+{#            </div>#}
+{##}
+{#            <div class="hero-card rounded-[32px] p-6 text-white">#}
+{#                <p class="text-xs uppercase tracking-[0.18em] text-white/60">Impact attendu</p>#}
+{#                <h3 class="mt-2 text-2xl font-black">Transformation immobilière pilotée par la donnée</h3>#}
+{##}
+{#                <div class="mt-6 space-y-4">#}
+{#                    <div class="rounded-[22px] bg-white/10 p-4">#}
+{#                        <p class="text-sm font-semibold">Meilleure visibilité du portefeuille</p>#}
+{#                    </div>#}
+{#                    <div class="rounded-[22px] bg-white/10 p-4">#}
+{#                        <p class="text-sm font-semibold">Accélération du cycle commercial</p>#}
+{#                    </div>#}
+{#                    <div class="rounded-[22px] bg-white/10 p-4">#}
+{#                        <p class="text-sm font-semibold">Suivi chantier plus fiable</p>#}
+{#                    </div>#}
+{#                    <div class="rounded-[22px] bg-white/10 p-4">#}
+{#                        <p class="text-sm font-semibold">Décisions plus rapides et mieux documentées</p>#}
+{#                    </div>#}
+{#                </div>#}
+{#            </div>#}
+{#        </section>#}
 
         <!-- PROCESS -->
-        <section id="process" class="section-anchor mt-8">
-            <div class="panel rounded-[32px] p-6 md:p-8">
-                <p class="text-xs font-bold uppercase tracking-[0.24em] text-premium-600">Parcours métier</p>
-                <h2 class="mt-2 text-3xl font-black text-slate-900">Du foncier à la livraison</h2>
-
-                <div class="mt-8 grid gap-4 md:grid-cols-4">
-                    <div class="rounded-[26px] bg-slate-50 p-5">
-                        <div class="grid h-12 w-12 place-items-center rounded-2xl bg-slate-900 text-white">1</div>
-                        <h3 class="mt-4 text-lg font-black text-slate-900">Structurer</h3>
-                        <p class="mt-2 text-sm leading-6 text-slate-500">
-                            Création des projets, programmes, phases, blocs et parcelles.
-                        </p>
-                    </div>
-
-                    <div class="rounded-[26px] bg-slate-50 p-5">
-                        <div class="grid h-12 w-12 place-items-center rounded-2xl premium-gradient text-white">2</div>
-                        <h3 class="mt-4 text-lg font-black text-slate-900">Commercialiser</h3>
-                        <p class="mt-2 text-sm leading-6 text-slate-500">
-                            Gestion des leads, clients, réservations et ventes.
-                        </p>
-                    </div>
-
-                    <div class="rounded-[26px] bg-slate-50 p-5">
-                        <div class="grid h-12 w-12 place-items-center rounded-2xl sky-gradient text-white">3</div>
-                        <h3 class="mt-4 text-lg font-black text-slate-900">Encaisser</h3>
-                        <p class="mt-2 text-sm leading-6 text-slate-500">
-                            Suivi des paiements, références et dossiers financiers.
-                        </p>
-                    </div>
-
-                    <div class="rounded-[26px] bg-slate-50 p-5">
-                        <div class="grid h-12 w-12 place-items-center rounded-2xl violet-gradient text-white">4</div>
-                        <h3 class="mt-4 text-lg font-black text-slate-900">Construire</h3>
-                        <p class="mt-2 text-sm leading-6 text-slate-500">
-                            Pilotage des chantiers, photos, mises à jour et médias de suivi.
-                        </p>
-                    </div>
-                </div>
-            </div>
-        </section>
+{#        <section id="process" class="section-anchor mt-8">#}
+{#            <div class="panel rounded-[32px] p-6 md:p-8">#}
+{#                <p class="text-xs font-bold uppercase tracking-[0.24em] text-premium-600">Parcours métier</p>#}
+{#                <h2 class="mt-2 text-3xl font-black text-slate-900">Du foncier à la livraison</h2>#}
+{##}
+{#                <div class="mt-8 grid gap-4 md:grid-cols-4">#}
+{#                    <div class="rounded-[26px] bg-slate-50 p-5">#}
+{#                        <div class="grid h-12 w-12 place-items-center rounded-2xl bg-slate-900 text-white">1</div>#}
+{#                        <h3 class="mt-4 text-lg font-black text-slate-900">Structurer</h3>#}
+{#                        <p class="mt-2 text-sm leading-6 text-slate-500">#}
+{#                            Création des projets, programmes, phases, blocs et parcelles.#}
+{#                        </p>#}
+{#                    </div>#}
+{##}
+{#                    <div class="rounded-[26px] bg-slate-50 p-5">#}
+{#                        <div class="grid h-12 w-12 place-items-center rounded-2xl premium-gradient text-white">2</div>#}
+{#                        <h3 class="mt-4 text-lg font-black text-slate-900">Commercialiser</h3>#}
+{#                        <p class="mt-2 text-sm leading-6 text-slate-500">#}
+{#                            Gestion des leads, clients, réservations et ventes.#}
+{#                        </p>#}
+{#                    </div>#}
+{##}
+{#                    <div class="rounded-[26px] bg-slate-50 p-5">#}
+{#                        <div class="grid h-12 w-12 place-items-center rounded-2xl sky-gradient text-white">3</div>#}
+{#                        <h3 class="mt-4 text-lg font-black text-slate-900">Encaisser</h3>#}
+{#                        <p class="mt-2 text-sm leading-6 text-slate-500">#}
+{#                            Suivi des paiements, références et dossiers financiers.#}
+{#                        </p>#}
+{#                    </div>#}
+{##}
+{#                    <div class="rounded-[26px] bg-slate-50 p-5">#}
+{#                        <div class="grid h-12 w-12 place-items-center rounded-2xl violet-gradient text-white">4</div>#}
+{#                        <h3 class="mt-4 text-lg font-black text-slate-900">Construire</h3>#}
+{#                        <p class="mt-2 text-sm leading-6 text-slate-500">#}
+{#                            Pilotage des chantiers, photos, mises à jour et médias de suivi.#}
+{#                        </p>#}
+{#                    </div>#}
+{#                </div>#}
+{#            </div>#}
+{#        </section>#}
 
         <!-- PRODUIT -->
-        <section class="mt-8 grid gap-4 xl:grid-cols-3">
-            <div class="panel rounded-[32px] p-6 xl:col-span-2">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-xs font-bold uppercase tracking-[0.24em] text-premium-600">Vue produit</p>
-                        <h2 class="mt-2 text-3xl font-black text-slate-900">Une plateforme pensée pour l’échelle</h2>
-                    </div>
-                </div>
-
-                <div class="mt-6 grid gap-4 md:grid-cols-3">
-                    <div class="rounded-[26px] slate-gradient p-5 text-white">
-                        <p class="text-xs uppercase tracking-[0.16em] text-white/60">Référentiel</p>
-                        <p class="mt-2 text-2xl font-black">Foncier</p>
-                        <p class="mt-2 text-sm text-white/75">Projets, phases, blocs, lots et géographie.</p>
-                    </div>
-
-                    <div class="rounded-[26px] premium-gradient p-5 text-white">
-                        <p class="text-xs uppercase tracking-[0.16em] text-white/60">Business</p>
-                        <p class="mt-2 text-2xl font-black">Commercial</p>
-                        <p class="mt-2 text-sm text-white/75">Leads, clients, réservations, ventes et paiements.</p>
-                    </div>
-
-                    <div class="rounded-[26px] violet-gradient p-5 text-white">
-                        <p class="text-xs uppercase tracking-[0.16em] text-white/60">Exécution</p>
-                        <p class="mt-2 text-2xl font-black">Travaux</p>
-                        <p class="mt-2 text-sm text-white/75">Chantiers, médias, photos et reporting terrain.</p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="panel rounded-[32px] p-6">
-                <p class="text-xs font-bold uppercase tracking-[0.24em] text-premium-600">Décision</p>
-                <h3 class="mt-2 text-2xl font-black text-slate-900">Tableaux de bord orientés action</h3>
-                <p class="mt-3 text-sm leading-7 text-slate-500">
-                    Identifiez immédiatement les zones de tension, la disponibilité des lots, les performances commerciales
-                    et la dynamique des chantiers.
-                </p>
-
-                <div class="mt-6 space-y-3">
-                    <div class="flex items-center gap-3 rounded-2xl bg-slate-50 p-4">
-                        <i class="fa-solid fa-chart-column text-premium-600"></i>
-                        <span class="text-sm font-semibold text-slate-700">KPI consolidés</span>
-                    </div>
-                    <div class="flex items-center gap-3 rounded-2xl bg-slate-50 p-4">
-                        <i class="fa-solid fa-map-location-dot text-premium-600"></i>
-                        <span class="text-sm font-semibold text-slate-700">Vue parcellaire cartographique</span>
-                    </div>
-                    <div class="flex items-center gap-3 rounded-2xl bg-slate-50 p-4">
-                        <i class="fa-solid fa-receipt text-premium-600"></i>
-                        <span class="text-sm font-semibold text-slate-700">Traçabilité financière</span>
-                    </div>
-                    <div class="flex items-center gap-3 rounded-2xl bg-slate-50 p-4">
-                        <i class="fa-solid fa-helmet-safety text-premium-600"></i>
-                        <span class="text-sm font-semibold text-slate-700">Contrôle chantier</span>
-                    </div>
-                </div>
-            </div>
-        </section>
+{#        <section class="mt-8 grid gap-4 xl:grid-cols-3">#}
+{#            <div class="panel rounded-[32px] p-6 xl:col-span-2">#}
+{#                <div class="flex items-center justify-between">#}
+{#                    <div>#}
+{#                        <p class="text-xs font-bold uppercase tracking-[0.24em] text-premium-600">Vue produit</p>#}
+{#                        <h2 class="mt-2 text-3xl font-black text-slate-900">Une plateforme pensée pour l’échelle</h2>#}
+{#                    </div>#}
+{#                </div>#}
+{##}
+{#                <div class="mt-6 grid gap-4 md:grid-cols-3">#}
+{#                    <div class="rounded-[26px] slate-gradient p-5 text-white">#}
+{#                        <p class="text-xs uppercase tracking-[0.16em] text-white/60">Référentiel</p>#}
+{#                        <p class="mt-2 text-2xl font-black">Foncier</p>#}
+{#                        <p class="mt-2 text-sm text-white/75">Projets, phases, blocs, lots et géographie.</p>#}
+{#                    </div>#}
+{##}
+{#                    <div class="rounded-[26px] premium-gradient p-5 text-white">#}
+{#                        <p class="text-xs uppercase tracking-[0.16em] text-white/60">Business</p>#}
+{#                        <p class="mt-2 text-2xl font-black">Commercial</p>#}
+{#                        <p class="mt-2 text-sm text-white/75">Leads, clients, réservations, ventes et paiements.</p>#}
+{#                    </div>#}
+{##}
+{#                    <div class="rounded-[26px] violet-gradient p-5 text-white">#}
+{#                        <p class="text-xs uppercase tracking-[0.16em] text-white/60">Exécution</p>#}
+{#                        <p class="mt-2 text-2xl font-black">Travaux</p>#}
+{#                        <p class="mt-2 text-sm text-white/75">Chantiers, médias, photos et reporting terrain.</p>#}
+{#                    </div>#}
+{#                </div>#}
+{#            </div>#}
+{##}
+{#            <div class="panel rounded-[32px] p-6">#}
+{#                <p class="text-xs font-bold uppercase tracking-[0.24em] text-premium-600">Décision</p>#}
+{#                <h3 class="mt-2 text-2xl font-black text-slate-900">Tableaux de bord orientés action</h3>#}
+{#                <p class="mt-3 text-sm leading-7 text-slate-500">#}
+{#                    Identifiez immédiatement les zones de tension, la disponibilité des lots, les performances commerciales#}
+{#                    et la dynamique des chantiers.#}
+{#                </p>#}
+{##}
+{#                <div class="mt-6 space-y-3">#}
+{#                    <div class="flex items-center gap-3 rounded-2xl bg-slate-50 p-4">#}
+{#                        <i class="fa-solid fa-chart-column text-premium-600"></i>#}
+{#                        <span class="text-sm font-semibold text-slate-700">KPI consolidés</span>#}
+{#                    </div>#}
+{#                    <div class="flex items-center gap-3 rounded-2xl bg-slate-50 p-4">#}
+{#                        <i class="fa-solid fa-map-location-dot text-premium-600"></i>#}
+{#                        <span class="text-sm font-semibold text-slate-700">Vue parcellaire cartographique</span>#}
+{#                    </div>#}
+{#                    <div class="flex items-center gap-3 rounded-2xl bg-slate-50 p-4">#}
+{#                        <i class="fa-solid fa-receipt text-premium-600"></i>#}
+{#                        <span class="text-sm font-semibold text-slate-700">Traçabilité financière</span>#}
+{#                    </div>#}
+{#                    <div class="flex items-center gap-3 rounded-2xl bg-slate-50 p-4">#}
+{#                        <i class="fa-solid fa-helmet-safety text-premium-600"></i>#}
+{#                        <span class="text-sm font-semibold text-slate-700">Contrôle chantier</span>#}
+{#                    </div>#}
+{#                </div>#}
+{#            </div>#}
+{#        </section>#}
 
         <!-- FAQ -->
-        <section id="faq" class="section-anchor mt-8">
-            <div class="panel rounded-[32px] p-6 md:p-8">
-                <p class="text-xs font-bold uppercase tracking-[0.24em] text-premium-600">Questions fréquentes</p>
-                <h2 class="mt-2 text-3xl font-black text-slate-900">FAQ</h2>
-
-                <div class="mt-6 space-y-4">
-                    <template x-for="(item, index) in faqs" :key="index">
-                        <div class="rounded-[24px] border border-slate-200 bg-white p-5">
-                            <button @click="toggleFaq(index)" class="flex w-full items-center justify-between gap-4 text-left">
-                                <span class="text-base font-black text-slate-900" x-text="item.q"></span>
-                                <i class="fa-solid text-slate-400" :class="item.open ? 'fa-minus' : 'fa-plus'"></i>
-                            </button>
-                            <div x-show="item.open" x-transition class="mt-4 text-sm leading-7 text-slate-500" x-text="item.a"></div>
-                        </div>
-                    </template>
-                </div>
-            </div>
-        </section>
+{#        <section id="faq" class="section-anchor mt-8">#}
+{#            <div class="panel rounded-[32px] p-6 md:p-8">#}
+{#                <p class="text-xs font-bold uppercase tracking-[0.24em] text-premium-600">Questions fréquentes</p>#}
+{#                <h2 class="mt-2 text-3xl font-black text-slate-900">FAQ</h2>#}
+{##}
+{#                <div class="mt-6 space-y-4">#}
+{#                    <template x-for="(item, index) in faqs" :key="index">#}
+{#                        <div class="rounded-[24px] border border-slate-200 bg-white p-5">#}
+{#                            <button @click="toggleFaq(index)" class="flex w-full items-center justify-between gap-4 text-left">#}
+{#                                <span class="text-base font-black text-slate-900" x-text="item.q"></span>#}
+{#                                <i class="fa-solid text-slate-400" :class="item.open ? 'fa-minus' : 'fa-plus'"></i>#}
+{#                            </button>#}
+{#                            <div x-show="item.open" x-transition class="mt-4 text-sm leading-7 text-slate-500" x-text="item.a"></div>#}
+{#                        </div>#}
+{#                    </template>#}
+{#                </div>#}
+{#            </div>#}
+{#        </section>#}
 
         <!-- CTA FINAL -->
-        <section class="mt-8">
-            <div class="hero-card overflow-hidden rounded-[34px] px-6 py-8 text-white md:px-10 md:py-10">
-                <div class="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-                    <div>
-                        <p class="text-xs font-bold uppercase tracking-[0.24em] text-white/60">Prêt à démarrer</p>
-                        <h2 class="mt-2 text-3xl font-black tracking-tight md:text-4xl">
-                            Passez à une gestion immobilière plus structurée et plus performante
-                        </h2>
-                        <p class="mt-3 max-w-3xl text-sm leading-7 text-white/75 md:text-base">
-                            Donnez à vos équipes une plateforme moderne pour superviser le portefeuille,
-                            accélérer les ventes et piloter l’exécution.
-                        </p>
-                    </div>
-
-                    <div class="flex flex-wrap gap-3">
-                        <a href="{% url 'parcelaire_dashboard' %}" class="inline-flex items-center gap-2 rounded-2xl bg-white px-6 py-3 text-sm font-bold text-slate-900 shadow-lg">
-                            <i class="fa-solid fa-gauge-high"></i>
-                            <span>Accéder au dashboard</span>
-                        </a>
-                        <a href="{% url 'project_add' %}" class="inline-flex items-center gap-2 rounded-2xl bg-white/10 px-6 py-3 text-sm font-bold text-white">
-                            <i class="fa-solid fa-plus"></i>
-                            <span>Créer un projet</span>
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </section>
+{#        <section class="mt-8">#}
+{#            <div class="hero-card overflow-hidden rounded-[34px] px-6 py-8 text-white md:px-10 md:py-10">#}
+{#                <div class="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">#}
+{#                    <div>#}
+{#                        <p class="text-xs font-bold uppercase tracking-[0.24em] text-white/60">Prêt à démarrer</p>#}
+{#                        <h2 class="mt-2 text-3xl font-black tracking-tight md:text-4xl">#}
+{#                            Passez à une gestion immobilière plus structurée et plus performante#}
+{#                        </h2>#}
+{#                        <p class="mt-3 max-w-3xl text-sm leading-7 text-white/75 md:text-base">#}
+{#                            Donnez à vos équipes une plateforme moderne pour superviser le portefeuille,#}
+{#                            accélérer les ventes et piloter l’exécution.#}
+{#                        </p>#}
+{#                    </div>#}
+{##}
+{#                    <div class="flex flex-wrap gap-3">#}
+{#                        <a href="{% url 'parcelaire_dashboard' %}" class="inline-flex items-center gap-2 rounded-2xl bg-white px-6 py-3 text-sm font-bold text-slate-900 shadow-lg">#}
+{#                            <i class="fa-solid fa-gauge-high"></i>#}
+{#                            <span>Accéder au dashboard</span>#}
+{#                        </a>#}
+{#                        <a href="{% url 'project_add' %}" class="inline-flex items-center gap-2 rounded-2xl bg-white/10 px-6 py-3 text-sm font-bold text-white">#}
+{#                            <i class="fa-solid fa-plus"></i>#}
+{#                            <span>Créer un projet</span>#}
+{#                        </a>#}
+{#                    </div>#}
+{#                </div>#}
+{#            </div>#}
+{#        </section>#}
 
         <!-- FOOTER -->
         <footer class="mt-8 pb-6">

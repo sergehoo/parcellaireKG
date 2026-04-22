@@ -223,17 +223,17 @@
     <a href="{% url 'map' %}"
        class="menu-item {% if request.resolver_match.url_name == 'map' %}menu-item-parcel{% else %}bg-slate-800 text-white{% endif %} flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold">
         <i class="fa-solid fa-map-location-dot w-5"></i>
-        <span>Parcellaire OPC</span>
+        <span>Carthographie </span>
     </a>
 {% endif %}
 
-{% if perms.parcelaire.view_commercial_map %}
-    <a href="{% url 'map_commercial' %}"
-       class="menu-item bg-blue-800 text-white flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold">
-        <i class="fa-solid fa-map-location-dot w-5"></i>
-        <span>Parcellaire Sales</span>
-    </a>
-{% endif %}
+{#{% if perms.parcelaire.view_commercial_map %}#}
+{#    <a href="{% url 'map_commercial' %}"#}
+{#       class="menu-item bg-blue-800 text-white flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold">#}
+{#        <i class="fa-solid fa-map-location-dot w-5"></i>#}
+{#        <span>Parcellaire Sales</span>#}
+{#    </a>#}
+{#{% endif %}#}
 
 
 
