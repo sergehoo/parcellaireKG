@@ -3,12 +3,14 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 from collections import defaultdict
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import requests
+from django.core.exceptions import ImproperlyConfigured
 from django.db import models, transaction
 from django.utils import timezone
 
@@ -44,12 +46,19 @@ class KaydanCRMLotSyncService:
       au lot de la parcelle terrain ; il ne doit donc pas être utilisé en priorité
       pour la cartographie lorsqu'unitaire_lot est disponible.
     """
+    def env_required(name):
 
-    EXTERNAL_LOTS_API_URL = "https://mykaydan.kaydangroupe.com/api/crm/lots"
-    EXTERNAL_LOTS_API_KEY = "5632d76ece5711436d3084a628f2afb03388a373"
-    EXTERNAL_LOTS_API_USERNAME = "admin"
-    EXTERNAL_LOTS_API_PASSWORD = "D@t@rium@1545#"
+        value = os.getenv(name)
 
+        if not value:
+            raise ImproperlyConfigured(f"La variable d'environnement {name} est requise.")
+
+        return value
+
+    EXTERNAL_LOTS_API_URL = env_required("EXTERNAL_LOTS_API_URL")
+    EXTERNAL_LOTS_API_KEY = env_required("EXTERNAL_LOTS_API_KEY")
+    EXTERNAL_LOTS_API_USERNAME = env_required("EXTERNAL_LOTS_API_USERNAME")
+    EXTERNAL_LOTS_API_PASSWORD = env_required("EXTERNAL_LOTS_API_PASSWORD")
     TIMEOUT = 20
     CHUNK_SIZE = 20
 
