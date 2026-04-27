@@ -10,6 +10,7 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import requests
+from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.db import models, transaction
 from django.utils import timezone
@@ -55,10 +56,10 @@ class KaydanCRMLotSyncService:
 
         return value
 
-    EXTERNAL_LOTS_API_URL = env_required("EXTERNAL_LOTS_API_URL")
-    EXTERNAL_LOTS_API_KEY = env_required("EXTERNAL_LOTS_API_KEY")
-    EXTERNAL_LOTS_API_USERNAME = env_required("EXTERNAL_LOTS_API_USERNAME")
-    EXTERNAL_LOTS_API_PASSWORD = env_required("EXTERNAL_LOTS_API_PASSWORD")
+    EXTERNAL_LOTS_API_URL = settings.EXTERNAL_LOTS_API_URL
+    EXTERNAL_LOTS_API_KEY =settings.EXTERNAL_LOTS_API_KEY
+    EXTERNAL_LOTS_API_USERNAME = settings.EXTERNAL_LOTS_API_USERNAME
+    EXTERNAL_LOTS_API_PASSWORD = settings.EXTERNAL_LOTS_API_PASSWORD
     TIMEOUT = 20
     CHUNK_SIZE = 20
 
