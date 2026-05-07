@@ -19,8 +19,18 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 
 def _split_env(name, default=""):
-    """Split a comma-separated env var into a clean list."""
-    raw = os.environ.get(name, default) or ""
+    """
+    Split a comma-separated env var into a clean list.
+
+    Bascule sur `default` si la variable est absente OU vide après
+    nettoyage (utile quand un docker-compose passe `VAR=` sans valeur :
+    `os.environ.get(name, default)` ne renverrait alors PAS le default
+    mais la chaîne vide, et la liste serait `[]` → Django bloque tout
+    avec un Bad Request.)
+    """
+    raw = (os.environ.get(name) or "").strip()
+    if not raw:
+        raw = (default or "").strip()
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 
