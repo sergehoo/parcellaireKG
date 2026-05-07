@@ -1,0 +1,13 @@
+{
+  "name": "parcelairekg-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Compilation Tailwind CSS pour les templates Django de parcelaireKG.",
+  "scripts": {
+    "build:css": "tailwindcss -i ./static/src/tailwind.css -o ./static/css/tailwind.css --minify",
+    "watch:css": "tailwindcss -i ./static/src/tailwind.css -o ./static/css/tailwind.css --watch"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.13"
+  }
+}

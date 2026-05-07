@@ -4,9 +4,9 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 
 from django.contrib.gis.geos import Polygon
-from django.db.models import Q, Sum, F
+from django.db.models import Q, Sum, F, Prefetch
 from django.db.models.functions import Coalesce
-from rest_framework.permissions import IsAuthenticatedOrReadOnly
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -52,7 +52,10 @@ def user_can_view_construction_data(user):
 
 
 class RealEstateMapAPIView(APIView):
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    # Toute la cartographie commerciale doit rester derrière l'authentification.
+    # Le masquage par permission (financial/patient/construction) reste géré
+    # plus bas via `get_user_rights`.
+    permission_classes = [IsAuthenticated]
 
     FILTERS = ["Tous", "Disponibles", "Réservés", "Vendus", "En construction"]
 
@@ -111,14 +114,42 @@ class RealEstateMapAPIView(APIView):
             "metadata": orthophoto.metadata or {},
         }
 
-    def get_program_orthophotos_queryset(self, program):
-        if not program:
-            return ProgramOrthophoto.objects.none()
+    # ---------------------------------------------------------------
+    # Orthophotos : on les groupe une fois par programme (cache local
+    # à la requête). Ainsi on évite N requêtes SQL et N copies dans le
+    # JSON de réponse.
+    # ---------------------------------------------------------------
+    ORTHOPHOTOS_PREFETCH_ATTR = "active_orthophotos"
 
-        return (
-            program.orthophotos
-            .filter(is_active=True)
-            .order_by(
+    @classmethod
+    def orthophotos_prefetch(cls):
+        """
+        Prefetch ré-utilisable pour les querysets Parcel/PropertyAsset.
+        On filtre côté SQL et on attache la liste pré-triée à
+        `program.active_orthophotos`.
+        """
+        ordered = ProgramOrthophoto.objects.filter(is_active=True).order_by(
+            "-is_current",
+            "-reference_year",
+            "-reference_month",
+            "-capture_date",
+            "-created_at",
+        )
+        return Prefetch(
+            "program__orthophotos",
+            queryset=ordered,
+            to_attr=cls.ORTHOPHOTOS_PREFETCH_ATTR,
+        )
+
+    def _program_orthophotos_cached(self, program):
+        """Récupère la liste pré-fetchée si dispo, sinon fallback DB."""
+        if program is None:
+            return []
+        cached = getattr(program, self.ORTHOPHOTOS_PREFETCH_ATTR, None)
+        if cached is not None:
+            return list(cached)
+        return list(
+            program.orthophotos.filter(is_active=True).order_by(
                 "-is_current",
                 "-reference_year",
                 "-reference_month",
@@ -127,14 +158,40 @@ class RealEstateMapAPIView(APIView):
             )
         )
 
+    def get_program_orthophotos_queryset(self, program):
+        # Compatibilité: anciens appels qui s'attendaient à un queryset.
+        return self._program_orthophotos_cached(program)
+
     def get_program_orthophotos_payload(self, program):
-        orthophotos = self.get_program_orthophotos_queryset(program)
-        return [self.serialize_orthophoto(o) for o in orthophotos]
+        return [self.serialize_orthophoto(o) for o in self._program_orthophotos_cached(program)]
 
     def get_program_current_orthophoto_payload(self, program):
-        orthophotos = self.get_program_orthophotos_queryset(program)
-        current = orthophotos.filter(is_current=True).first() or orthophotos.first()
+        orthos = self._program_orthophotos_cached(program)
+        current = next((o for o in orthos if getattr(o, "is_current", False)), None)
+        if not current and orthos:
+            current = orthos[0]
         return self.serialize_orthophoto(current)
+
+    def collect_orthophotos_by_program(self, programs):
+        """
+        Construit un mapping program_id -> {current, all} en une passe,
+        utilisable côté frontend pour ne pas dupliquer le payload.
+        """
+        result = {}
+        for program in programs:
+            if not program or program.pk in result:
+                continue
+            orthos = self._program_orthophotos_cached(program)
+            current = next((o for o in orthos if getattr(o, "is_current", False)), None)
+            if not current and orthos:
+                current = orthos[0]
+            result[program.pk] = {
+                "program_id": program.pk,
+                "program_name": program.name,
+                "current": self.serialize_orthophoto(current),
+                "versions": [self.serialize_orthophoto(o) for o in orthos],
+            }
+        return result
 
     def get_user_rights(self, request):
         user = request.user
@@ -2023,9 +2080,11 @@ class RealEstateMapAPIView(APIView):
         can_view_construction = rights.get("can_view_construction_data", False)
         zoom = params["zoom"]
 
-        queryset = queryset[:params["limit"]]
+        # Le caller passe déjà une liste tronquée à la limite courante.
+        if not isinstance(queryset, (list, tuple)):
+            queryset = list(queryset[: params["limit"]])
 
-        asset_ids = list(queryset.values_list("id", flat=True))
+        asset_ids = [a.id for a in queryset]
         asset_units_map = self.get_asset_units_map(asset_ids)
         asset_sales_map = self.get_asset_sales_map(asset_ids)
         asset_reservations_map = self.get_asset_reservations_map(asset_ids)
@@ -2198,7 +2257,10 @@ class RealEstateMapAPIView(APIView):
                 "program": asset.program.name if asset.program else "—",
                 "program_id": asset.program_id if asset.program_id else None,
                 "orthophoto": self.get_program_current_orthophoto_payload(asset.program) if asset.program else None,
-                "orthophotos": self.get_program_orthophotos_payload(asset.program) if asset.program else [],
+                # Les versions complètes sont exposées une seule fois en top-level
+                # via `orthophotos_by_program` — on garde un tableau vide ici pour
+                # la rétrocompatibilité du contrat.
+                "orthophotos": [],
                 "tags": self.get_parcel_tags_payload(parcel) if parcel else [],
                 "type": asset.property_type.label if asset.property_type else "Actif immobilier",
                 "asset_category": asset.asset_category.label if asset.asset_category else "—",
@@ -2274,9 +2336,11 @@ class RealEstateMapAPIView(APIView):
         can_view_construction = rights.get("can_view_construction_data", False)
         zoom = params["zoom"]
 
-        queryset = queryset[:params["limit"]]
+        # Le caller passe déjà une liste tronquée à la limite courante.
+        if not isinstance(queryset, (list, tuple)):
+            queryset = list(queryset[: params["limit"]])
 
-        parcel_ids = list(queryset.values_list("id", flat=True))
+        parcel_ids = [p.id for p in queryset]
         sales_by_parcel = self.get_sales_by_parcel(parcel_ids)
         reservations_by_parcel = self.get_reservations_by_parcel(parcel_ids)
 
@@ -2411,7 +2475,7 @@ class RealEstateMapAPIView(APIView):
                     "program_id": parcel.program_id if parcel.program_id else None,
                     "orthophoto": self.get_program_current_orthophoto_payload(
                         parcel.program) if parcel.program else None,
-                    "orthophotos": self.get_program_orthophotos_payload(parcel.program) if parcel.program else [],
+                    "orthophotos": [],  # cf. orthophotos_by_program au niveau racine
                     "tags": self.get_parcel_tags_payload(parcel),
                     "type": crm_asset_label if sidebar_mode == self.SIDEBAR_MODE_BUILDING else "Parcelle",
                     "asset_category": "—",
@@ -2658,6 +2722,8 @@ class RealEstateMapAPIView(APIView):
         self.user_rights = self.get_user_rights(request)
         params = self.normalize_query(request)
 
+        ortho_prefetch = self.orthophotos_prefetch()
+
         asset_queryset = (
             PropertyAsset.objects.select_related(
                 "program",
@@ -2677,7 +2743,7 @@ class RealEstateMapAPIView(APIView):
                 "construction_projects",
                 "construction_projects__updates",
                 "construction_projects__photos",
-                "program__orthophotos",
+                ortho_prefetch,
             )
             .filter(is_active=True)
             .order_by("code")
@@ -2696,7 +2762,7 @@ class RealEstateMapAPIView(APIView):
                 "documents",
                 "construction_projects__photos",
                 "construction_projects__updates",
-                "program__orthophotos",
+                ortho_prefetch,
             )
             .filter(is_active=True)
             .exclude(geometry__isnull=True)
@@ -2704,22 +2770,29 @@ class RealEstateMapAPIView(APIView):
         )
         parcel_queryset = self.apply_common_filters_parcels(parcel_queryset, params)
 
-        asset_parcel_ids = list(
-            asset_queryset.exclude(parcel_id__isnull=True).values_list("parcel_id", flat=True)
-        )
+        # On matérialise les assets *après* avoir appliqué la limite, afin que
+        # l'exclusion des parcelles déjà rattachées soit cohérente avec ce qui
+        # sera réellement renvoyé (anciennement source de "trous" dans la carte).
+        limited_assets = list(asset_queryset[: params["limit"]])
+        asset_parcel_ids = [a.parcel_id for a in limited_assets if a.parcel_id]
         parcel_queryset = parcel_queryset.exclude(id__in=asset_parcel_ids)
+        limited_parcels = list(parcel_queryset[: params["limit"]])
 
-        asset_data = self._build_from_assets(asset_queryset, params) if asset_queryset.exists() else {
-            "source": "property_assets",
-            "assets": [],
-            "summaries": [],
-        }
+        asset_data = (
+            self._build_from_assets(limited_assets, params) if limited_assets else {
+                "source": "property_assets",
+                "assets": [],
+                "summaries": [],
+            }
+        )
 
-        parcel_data = self._build_from_parcels(parcel_queryset, params) if parcel_queryset.exists() else {
-            "source": "parcels",
-            "assets": [],
-            "summaries": [],
-        }
+        parcel_data = (
+            self._build_from_parcels(limited_parcels, params) if limited_parcels else {
+                "source": "parcels",
+                "assets": [],
+                "summaries": [],
+            }
+        )
 
         asset_items = asset_data.get("assets", [])
         parcel_items = parcel_data.get("assets", [])
@@ -2748,14 +2821,33 @@ class RealEstateMapAPIView(APIView):
             {"label": "CA potentiel", "value": self.money_display(total_ca) if can_view_financial else "Masqué"},
         ]
         all_relevant_parcel_ids = set(
-            asset_queryset.exclude(parcel_id__isnull=True).values_list("parcel_id", flat=True)
-        ) | set(parcel_queryset.values_list("id", flat=True))
+            a.parcel_id for a in limited_assets if a.parcel_id
+        ) | set(p.id for p in limited_parcels)
 
         tag_filters = self.get_tag_filters(
             parcels_queryset=Parcel.objects.filter(id__in=all_relevant_parcel_ids),
             program_id=params.get("program_id"),
             project_id=params.get("project_id"),
         )
+
+        # Construire l'index orthophotos_by_program depuis les programmes
+        # uniques touchés, sans relancer de requête (prefetch déjà résolu).
+        seen_programs = []
+        seen_program_ids = set()
+        for source in (limited_assets, limited_parcels):
+            for obj in source:
+                program = getattr(obj, "program", None)
+                if program and program.pk not in seen_program_ids:
+                    seen_programs.append(program)
+                    seen_program_ids.add(program.pk)
+        orthophotos_by_program = self.collect_orthophotos_by_program(seen_programs)
+
+        # `truncated` est exposé pour que le frontend puisse afficher un avertissement
+        # si la limite a été atteinte (cf. ancien `MAX_LIMIT` silencieux).
+        truncated = (
+            len(limited_assets) >= params["limit"] or len(limited_parcels) >= params["limit"]
+        )
+
         return Response({
             "source": "mixed",
             "assets": combined_assets,
@@ -2763,12 +2855,13 @@ class RealEstateMapAPIView(APIView):
             "filters": self.FILTERS,
             "tag_filters": tag_filters,
             "user_rights": rights,
+            "orthophotos_by_program": orthophotos_by_program,
             "counts": {
                 "assets_count": len(asset_items),
                 "parcels_count": len(parcel_items),
                 "total_count": len(combined_assets),
             },
-
+            "truncated": truncated,
             "map_context": {
                 "zoom": params["zoom"],
                 "bbox_applied": bool(params["bbox"]),

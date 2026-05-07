@@ -7,7 +7,8 @@
     <meta name="referrer" content="origin-when-cross-origin">
     <title>KAYDAN Programmes Immobiliers</title>
 
-    <script src="https://cdn.tailwindcss.com"></script>
+    {# Tailwind compilé localement (npm run build:css) — remplace cdn.tailwindcss.com #}
+    <link rel="stylesheet" href="{% static 'css/tailwind.css' %}"/>
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -356,35 +357,8 @@
             background: transparent !important;
         }
     </style>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        premium: {
-                            50: '#fff7ed',
-                            100: '#ffedd5',
-                            200: '#fed7aa',
-                            300: '#fdba74',
-                            400: '#fb923c',
-                            500: '#f97316',
-                            600: '#ea580c',
-                            700: '#c2410c',
-                            800: '#9a3412',
-                            900: '#7c2d12'
-                        }
-                    },
-                    borderRadius: {
-                        '4xl': '2rem'
-                    },
-                    boxShadow: {
-                        premium: '0 24px 80px rgba(194, 65, 12, 0.18)',
-                        soft: '0 20px 60px rgba(15,23,42,0.12)'
-                    }
-                }
-            }
-        }
-    </script>
+    {# Tailwind est compilé via tailwind.config.js (theme.extend) ;
+       l'ancien bloc `tailwind.config = {...}` runtime n'a plus lieu d'être. #}
     <script>
         function estateMapApp() {
             return {
@@ -450,6 +424,12 @@
                     {label: 'Réservés/Vendus', value: '0'},
                     {label: 'CA potentiel', value: '0 FCFA'},
                 ],
+
+                // ---- État UX/perf ajouté ----
+                toast: null,                  // {type:'info'|'warning', message:'…'} | null
+                lastBboxKey: '',              // dernière clé bbox effectivement chargée
+                inflightController: null,     // AbortController du fetch en cours
+                debounceTimers: {},           // pour debounce loadData / recherche
 
                 get filteredProgramOptions() {
                     if (!this.projectFilter) return this.programOptions;
@@ -966,7 +946,9 @@
 
                     this.tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                         maxZoom: 23,
-                        attribution: '&copy; PARCELLAIRE KAYDAN GROUPE',
+                        // Attribution ODbL obligatoire pour les tuiles OpenStreetMap.
+                        attribution:
+                            '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors &mdash; PARCELLAIRE KAYDAN GROUPE',
                         updateWhenZooming: false,
                         updateWhenIdle: true,
                         keepBuffer: 4
@@ -1040,6 +1022,10 @@
                         }
 
                         this.scheduleRedraw(300);
+
+                        // Recharge serveur (debounced) pour ramener uniquement les
+                        // actifs visibles dans la nouvelle bbox.
+                        if (this.initialized) this.requestReload(450);
                     });
 
                     this.applyBaseLayers();
@@ -1235,17 +1221,110 @@
                     };
                 },
 
-                async loadData() {
-                    const response = await fetch("{% url 'api-map-assets' %}", {
-                        headers: {'X-Requested-With': 'XMLHttpRequest'},
-                        credentials: 'same-origin'
-                    });
+                // -------- Helpers UX/perf --------
+                debounce(key, fn, delay = 250) {
+                    if (this.debounceTimers[key]) clearTimeout(this.debounceTimers[key]);
+                    this.debounceTimers[key] = setTimeout(() => {
+                        delete this.debounceTimers[key];
+                        try { fn(); } catch (e) { console.warn(e); }
+                    }, delay);
+                },
+
+                showToast(message, type = 'info', durationMs = 3500) {
+                    this.toast = {message, type};
+                    if (this._toastTimer) clearTimeout(this._toastTimer);
+                    this._toastTimer = setTimeout(() => { this.toast = null; }, durationMs);
+                },
+
+                buildLoadParams() {
+                    const params = new URLSearchParams();
+                    const programId = this.getProgramIdByName?.(this.programFilter);
+                    if (programId) params.set('program', programId);
+
+                    if (this.activeFilter && this.activeFilter !== 'Tous') {
+                        const statusMap = {
+                            'Disponibles': 'AVAILABLE',
+                            'Réservés': 'RESERVED',
+                            'Vendus': 'SOLD',
+                            'En construction': 'UNDER_CONSTRUCTION',
+                        };
+                        const mapped = statusMap[this.activeFilter];
+                        if (mapped) params.set('status', mapped);
+                    }
+                    if (this.search) params.set('search', this.search);
+                    if (this.tagFilter) params.set('tag', this.tagFilter);
+
+                    if (this.map) {
+                        try {
+                            const z = this.map.getZoom();
+                            if (Number.isFinite(z)) params.set('zoom', String(z));
+                            const b = this.map.getBounds();
+                            if (b && b.isValid()) {
+                                // Précision ~5 décimales suffisante pour la dédup de bbox.
+                                const round = (v) => Number(v).toFixed(5);
+                                params.set(
+                                    'bbox',
+                                    [round(b.getWest()), round(b.getSouth()), round(b.getEast()), round(b.getNorth())].join(',')
+                                );
+                            }
+                        } catch (_) {/* map pas encore prête */}
+                    }
+                    return params;
+                },
+
+                async loadData({force = false} = {}) {
+                    const params = this.buildLoadParams();
+                    const key = params.toString();
+
+                    // Dédup : si rien n'a changé, on ne refait pas l'appel.
+                    if (!force && key === this.lastBboxKey) return;
+                    this.lastBboxKey = key;
+
+                    // Annule le fetch précédent encore en vol.
+                    if (this.inflightController) {
+                        try { this.inflightController.abort(); } catch (_) {}
+                    }
+                    this.inflightController = new AbortController();
+
+                    const url = "{% url 'api-map-assets' %}" + (key ? `?${key}` : '');
+
+                    this.loading = true;
+                    this.apiError = '';
+
+                    let response;
+                    try {
+                        response = await fetch(url, {
+                            headers: {'X-Requested-With': 'XMLHttpRequest'},
+                            credentials: 'same-origin',
+                            signal: this.inflightController.signal,
+                        });
+                    } catch (err) {
+                        if (err.name === 'AbortError') return; // remplacé par un fetch plus récent
+                        this.loading = false;
+                        this.apiError = 'Réseau indisponible — réessayez.';
+                        this.showToast(this.apiError, 'warning');
+                        throw err;
+                    }
 
                     if (!response.ok) {
-                        throw new Error('Impossible de charger les données de la carte.');
+                        this.loading = false;
+                        const msg = `Erreur ${response.status} lors du chargement de la carte.`;
+                        this.apiError = msg;
+                        this.showToast(msg, 'warning');
+                        throw new Error(msg);
                     }
 
                     const data = await response.json();
+
+                    // Avertir l'utilisateur si la limite serveur a été atteinte.
+                    if (data.truncated) {
+                        const limit = data.map_context?.limit ?? '?';
+                        this.showToast(
+                            `Limite serveur atteinte (${limit} actifs affichés). Affinez les filtres pour tout voir.`,
+                            'warning',
+                            5000,
+                        );
+                    }
 
                     this.assets = (data.assets || []).map(raw => {
                         const asset = this.sanitizeAsset(raw);
@@ -1320,6 +1399,18 @@
                     this.selectedAsset = {};
                     this.sidebarImageIndex = 0;
                     this.sidebarOpen = false;
+                    this.loading = false;
+                },
+
+                // Recharge avec debounce — appelée par moveend / saisies utilisateur.
+                requestReload(delay = 350) {
+                    this.debounce('loadData', () => this.loadData({force: false}), delay);
+                },
+
+                // Force un rechargement immédiat (changement de filtre programme/projet).
+                forceReload() {
+                    this.lastBboxKey = '';
+                    return this.loadData({force: true});
                 },
 
                 setMapMode(mode) {
@@ -1583,6 +1674,9 @@
                     }
 
                     this.filterAssets();
+                    // Le programme conditionne fortement le payload : on
+                    // recharge côté serveur pour ne ramener que ses parcelles.
+                    if (this.initialized) this.forceReload().catch(() => {});
                 },
 
                 onOrthoPeriodChange() {
@@ -1667,22 +1761,42 @@
                 },
 
                 buildPopup(asset) {
-                    const firstImg = asset.images?.[0] || 'https://artemisconstruction-ci.com/assets/images/portfolio/symphonia/7.jpg';
+                    // Helpers locaux pour durcir l'injection HTML : on échappe systématiquement
+                    // les valeurs textuelles, les URLs et la couleur des tags (cf. CSS injection).
+                    const esc = (v) => this.escapeHtml(v == null ? '' : String(v));
+                    const escAttr = (v) => esc(v).replace(/"/g, '&quot;');
+                    const escUrl = (u) => {
+                        const s = String(u || '');
+                        // Bloque javascript: et data: pour éviter XSS via src.
+                        if (/^\s*(javascript:|data:|vbscript:)/i.test(s)) return '';
+                        return escAttr(s);
+                    };
+                    const escColor = (c) => {
+                        // Couleur valide : #fff / #ffffff / #ffffffff / rgb(a) / nom CSS court.
+                        const s = String(c || '').trim();
+                        if (/^#[0-9a-f]{3,8}$/i.test(s)) return s;
+                        if (/^rgba?\(\s*[\d.\s,]+%?\s*\)$/i.test(s)) return s;
+                        if (/^[a-z]{3,30}$/i.test(s)) return s;
+                        return '#64748b';
+                    };
+
+                    const fallbackImg = "{% static 'logo/logo_kaydanG_B.png' %}";
+                    const firstImg = asset.images?.[0] || fallbackImg;
 
                     const slides = (asset.images || []).map((img, idx) => `
-                    <img src="${img}" alt="${this.escapeHtml(asset.name)} ${idx + 1}" data-slide="${idx}" style="display:${idx === 0 ? 'block' : 'none'};" />
+                    <img src="${escUrl(img)}" alt="${escAttr(asset.name + ' ' + (idx + 1))}" data-slide="${idx}" style="display:${idx === 0 ? 'block' : 'none'};" />
                 `).join('');
 
                     const dots = (asset.images || []).map((_, idx) => `
                     <span class="popup-dot ${idx === 0 ? 'active' : ''}" data-dot="${idx}"></span>
                 `).join('');
 
-                    const progress = asset.construction_stats?.taux_avancement || '0%';
-                    const monthlyDelta = asset.construction_stats?.evolution_mensuelle_label || '0% ce mois';
-                    const ratioLabel = asset.priority_stats?.ratio_label || '—';
-                    const natureLabel = this.escapeHtml(asset.asset_nature || asset.type || 'Actif immobilier');
+                    const progress = esc(asset.construction_stats?.taux_avancement || '0%');
+                    const monthlyDelta = esc(asset.construction_stats?.evolution_mensuelle_label || '0% ce mois');
+                    const ratioLabel = esc(asset.priority_stats?.ratio_label || '—');
+                    const natureLabel = esc(asset.asset_nature || asset.type || 'Actif immobilier');
                     const unitsLabel = asset.is_multi_unit
-                        ? `<div style="margin-top:8px;font-size:12px;color:#e5e7eb">Unités : <strong>${asset.unit_summary?.total_units ?? 0}</strong> • Vendues : <strong>${asset.unit_summary?.sold_units ?? 0}</strong></div>`
+                        ? `<div style="margin-top:8px;font-size:12px;color:#e5e7eb">Unités : <strong>${esc(asset.unit_summary?.total_units ?? 0)}</strong> • Vendues : <strong>${esc(asset.unit_summary?.sold_units ?? 0)}</strong></div>`
                         : '';
 
                     const orthoLabel = asset.orthophoto?.period_label_resolved || asset.orthophoto?.period_label || '';
@@ -1699,8 +1813,8 @@
                                 font-size:11px;
                                 font-weight:700;
                                 color:#fff;
-                                background:${tag.color || '#64748b'};
-                            ">${this.escapeHtml(tag.name)}</span>
+                                background:${escColor(tag.color)};
+                            ">${esc(tag.name)}</span>
                         `).join('')}
                     </div>
                 `
@@ -1708,8 +1822,8 @@
 
                     return `
                     <div style="width:270px">
-                        <div class="popup-carousel" data-carousel="${asset.id}" data-index="0">
-                            ${slides || `<img src="${firstImg}" alt="${this.escapeHtml(asset.name || 'Actif')}" />`}
+                        <div class="popup-carousel" data-carousel="${escAttr(asset.id)}" data-index="0">
+                            ${slides || `<img src="${escUrl(firstImg)}" alt="${escAttr(asset.name || 'Actif')}" />`}
                             ${(asset.images || []).length > 1
                         ? `<button class="popup-carousel-btn left" data-action="prev">‹</button><button class="popup-carousel-btn right" data-action="next">›</button>`
                         : ''}
@@ -1717,16 +1831,16 @@
                         </div>
 
                         <div style="font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#fdba74;font-weight:700">
-                            ${this.escapeHtml(asset.project || '—')}
+                            ${esc(asset.project || '—')}
                         </div>
-                        <div style="margin-top:3px;font-size:12px;color:#d1d5db">${this.escapeHtml(asset.program || '—')}</div>
-                        <div style="margin-top:6px;font-size:18px;font-weight:800">${this.escapeHtml(asset.name || '—')}</div>
+                        <div style="margin-top:3px;font-size:12px;color:#d1d5db">${esc(asset.program || '—')}</div>
+                        <div style="margin-top:6px;font-size:18px;font-weight:800">${esc(asset.name || '—')}</div>
                         <div style="margin-top:6px;font-size:13px;color:#e5e7eb">${natureLabel}</div>
-                        ${orthoLabel ? `<div style="margin-top:6px;font-size:11px;color:#fdba74;font-weight:700;">Orthophoto : ${this.escapeHtml(orthoLabel)}</div>` : ''}
+                        ${orthoLabel ? `<div style="margin-top:6px;font-size:11px;color:#fdba74;font-weight:700;">Orthophoto : ${esc(orthoLabel)}</div>` : ''}
 
                         <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
-                            <div><span style="color:#fdba74">Prix</span><br><strong>${asset.price || '—'}</strong></div>
-                            <div><span style="color:#fdba74">Surface</span><br><strong>${asset.surface || '—'}</strong></div>
+                            <div><span style="color:#fdba74">Prix</span><br><strong>${esc(asset.price || '—')}</strong></div>
+                            <div><span style="color:#fdba74">Surface</span><br><strong>${esc(asset.surface || '—')}</strong></div>
                         </div>
 
                         ${unitsLabel}
@@ -1734,12 +1848,12 @@
 
                         <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center;font-size:12px">
                             <span style="color:#d1d5db">Valeur hypothécaire</span>
-                            <strong>${asset.construction_stats?.valeur_hypothecaire || '—'}</strong>
+                            <strong>${esc(asset.construction_stats?.valeur_hypothecaire || '—')}</strong>
                         </div>
 
                         <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center;font-size:12px">
                             <span style="color:#d1d5db">Client</span>
-                            <strong>${this.escapeHtml(asset.client || '—')}</strong>
+                            <strong>${esc(asset.client || '—')}</strong>
                         </div>
 
                         <div style="margin-top:8px;font-size:11px;color:#cbd5e1">
@@ -1749,7 +1863,7 @@
                             Ratio hypo/paiements : <b>${ratioLabel}</b>
                         </div>
                         <div style="margin-top:10px;font-size:11px;color:#9ca3af">
-                            Statut : <b>${this.escapeHtml(asset.status || '—')}</b>
+                            Statut : <b>${esc(asset.status || '—')}</b>
                         </div>
                     </div>
                 `;
@@ -3018,25 +3132,66 @@
             </div>
         </div>
 
-        <div x-show="loading" class="map-loading-chip">
-            Chargement cartographique en cours...
+        <div x-show="loading"
+             x-transition.opacity
+             role="status"
+             aria-live="polite"
+             aria-label="Chargement de la carte en cours"
+             class="map-loading-chip pointer-events-none flex items-center gap-3">
+            <svg class="h-4 w-4 animate-spin text-white" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor"
+                      d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/>
+            </svg>
+            <span>Chargement cartographique en cours…</span>
+        </div>
+
+        {# Toast (info / warning) — déclenché par showToast() #}
+        <div x-show="toast"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0 -translate-y-2"
+             x-transition:enter-end="opacity-100 translate-y-0"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100 translate-y-0"
+             x-transition:leave-end="opacity-0 -translate-y-2"
+             class="pointer-events-none fixed left-1/2 top-6 z-[60] -translate-x-1/2"
+             role="status"
+             aria-live="polite">
+            <div class="toast"
+                 :class="toast?.type === 'warning' ? 'toast-warning' : ''">
+                <span x-show="toast?.type === 'warning'" aria-hidden="true">⚠️</span>
+                <span x-show="toast?.type !== 'warning'" aria-hidden="true">ℹ️</span>
+                <span x-text="toast?.message || ''"></span>
+                <button class="pointer-events-auto ml-2 text-white/70 hover:text-white"
+                        @click="toast = null"
+                        aria-label="Fermer la notification">✕</button>
+            </div>
         </div>
 
         <div x-show="lightboxOpen" x-transition.opacity
              class="absolute inset-0 z-50 flex items-center justify-center bg-slate-950/88 p-6"
-             @click.self="closeLightbox()">
+             role="dialog"
+             aria-modal="true"
+             aria-label="Aperçu image"
+             @click.self="closeLightbox()"
+             @keydown.escape.window="closeLightbox()"
+             @keydown.left.window="prevLightboxImage()"
+             @keydown.right.window="nextLightboxImage()">
             <button @click="closeLightbox()"
-                    class="absolute right-6 top-6 grid h-12 w-12 place-items-center rounded-full bg-white/10 text-white">
+                    aria-label="Fermer l'aperçu"
+                    class="absolute right-6 top-6 grid h-12 w-12 place-items-center rounded-full bg-white/10 text-white transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
                 ✕
             </button>
             <button @click.stop="prevLightboxImage()"
-                    class="absolute left-6 top-1/2 grid h-12 w-12 -translate-y-1/2 place-items-center rounded-full bg-white/10 text-white">
+                    aria-label="Image précédente"
+                    class="absolute left-6 top-1/2 grid h-12 w-12 -translate-y-1/2 place-items-center rounded-full bg-white/10 text-white transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
                 ‹
             </button>
             <img :src="lightboxImage" alt="Aperçu"
                  class="max-h-[88vh] max-w-[92vw] rounded-3xl object-contain shadow-2xl"/>
             <button @click.stop="nextLightboxImage()"
-                    class="absolute right-6 top-1/2 grid h-12 w-12 -translate-y-1/2 place-items-center rounded-full bg-white/10 text-white">
+                    aria-label="Image suivante"
+                    class="absolute right-6 top-1/2 grid h-12 w-12 -translate-y-1/2 place-items-center rounded-full bg-white/10 text-white transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
                 ›
             </button>
         </div>

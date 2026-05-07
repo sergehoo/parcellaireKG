@@ -7,7 +7,8 @@
     <meta name="referrer" content="origin-when-cross-origin">
     <title>KAYDAN Programmes Immobiliers</title>
 
-    <script src="https://cdn.tailwindcss.com"></script>
+    {# Tailwind compilé localement (npm run build:css) — remplace cdn.tailwindcss.com #}
+    <link rel="stylesheet" href="{% static 'css/tailwind.css' %}"/>
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -345,35 +346,9 @@
         }
     </style>
 
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        premium: {
-                            50: '#ecfdf5',
-                            100: '#d1fae5',
-                            200: '#a7f3d0',
-                            300: '#6ee7b7',
-                            400: '#34d399',
-                            500: '#10b981',
-                            600: '#059669',
-                            700: '#047857',
-                            800: '#065f46',
-                            900: '#064e3b'
-                        }
-                    },
-                    borderRadius: {
-                        '4xl': '2rem'
-                    },
-                    boxShadow: {
-                        premium: '0 24px 80px rgba(5, 150, 105, 0.18)',
-                        soft: '0 20px 60px rgba(6,78,59,0.12)'
-                    }
-                }
-            }
-        }
-    </script>
+    {# Couleurs de la carte commerciale : palette `commercial-*` définie
+       dans tailwind.config.js. Les classes `premium-*` ont été renommées
+       en `commercial-*` plus bas dans ce template. #}
 
     <script>
         function estateMapApp() {
@@ -442,7 +417,7 @@
 
                 get currentSidebarImage() {
                     const imgs = this.selectedAsset?.images || [];
-                    return imgs[this.sidebarImageIndex] || 'https://artemisconstruction-ci.com/assets/images/portfolio/symphonia/7.jpg';
+                    return imgs[this.sidebarImageIndex] || "{% static 'logo/logo_kaydanG_B.png' %}";
                 },
 
                 formatPercent(value) {
@@ -571,7 +546,8 @@
 
                     this.tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                         maxZoom: 23,
-                        attribution: '&copy; OpenStreetMap'
+                        attribution:
+                            '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'
                     });
 
                     this.orthoErrorCount = 0;
@@ -986,7 +962,7 @@
                 },
 
                 buildPopup(asset) {
-                    const firstImg = asset.images?.[0] || 'https://artemisconstruction-ci.com/assets/images/portfolio/symphonia/7.jpg';
+                    const firstImg = asset.images?.[0] || "{% static 'logo/logo_kaydanG_B.png' %}";
 
                     const slides = (asset.images || []).map((img, idx) => `
                         <img src="${this.escapeHtml(img)}" alt="${this.escapeHtml(asset.name)} ${idx + 1}" data-slide="${idx}" style="display:${idx === 0 ? 'block' : 'none'};" />
@@ -1475,9 +1451,9 @@
         <div class="pointer-events-none absolute inset-x-0 top-0 z-20 px-4 pt-4 lg:px-6">
             <div class="pointer-events-auto flex flex-col gap-3">
                 <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                    <div class="glass sidebar-shadow rounded-[28px] border border-white/20 bg-white/78 px-4 py-4 shadow-premium lg:px-5">
+                    <div class="glass sidebar-shadow rounded-[28px] border border-white/20 bg-white/78 px-4 py-4 shadow-commercial lg:px-5">
                         <div class="flex items-center gap-4">
-                            <div class="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-premium-500 to-premium-700 text-white shadow-premium">
+                            <div class="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-commercial-500 to-commercial-700 text-white shadow-commercial">
                                 <i class="fa-solid fa-city text-xl"></i>
                             </div>
                             <div>
@@ -1493,7 +1469,7 @@
 
                     <div class="flex flex-wrap items-center gap-2">
                         <div class="glass flex items-center gap-3 rounded-2xl border border-white/20 bg-white/82 px-4 py-3 shadow-soft">
-                            <svg class="h-5 w-5 text-premium-600" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            <svg class="h-5 w-5 text-commercial-600" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                  stroke-width="1.8">
                                 <circle cx="11" cy="11" r="7"/>
                                 <path d="m20 20-3.5-3.5"/>
@@ -1586,11 +1562,11 @@
                 x-transition:leave="transition ease-in duration-200"
                 x-transition:leave-start="opacity-100 translate-x-0"
                 x-transition:leave-end="opacity-0 translate-x-8"
-                class="pointer-events-auto mt-10 flex h-full w-full max-w-[520px] flex-col overflow-hidden rounded-[32px] border border-white/20 bg-white/80 shadow-premium glass sidebar-shadow">
+                class="pointer-events-auto mt-10 flex h-full w-full max-w-[520px] flex-col overflow-hidden rounded-[32px] border border-white/20 bg-white/80 shadow-commercial glass sidebar-shadow">
                 <div class="border-b border-slate-200/70 px-5 py-5 lg:px-6">
                     <div class="flex items-start justify-between gap-3">
                         <div class="min-w-0">
-                            <p class="text-xs font-bold uppercase tracking-[0.28em] text-premium-600">Actif sélectionné</p>
+                            <p class="text-xs font-bold uppercase tracking-[0.28em] text-commercial-600">Actif sélectionné</p>
                             <h2 class="mt-2 text-2xl font-extrabold tracking-tight text-slate-900"
                                 x-text="selectedAsset.name || '—'"></h2>
                             <p class="mt-1 text-sm text-slate-500" x-text="selectedAsset.program || '—'"></p>
@@ -1705,7 +1681,7 @@
                         </div>
                     </div>
 
-                    <div class="mt-5 rounded-[28px] bg-gradient-to-br from-slate-950 via-slate-900 to-premium-900 p-5 text-white shadow-premium">
+                    <div class="mt-5 rounded-[28px] bg-gradient-to-br from-slate-950 via-slate-900 to-commercial-900 p-5 text-white shadow-commercial">
                         <div class="flex items-center justify-between gap-4">
                             <div class="min-w-0">
                                 <p class="text-xs uppercase tracking-[0.24em] text-white/50">Type d’actif</p>
@@ -1742,7 +1718,7 @@
 
                     <template x-if="selectedAsset.sidebar_mode === 'SINGLE'">
                         <div>
-                            <div class="mt-5 rounded-[28px] bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-5 text-white shadow-premium">
+                            <div class="mt-5 rounded-[28px] bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-5 text-white shadow-commercial">
                                 <div class="flex items-center justify-between gap-4">
                                     <div>
                                         <p class="text-xs uppercase tracking-[0.24em] text-white/50">Actif simple</p>
@@ -1789,7 +1765,7 @@
                                 </div>
                             </div>
 
-                            <div class="mt-5 rounded-[28px] bg-gradient-to-br from-premium-900 via-slate-900 to-slate-950 p-5 text-white shadow-premium">
+                            <div class="mt-5 rounded-[28px] bg-gradient-to-br from-commercial-900 via-slate-900 to-slate-950 p-5 text-white shadow-commercial">
                                 <div class="flex items-center justify-between gap-4">
                                     <div>
                                         <p class="text-xs uppercase tracking-[0.24em] text-white/50">Travaux & valorisation</p>
@@ -1848,7 +1824,7 @@
 
                     <template x-if="selectedAsset.sidebar_mode === 'BUILDING'">
                         <div>
-                            <div class="mt-5 rounded-[28px] bg-gradient-to-br from-indigo-950 via-slate-900 to-slate-950 p-5 text-white shadow-premium">
+                            <div class="mt-5 rounded-[28px] bg-gradient-to-br from-indigo-950 via-slate-900 to-slate-950 p-5 text-white shadow-commercial">
                                 <div class="flex items-center justify-between gap-4">
                                     <div>
                                         <p class="text-xs uppercase tracking-[0.24em] text-white/50">Immeuble / résidence</p>
@@ -1895,7 +1871,7 @@
                                 </div>
                             </div>
 
-                            <div class="mt-5 rounded-[28px] bg-gradient-to-br from-premium-900 via-slate-900 to-slate-950 p-5 text-white shadow-premium">
+                            <div class="mt-5 rounded-[28px] bg-gradient-to-br from-commercial-900 via-slate-900 to-slate-950 p-5 text-white shadow-commercial">
                                 <div class="flex items-center justify-between gap-4">
                                     <div>
                                         <p class="text-xs uppercase tracking-[0.24em] text-white/50">Travaux bâtiment</p>
@@ -2118,7 +2094,7 @@
                         <div class="flex items-center justify-between">
                             <h3 class="text-sm font-extrabold uppercase tracking-[0.22em] text-slate-500">Détails</h3>
                             <button @click="flyToSelected()"
-                                    class="rounded-2xl bg-premium-500 px-4 py-2 text-xs font-bold text-white transition hover:bg-premium-600">
+                                    class="rounded-2xl bg-commercial-500 px-4 py-2 text-xs font-bold text-white transition hover:bg-commercial-600">
                                 Centrer sur la carte
                             </button>
                         </div>
@@ -2167,8 +2143,8 @@
 
         <div class="pointer-events-none absolute bottom-4 left-4 z-20 lg:bottom-5 lg:left-4">
             <div class="pointer-events-auto grid gap-3 lg:grid-cols-3">
-                <div class="glass rounded-[26px] border border-white/20 bg-white/80 p-4 shadow-premium">
-                    <p class="text-xs font-extrabold uppercase tracking-[0.22em] text-premium-600">Priorité recouvrement </p>
+                <div class="glass rounded-[26px] border border-white/20 bg-white/80 p-4 shadow-commercial">
+                    <p class="text-xs font-extrabold uppercase tracking-[0.22em] text-commercial-600">Priorité recouvrement </p>
                     <div class="mt-2 flex flex-wrap gap-2 text-xs font-semibold text-slate-700">
                         <span class="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 shadow-soft">
                             <span class="h-3 w-3 rounded-full bg-red-500"></span> Faible
@@ -2216,10 +2192,10 @@
 {% else %}
     <div class="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 flex items-center justify-center px-6 py-10">
         <div class="relative w-full max-w-2xl overflow-hidden rounded-[36px] border border-white/10 bg-white/10 shadow-2xl backdrop-blur-2xl">
-            <div class="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-premium-500/10"></div>
+            <div class="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-commercial-500/10"></div>
 
             <div class="relative p-8 md:p-12">
-                <div class="mx-auto flex h-24 w-24 items-center justify-center rounded-[28px] bg-gradient-to-br from-rose-500 to-premium-600 shadow-[0_20px_60px_rgba(244,63,94,0.30)]">
+                <div class="mx-auto flex h-24 w-24 items-center justify-center rounded-[28px] bg-gradient-to-br from-rose-500 to-commercial-600 shadow-[0_20px_60px_rgba(244,63,94,0.30)]">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-white" viewBox="0 0 24 24" fill="none"
                          stroke="currentColor" stroke-width="1.8">
                         <path stroke-linecap="round" stroke-linejoin="round"
@@ -2228,7 +2204,7 @@
                 </div>
 
                 <div class="mt-8 text-center">
-                    <p class="text-xs font-extrabold uppercase tracking-[0.32em] text-premium-300">
+                    <p class="text-xs font-extrabold uppercase tracking-[0.32em] text-commercial-300">
                         Accès restreint
                     </p>
 

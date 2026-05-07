@@ -47,19 +47,6 @@ class KaydanCRMLotSyncService:
       au lot de la parcelle terrain ; il ne doit donc pas être utilisé en priorité
       pour la cartographie lorsqu'unitaire_lot est disponible.
     """
-    def env_required(name):
-
-        value = os.getenv(name)
-
-        if not value:
-            raise ImproperlyConfigured(f"La variable d'environnement {name} est requise.")
-
-        return value
-
-    EXTERNAL_LOTS_API_URL = settings.EXTERNAL_LOTS_API_URL
-    EXTERNAL_LOTS_API_KEY =settings.EXTERNAL_LOTS_API_KEY
-    EXTERNAL_LOTS_API_USERNAME = settings.EXTERNAL_LOTS_API_USERNAME
-    EXTERNAL_LOTS_API_PASSWORD = settings.EXTERNAL_LOTS_API_PASSWORD
     TIMEOUT = 20
     CHUNK_SIZE = 20
 
@@ -69,18 +56,53 @@ class KaydanCRMLotSyncService:
         "IMMEUBLE",
     )
 
+    @staticmethod
+    def _env_required(name):
+        """
+        Lit une variable obligatoire (settings ou env) et lève
+        `ImproperlyConfigured` si elle est manquante.
+        """
+        value = getattr(settings, name, None) or os.getenv(name)
+        if not value:
+            raise ImproperlyConfigured(
+                f"La variable {name} est requise pour la synchronisation CRM."
+            )
+        return value
+
     def __init__(self):
+        # Lecture à l'instanciation (et non au chargement du module) :
+        # garantit que les variables d'environnement sont déjà résolues
+        # quand un worker Celery démarre.
+        self.api_url = self._env_required("EXTERNAL_LOTS_API_URL")
+        self.api_key = self._env_required("EXTERNAL_LOTS_API_KEY")
+        self.api_username = self._env_required("EXTERNAL_LOTS_API_USERNAME")
+        self.api_password = self._env_required("EXTERNAL_LOTS_API_PASSWORD")
+
         self.session = requests.Session()
-        self.session.auth = (
-            self.EXTERNAL_LOTS_API_USERNAME,
-            self.EXTERNAL_LOTS_API_PASSWORD,
-        )
+        self.session.auth = (self.api_username, self.api_password)
         self.session.headers.update(
             {
-                "X-API-KEY": self.EXTERNAL_LOTS_API_KEY,
+                "X-API-KEY": self.api_key,
                 "Accept": "application/json",
             }
         )
+
+    # --- Compatibilité ascendante (anciens accès via attribut) -----------
+    @property
+    def EXTERNAL_LOTS_API_URL(self):
+        return self.api_url
+
+    @property
+    def EXTERNAL_LOTS_API_KEY(self):
+        return self.api_key
+
+    @property
+    def EXTERNAL_LOTS_API_USERNAME(self):
+        return self.api_username
+
+    @property
+    def EXTERNAL_LOTS_API_PASSWORD(self):
+        return self.api_password
 
     # =========================================================
     # SAFE HELPERS

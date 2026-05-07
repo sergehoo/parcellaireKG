@@ -17,23 +17,37 @@ from celery.schedules import crontab
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
+
+def _split_env(name, default=""):
+    """Split a comma-separated env var into a clean list."""
+    raw = os.environ.get(name, default) or ""
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
 # SECURITY WARNING: keep the secret key used in production secret!
+# La clé est lue depuis l'environnement. Une valeur de repli est fournie
+# uniquement pour permettre les tâches sans env (ex. `manage.py check`),
+# et porte le préfixe "django-insecure-" pour rester détectable.
+SECRET_KEY = os.environ.get(
+    "SECRET_KEY",
+    "django-insecure-fallback-do-not-use-in-production",
+)
 
-SECRET_KEY = 'django-insecure-9uzaef-rpxlqoxg!juy_7x3z*a9!y7%mhtajqaamyp9x(#0qr8'
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# `DEBUG` est piloté par variable d'env. Faux par défaut pour éviter
+# d'exposer la stack en cas d'oubli de configuration.
+DEBUG = os.environ.get("DEBUG", "False").lower() in {"1", "true", "yes", "on"}
 
-ALLOWED_HOSTS = [
-    'datarium-dev.com',
-    'localhost',
-    '127.0.0.1'
-]
-CSRF_TRUSTED_ORIGINS=[
-    'https://datarium-dev.com',
-    'http://datarium-dev.com',
-]
+ALLOWED_HOSTS = _split_env(
+    "ALLOWED_HOSTS",
+    default="datarium-dev.com,localhost,127.0.0.1",
+)
+
+CSRF_TRUSTED_ORIGINS = _split_env(
+    "CSRF_TRUSTED_ORIGINS",
+    default="https://datarium-dev.com",
+)
+
 SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 # Application definition
 
@@ -83,7 +97,76 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'simple_history.middleware.HistoryRequestMiddleware',
     "allauth.account.middleware.AccountMiddleware",
+    # CSP : doit être chargé après SecurityMiddleware pour pouvoir injecter
+    # les headers Content-Security-Policy.
+    "csp.middleware.CSPMiddleware",
 ]
+
+# =====================================================================
+# Content Security Policy (django-csp 4.x)
+# =====================================================================
+# La cartographie utilise Leaflet, Tailwind CDN, Alpine.js, Font Awesome,
+# Google Fonts et les tuiles OpenStreetMap. La policy doit donc autoriser
+# ces sources tout en bloquant les iframes et les frames.
+#
+# IMPORTANT — `'unsafe-eval'` est requis :
+# Alpine.js v3 (build CDN unpkg) compile chacune de ses directives
+# (`x-data`, `x-show`, `@click`, `:class`, etc.) via `new Function(...)`,
+# ce qui est interdit sans `'unsafe-eval'`. La CSP reste utile contre
+# l'injection de scripts cross-origin et de balises iframe ; elle ne
+# protège juste plus contre l'évaluation dynamique côté Alpine.
+# Pour s'en débarrasser à terme, basculer sur `@alpinejs/csp` (qui ne
+# supporte que des expressions simples) ou compiler Alpine en build.
+#
+# `CSP_ENABLED=False` permet de désactiver complètement la CSP via env
+# (utile en dev pour pister un nouveau plantage).
+CSP_ENABLED = os.environ.get("CSP_ENABLED", "True").lower() in {"1", "true", "yes", "on"}
+
+if CSP_ENABLED:
+    CONTENT_SECURITY_POLICY = {
+        "DIRECTIVES": {
+            "default-src": ["'self'"],
+            "script-src": [
+                "'self'",
+                "'unsafe-inline'",
+                "'unsafe-eval'",  # requis par Alpine.js v3 (CDN)
+                # cdn.tailwindcss.com retiré : Tailwind est compilé en
+                # local (`npm run build:css`) → /static/css/tailwind.css
+                "https://unpkg.com",
+                "https://cdnjs.cloudflare.com",
+            ],
+            "style-src": [
+                "'self'",
+                "'unsafe-inline'",
+                "https://fonts.googleapis.com",
+                "https://unpkg.com",
+                "https://cdnjs.cloudflare.com",
+            ],
+            "font-src": [
+                "'self'",
+                "https://fonts.gstatic.com",
+                "https://cdnjs.cloudflare.com",
+                "data:",
+            ],
+            "img-src": [
+                "'self'",
+                "data:",
+                "blob:",
+                "https://*.tile.openstreetmap.org",
+                "https://*.basemaps.cartocdn.com",
+                # Markers / sprites Leaflet servis depuis le CDN unpkg.
+                "https://unpkg.com",
+            ],
+            "connect-src": ["'self'"],
+            "frame-ancestors": ["'none'"],
+            "base-uri": ["'self'"],
+            "object-src": ["'none'"],
+        },
+    }
+else:
+    # CSP désactivée — on retire le middleware pour éviter qu'il n'envoie
+    # un header vide qui bloquerait quand même certaines ressources.
+    MIDDLEWARE = [m for m in MIDDLEWARE if m != "csp.middleware.CSPMiddleware"]
 
 ROOT_URLCONF = 'parcelaireKG.urls'
 
@@ -130,14 +213,15 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/4.2/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = 'fr'
 
-TIME_ZONE = 'UTC'
+# Aligné sur le calendrier métier (Côte d'Ivoire) et sur Celery (cf. CELERY_TIMEZONE).
+TIME_ZONE = os.environ.get("TIME_ZONE", "Africa/Abidjan")
 
 USE_I18N = True
 
 USE_TZ = True
-SITE_ID = 1
+SITE_ID = int(os.environ.get("SITE_ID", "1"))
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/

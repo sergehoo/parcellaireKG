@@ -17,18 +17,34 @@ from parcelaire.models import ProgramBlock, ProjetImmobilier, RealEstateProgram,
 
 # Create your views here.
 
-class HomeView(TemplateView):
+class HomeView(LoginRequiredMixin, TemplateView):
     template_name = "index.html"
 
 
-class MapView(TemplateView):
+class MapView(LoginRequiredMixin, TemplateView):
+    """Carte parcellaire générale. Accessible aux utilisateurs authentifiés."""
     template_name = "map.html"
 
-class MapCommercialView(TemplateView):
+
+class MapCommercialView(LoginRequiredMixin, TemplateView):
+    """
+    Carte commerciale (lots vendus / réservés / disponibles).
+    Réservée aux utilisateurs disposant de la permission métier
+    `parcelaire.view_commercial_map` (ou superuser).
+    """
     template_name = "mapcommercial.html"
 
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.is_authenticated and not (
+            request.user.is_superuser
+            or request.user.has_perm("parcelaire.view_commercial_map")
+        ):
+            from django.core.exceptions import PermissionDenied
+            raise PermissionDenied("Accès à la carte commerciale non autorisé.")
+        return super().dispatch(request, *args, **kwargs)
 
-class RealEstateMap3DView(TemplateView):
+
+class RealEstateMap3DView(LoginRequiredMixin, TemplateView):
     template_name = "map_3d.html"
 
 

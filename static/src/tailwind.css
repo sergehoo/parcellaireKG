@@ -1,0 +1,101 @@
+/*
+ * Source Tailwind compilée vers /static/css/tailwind.css.
+ * Build : `npm run build:css` (ou `npm run watch:css` en dev).
+ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ====================================================================
+ * Composants & utilitaires applicatifs réutilisables (carto KAYDAN)
+ * ==================================================================== */
+
+@layer components {
+  /* Carte verre dépoli (panneau de filtres, sidebar) */
+  .card-glass {
+    @apply rounded-2xl border border-white/30 bg-white/85 shadow-soft backdrop-blur;
+  }
+
+  /* Bouton primaire (orange charté) */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-kaydan-600 px-4 py-2 text-sm font-semibold text-white shadow-soft
+           transition-all duration-200 ease-smooth
+           hover:bg-kaydan-700 hover:shadow-glass
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kaydan-300
+           active:scale-[0.98];
+  }
+
+  /* Bouton secondaire (sur fond clair) */
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm
+           transition-all duration-200 ease-smooth
+           hover:bg-slate-50 hover:border-slate-300
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300;
+  }
+
+  /* Pill / chip (filtres) */
+  .pill {
+    @apply inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold transition-colors;
+  }
+
+  /* Skeleton (loading) */
+  .skeleton {
+    @apply relative overflow-hidden rounded-xl bg-slate-200/70;
+  }
+  .skeleton::after {
+    content: "";
+    @apply absolute inset-0;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.6),
+      transparent
+    );
+    animation: skeleton-shimmer 1.4s infinite;
+  }
+
+  /* Toast (info / warning) */
+  .toast {
+    @apply pointer-events-auto flex items-start gap-3 rounded-xl border border-white/40 bg-slate-900/95 px-4 py-3 text-sm text-white shadow-glass backdrop-blur;
+  }
+  .toast-warning {
+    @apply border-amber-300/40 bg-amber-500/95 text-white;
+  }
+}
+
+@keyframes skeleton-shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* Slide-in / fade pour la sidebar (Alpine x-transition) */
+@keyframes slide-in-right {
+  from { transform: translateX(110%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.animate-slide-in-right { animation: slide-in-right 280ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.animate-fade-in        { animation: fade-in 200ms ease-out both; }
+
+/* Scrollbar discrète sur les colonnes scrollables (sidebar) */
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(15, 23, 42, 0.25) transparent;
+}
+.scroll-thin::-webkit-scrollbar        { width: 6px; height: 6px; }
+.scroll-thin::-webkit-scrollbar-track  { background: transparent; }
+.scroll-thin::-webkit-scrollbar-thumb  { background-color: rgba(15, 23, 42, 0.18); border-radius: 999px; }
+.scroll-thin::-webkit-scrollbar-thumb:hover { background-color: rgba(15, 23, 42, 0.32); }
+
+/* Réduction d'animation pour les utilisateurs qui le demandent */
+@media (prefers-reduced-motion: reduce) {
+  .animate-slide-in-right,
+  .animate-fade-in {
+    animation: none !important;
+  }
+  .skeleton::after { animation: none !important; }
+}

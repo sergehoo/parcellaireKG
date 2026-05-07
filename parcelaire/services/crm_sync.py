@@ -1,6 +1,8 @@
 # parcelaire/services/crm_sync_runner.py
 from __future__ import annotations
 
+from datetime import timedelta
+
 from django.db.models import Q
 from django.utils import timezone
 
@@ -64,7 +66,9 @@ def sync_stale_parcels(hours=24):
     queryset = _base_queryset()
 
     if hasattr(Parcel, "crm_last_synced_at"):
-        limit = timezone.now() - timezone.timedelta(hours=hours)
+        # `django.utils.timezone` ne ré-exporte pas `timedelta` —
+        # on importe explicitement depuis `datetime`.
+        limit = timezone.now() - timedelta(hours=hours)
         queryset = queryset.filter(
             Q(crm_last_synced_at__isnull=True) |
             Q(crm_last_synced_at__lt=limit)

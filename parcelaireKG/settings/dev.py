@@ -1,15 +1,34 @@
-from .base import *
-from decouple import config
+"""
+Configuration de développement.
+"""
 import os
+import sys
+from pathlib import Path
 
+from decouple import config
+
+from .base import *  # noqa: F401,F403
+
+# En dev on accepte tous les hosts pour faciliter ngrok / réseau local.
 ALLOWED_HOSTS = ['*']
 
-# GDAL_LIBRARY_PATH = os.getenv('GDAL_LIBRARY_PATH', '/opt/homebrew/opt/gdal/lib/libgdal.dylib')
-# GEOS_LIBRARY_PATH = os.getenv('GEOS_LIBRARY_PATH', '/opt/homebrew/opt/geos/lib/libgeos_c.dylib')
-GDAL_LIBRARY_PATH = "/opt/homebrew/lib/libgdal.dylib"
-GEOS_LIBRARY_PATH = "/opt/homebrew/lib/libgeos_c.dylib"
+# Chemins GDAL/GEOS : conditionnels selon la plateforme. Permettre à l'env
+# de surcharger en priorité, sinon n'imposer un chemin que sur macOS Homebrew.
+_GDAL_FROM_ENV = os.environ.get("GDAL_LIBRARY_PATH")
+_GEOS_FROM_ENV = os.environ.get("GEOS_LIBRARY_PATH")
 
-DEBUG = True
+if _GDAL_FROM_ENV:
+    GDAL_LIBRARY_PATH = _GDAL_FROM_ENV
+elif sys.platform == "darwin" and Path("/opt/homebrew/lib/libgdal.dylib").exists():
+    GDAL_LIBRARY_PATH = "/opt/homebrew/lib/libgdal.dylib"
+
+if _GEOS_FROM_ENV:
+    GEOS_LIBRARY_PATH = _GEOS_FROM_ENV
+elif sys.platform == "darwin" and Path("/opt/homebrew/lib/libgeos_c.dylib").exists():
+    GEOS_LIBRARY_PATH = "/opt/homebrew/lib/libgeos_c.dylib"
+
+# DEBUG est activé en dev par défaut, mais l'env peut le forcer à False.
+DEBUG = os.environ.get("DEBUG", "True").lower() in {"1", "true", "yes", "on"}
 
 
 DATABASES = {

@@ -1,16 +1,16 @@
 import re
 from typing import Optional
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils.text import slugify
 
-from parcelaire.models import Parcel, ParcelTag
+from parcelaire.models import Parcel, ParcelTag, RealEstateProgram
 
 
 class Command(BaseCommand):
     help = (
-        "Met à jour les tags des lots du programme "
-        "'LES RESIDENCES BO REFLETS' selon les plages de numéros."
+        "Met à jour les tags des lots d'un programme selon des plages de "
+        "numéros de lot. Par défaut traite le programme 'Callisto BNETD'."
     )
 
     PROGRAM_NAME = "Callisto BNETD"
@@ -47,10 +47,19 @@ class Command(BaseCommand):
         dry_run: bool = options["dry_run"]
         clear_existing_program_tags: bool = options["clear_existing_program_tags"]
 
+        # On résout d'abord le programme : indispensable pour créer/chercher
+        # les tags dans le bon scope (ParcelTag.program est NOT NULL).
+        try:
+            program = RealEstateProgram.objects.get(name=program_name)
+        except RealEstateProgram.DoesNotExist as exc:
+            raise CommandError(
+                f"Aucun programme trouvé pour '{program_name}'."
+            ) from exc
+
         qs = (
             Parcel.objects.select_related("program")
             .prefetch_related("tags")
-            .filter(program__name=program_name)
+            .filter(program=program)
             .order_by("lot_number", "id")
         )
 
@@ -63,7 +72,7 @@ class Command(BaseCommand):
             )
             return
 
-        managed_tags = self._get_or_build_managed_tags(dry_run=dry_run)
+        managed_tags = self._get_or_build_managed_tags(program=program, dry_run=dry_run)
 
         updated_count = 0
         skipped_count = 0
@@ -138,9 +147,11 @@ class Command(BaseCommand):
         if dry_run:
             self.stdout.write(self.style.WARNING("Mode dry-run : aucune modification enregistrée."))
 
-    def _get_or_build_managed_tags(self, dry_run: bool) -> dict[str, ParcelTag]:
+    def _get_or_build_managed_tags(
+        self, program: RealEstateProgram, dry_run: bool
+    ) -> "dict[str, ParcelTag]":
         tag_names = [tag_name for _, tag_name in self.TAG_RULES]
-        result: dict[str, ParcelTag] = {}
+        result: "dict[str, ParcelTag]" = {}
 
         default_colors = {
             "boreflet": "#0ea5e9",
@@ -149,25 +160,27 @@ class Command(BaseCommand):
         }
 
         for name in tag_names:
-            tag = ParcelTag.objects.filter(name=name).first()
+            # `ParcelTag.program` est NOT NULL et la contrainte unique porte
+            # sur (program, slug) — on doit donc impérativement scoper la
+            # recherche au programme courant pour éviter une IntegrityError
+            # ou un partage involontaire de tag entre programmes.
+            tag = ParcelTag.objects.filter(program=program, name=name).first()
             if tag:
                 result[name] = tag
                 continue
 
+            tag_kwargs = dict(
+                program=program,
+                name=name,
+                slug=slugify(name),
+                color=default_colors.get(name, "#64748b"),
+                is_active=True,
+            )
+
             if dry_run:
-                tag = ParcelTag(
-                    name=name,
-                    slug=slugify(name),
-                    color=default_colors.get(name, "#64748b"),
-                    is_active=True,
-                )
+                tag = ParcelTag(**tag_kwargs)
             else:
-                tag = ParcelTag.objects.create(
-                    name=name,
-                    slug=slugify(name),
-                    color=default_colors.get(name, "#64748b"),
-                    is_active=True,
-                )
+                tag = ParcelTag.objects.create(**tag_kwargs)
 
             result[name] = tag
 
