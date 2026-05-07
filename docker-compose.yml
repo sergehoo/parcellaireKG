@@ -2,8 +2,22 @@ services:
   parcelaireweb:
     build: .
     container_name: parcelaireweb
-    command: gunicorn parcelaireKG.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120
+    # Au démarrage on rejoue collectstatic (au cas où le bind-mount `.:/app`
+    # aurait écrasé le CSS de l'image) et on applique les migrations, avant
+    # de lancer gunicorn. Sans collectstatic, /app/staticfiles serait vide
+    # et WhiteNoise renverrait 404 sur tailwind.css → page sans style.
+    command: >
+      sh -c "python manage.py collectstatic --noinput &&
+             python manage.py migrate --noinput &&
+             gunicorn parcelaireKG.wsgi:application
+                 --bind 0.0.0.0:8000
+                 --workers 3
+                 --timeout 120"
     volumes:
+      # NB : ce bind écrase /app par le code source de l'hôte.
+      # En prod, considérer un compose dédié sans cette ligne pour
+      # garantir que l'image (avec son CSS et ses statics buildés)
+      # soit utilisée telle quelle.
       - .:/app
       - static_volume:/app/staticfiles
       - ./media:/app/media

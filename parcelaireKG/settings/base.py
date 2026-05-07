@@ -89,6 +89,10 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # WhiteNoise sert /static/ depuis STATIC_ROOT (CSS Tailwind compilé,
+    # JS, images, polices…) sans nécessiter Nginx en frontal.
+    # Doit impérativement être placé juste après SecurityMiddleware.
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -101,6 +105,28 @@ MIDDLEWARE = [
     # les headers Content-Security-Policy.
     "csp.middleware.CSPMiddleware",
 ]
+
+# WhiteNoise : compression (gzip + brotli) et cache busting (manifest).
+# Le manifest est plus strict, on l'active seulement quand on n'est PAS en
+# debug pour éviter de planter le dev si un asset n'a pas été collecté.
+WHITENOISE_COMPRESSION_ENABLED = True
+WHITENOISE_MAX_AGE = 60 * 60 * 24 * 365  # 1 an
+WHITENOISE_INDEX_FILE = False  # ne pas servir d'index dans /static/
+
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        # En dev (DEBUG=True) → serveur runserver + StaticFilesStorage simple.
+        # En prod → CompressedManifestStaticFilesStorage (cache long, hashé).
+        "BACKEND": (
+            "whitenoise.storage.CompressedStaticFilesStorage"
+            if DEBUG
+            else "whitenoise.storage.CompressedManifestStaticFilesStorage"
+        ),
+    },
+}
 
 # =====================================================================
 # Content Security Policy (django-csp 4.x)
@@ -228,7 +254,15 @@ SITE_ID = int(os.environ.get("SITE_ID", "1"))
 
 
 MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / "media"
+MEDIA_ROOT = Path(os.environ.get('MEDIA_ROOT', BASE_DIR / 'media'))
+
+# Statics : valeurs sensibles redéfinies dans dev.py / prod.py si besoin,
+# mais on les définit ici pour que WhiteNoise et `collectstatic` les
+# trouvent dans tous les environnements (même quand le module est
+# importé sans la sous-config).
+STATIC_URL = '/static/'
+STATIC_ROOT = Path(os.environ.get('STATIC_ROOT', BASE_DIR / 'staticfiles'))
+STATICFILES_DIRS = [BASE_DIR / 'static'] if (BASE_DIR / 'static').exists() else []
 
 
 # Default primary key field type

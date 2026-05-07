@@ -32,6 +32,7 @@ django-select2==8.2.4
 django-simple-history==3.10.1
 django-tinymce==5.0.0
 django-widget-tweaks==1.5.1
+whitenoise==6.7.0
 djangorestframework==3.16.1
 docopt==0.6.2
 drf-spectacular==0.29.0

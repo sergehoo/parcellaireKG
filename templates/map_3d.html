@@ -222,35 +222,7 @@
         }
     </style>
 
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        premium: {
-                            50: '#fff7ed',
-                            100: '#ffedd5',
-                            200: '#fed7aa',
-                            300: '#fdba74',
-                            400: '#fb923c',
-                            500: '#f97316',
-                            600: '#ea580c',
-                            700: '#c2410c',
-                            800: '#9a3412',
-                            900: '#7c2d12'
-                        }
-                    },
-                    borderRadius: {
-                        '4xl': '2rem'
-                    },
-                    boxShadow: {
-                        premium: '0 24px 80px rgba(194, 65, 12, 0.18)',
-                        soft: '0 20px 60px rgba(15,23,42,0.12)'
-                    }
-                }
-            }
-        }
-    </script>
+    {# Tailwind est compilé via tailwind.config.js (theme.extend). Le bloc `tailwind.config = {…}` runtime n'a plus lieu d'être. #}
 </head>
 <body>
 {% if perms.parcelaire.view_parcellaire %}
