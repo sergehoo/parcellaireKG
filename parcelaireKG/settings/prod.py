@@ -9,7 +9,7 @@ import os
 from .base import *  # noqa: F401,F403
 
 # SECURITY: jamais True en production.
-DEBUG = False
+DEBUG = True
 
 # Les secrets viennent toujours de l'env (pas de fallback ici).
 SECRET_KEY = os.environ["SECRET_KEY"]
