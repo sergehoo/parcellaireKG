@@ -60,7 +60,7 @@ class RealEstateMapAPIView(APIView):
     FILTERS = ["Tous", "Disponibles", "Réservés", "Vendus", "En construction"]
 
     DEFAULT_LIMIT = 1200
-    MAX_LIMIT = 2500
+    MAX_LIMIT = 12500
 
     SIDEBAR_MODE_SINGLE = "SINGLE"
     SIDEBAR_MODE_BUILDING = "BUILDING"

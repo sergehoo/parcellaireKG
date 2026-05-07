@@ -427,9 +427,12 @@
 
                 // ---- État UX/perf ajouté ----
                 toast: null,                  // {type:'info'|'warning', message:'…'} | null
-                lastBboxKey: '',              // dernière clé bbox effectivement chargée
+                loadedBounds: null,           // Leaflet LatLngBounds couvert par le dernier fetch (pré-élargi)
+                loadedFiltersKey: '',         // clé des filtres (programme/statut/recherche/tag)
                 inflightController: null,     // AbortController du fetch en cours
                 debounceTimers: {},           // pour debounce loadData / recherche
+                bboxPadRatio: 0.5,            // marge autour de l'écran pour préfetcher
+                hasInitialLoad: false,        // false tant qu'on n'a pas reçu un premier dataset
 
                 get filteredProgramOptions() {
                     if (!this.projectFilter) return this.programOptions;
@@ -1023,9 +1026,11 @@
 
                         this.scheduleRedraw(300);
 
-                        // Recharge serveur (debounced) pour ramener uniquement les
-                        // actifs visibles dans la nouvelle bbox.
-                        if (this.initialized) this.requestReload(450);
+                        // Recharge serveur (debouncé) — ne déclenche un fetch
+                        // que si la nouvelle vue sort de la zone préchargée
+                        // (cf. logique dans loadData). Un simple zoom interne
+                        // ou un petit pan ne provoque PLUS de requête.
+                        if (this.initialized) this.requestReload(600);
                     });
 
                     this.applyBaseLayers();
@@ -1236,7 +1241,25 @@
                     this._toastTimer = setTimeout(() => { this.toast = null; }, durationMs);
                 },
 
-                buildLoadParams() {
+                // Construit la clé des filtres "non spatiaux" — programme,
+                // statut, recherche, tag. Sert à détecter qu'un filtre a
+                // changé et qu'il faut refaire un fetch même si la vue
+                // tient encore dans la zone précédemment chargée.
+                buildFiltersKey() {
+                    const programId = this.getProgramIdByName?.(this.programFilter) || '';
+                    const statusMap = {
+                        'Disponibles': 'AVAILABLE',
+                        'Réservés': 'RESERVED',
+                        'Vendus': 'SOLD',
+                        'En construction': 'UNDER_CONSTRUCTION',
+                    };
+                    const mapped = (this.activeFilter && this.activeFilter !== 'Tous')
+                        ? (statusMap[this.activeFilter] || '')
+                        : '';
+                    return [programId, mapped, this.search || '', this.tagFilter || ''].join('|');
+                },
+
+                buildLoadParams(boundsForFetch) {
                     const params = new URLSearchParams();
                     const programId = this.getProgramIdByName?.(this.programFilter);
                     if (programId) params.set('program', programId);
@@ -1258,9 +1281,8 @@
                         try {
                             const z = this.map.getZoom();
                             if (Number.isFinite(z)) params.set('zoom', String(z));
-                            const b = this.map.getBounds();
+                            const b = boundsForFetch || this.map.getBounds();
                             if (b && b.isValid()) {
-                                // Précision ~5 décimales suffisante pour la dédup de bbox.
                                 const round = (v) => Number(v).toFixed(5);
                                 params.set(
                                     'bbox',
@@ -1273,12 +1295,42 @@
                 },
 
                 async loadData({force = false} = {}) {
-                    const params = this.buildLoadParams();
-                    const key = params.toString();
+                    // ----- Stratégie type Google Maps -----
+                    // 1) Au tout premier chargement on ne contraint PAS la
+                    //    bbox : on veut tous les programmes du dataset (la
+                    //    map démarre arbitrairement sur une zone, on n'a
+                    //    pas envie d'éliminer les autres programmes).
+                    // 2) Ensuite, si les filtres n'ont pas changé ET que la
+                    //    vue actuelle tient encore dans la zone qu'on a déjà
+                    //    préchargée, on ne refait PAS d'appel réseau (le
+                    //    pan/zoom local se contente du dataset en mémoire).
+                    // 3) Sinon, on refetch en élargissant le bbox de
+                    //    `bboxPadRatio` autour de l'écran courant.
+                    const filtersKey = this.buildFiltersKey();
+                    const filtersChanged = filtersKey !== this.loadedFiltersKey;
 
-                    // Dédup : si rien n'a changé, on ne refait pas l'appel.
-                    if (!force && key === this.lastBboxKey) return;
-                    this.lastBboxKey = key;
+                    let fetchBounds = null;
+
+                    if (this.hasInitialLoad && this.map) {
+                        try {
+                            const current = this.map.getBounds();
+                            if (current && current.isValid()) {
+                                if (
+                                    !force
+                                    && !filtersChanged
+                                    && this.loadedBounds
+                                    && this.loadedBounds.contains(current)
+                                ) {
+                                    // Toujours dans la zone préchargée → rien à faire.
+                                    return;
+                                }
+                                fetchBounds = current.pad(this.bboxPadRatio);
+                            }
+                        } catch (_) {/* map pas encore prête */}
+                    }
+
+                    const params = this.buildLoadParams(fetchBounds);
+                    const key = params.toString();
 
                     // Annule le fetch précédent encore en vol.
                     if (this.inflightController) {
@@ -1399,6 +1451,39 @@
                     this.selectedAsset = {};
                     this.sidebarImageIndex = 0;
                     this.sidebarOpen = false;
+
+                    // Premier chargement : centrer/zoomer sur l'ensemble des
+                    // programmes (sinon la map reste sur Grand-Bassam au zoom
+                    // 17 et l'utilisateur ne voit qu'un seul programme).
+                    if (!this.hasInitialLoad && this.assets.length && this.map) {
+                        try {
+                            this.fitToVisibleAssets?.();
+                        } catch (_) {/* ignore */}
+                        this.hasInitialLoad = true;
+
+                        // Comme la vue vient d'être recalée sur l'ensemble du
+                        // portefeuille, on prend le bbox _final_ (élargi)
+                        // comme zone considérée comme déjà chargée. Empêche
+                        // un refetch immédiat juste après le fitBounds.
+                        try {
+                            const after = this.map.getBounds();
+                            if (after && after.isValid()) {
+                                this.loadedBounds = after.pad(this.bboxPadRatio);
+                            }
+                        } catch (_) {/* ignore */}
+                    } else if (this.map) {
+                        // Mémorise la zone effectivement chargée (élargie via pad)
+                        // et la clé des filtres : tant que la vue tient dedans
+                        // ET que les filtres n'ont pas changé, plus aucun fetch.
+                        try {
+                            const current = this.map.getBounds();
+                            if (current && current.isValid()) {
+                                this.loadedBounds = current.pad(this.bboxPadRatio);
+                            }
+                        } catch (_) {/* ignore */}
+                    }
+                    this.loadedFiltersKey = this.buildFiltersKey();
+
                     this.loading = false;
                 },
 
@@ -1408,8 +1493,13 @@
                 },
 
                 // Force un rechargement immédiat (changement de filtre programme/projet).
+                // On remet aussi `hasInitialLoad` à false pour que la map
+                // refasse un fitBounds sur les programmes filtrés (utile quand
+                // on passe de "Tous les programmes" à un programme distant).
                 forceReload() {
-                    this.lastBboxKey = '';
+                    this.loadedBounds = null;
+                    this.loadedFiltersKey = '';
+                    this.hasInitialLoad = false;
                     return this.loadData({force: true});
                 },
 
