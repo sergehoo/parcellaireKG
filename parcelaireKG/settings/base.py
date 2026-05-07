@@ -193,7 +193,14 @@ if CSP_ENABLED:
                 # Markers / sprites Leaflet servis depuis le CDN unpkg.
                 "https://unpkg.com",
             ],
-            "connect-src": ["'self'"],
+            "connect-src": [
+                "'self'",
+                # Source maps Leaflet / leaflet.markercluster (DevTools).
+                # Sans ces entrées, la console affiche un warning CSP à
+                # chaque ouverture des outils de développement.
+                "https://unpkg.com",
+                "https://cdnjs.cloudflare.com",
+            ],
             "frame-ancestors": ["'none'"],
             "base-uri": ["'self'"],
             "object-src": ["'none'"],
