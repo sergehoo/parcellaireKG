@@ -2,16 +2,23 @@ services:
   parcelaireweb:
     build: .
     container_name: parcelaireweb
-    # Au démarrage on rejoue collectstatic (au cas où le bind-mount `.:/app`
-    # aurait écrasé le CSS de l'image) et on applique les migrations, avant
-    # de lancer gunicorn. Sans collectstatic, /app/staticfiles serait vide
-    # et WhiteNoise renverrait 404 sur tailwind.css → page sans style.
-    command: >
-      sh -c "python manage.py collectstatic --noinput &&
-             gunicorn parcelaireKG.wsgi:application
-                 --bind 0.0.0.0:8000
-                 --workers 3
-                 --timeout 120"
+    # Form YAML liste pour éviter toute imbrication de quotes ambiguë
+    # (le `>` + `sh -c "…"` mangeait l'argument `--bind`, gunicorn
+    # restait alors sur 127.0.0.1 et Traefik renvoyait Bad Gateway).
+    # `exec gunicorn` remplace le shell par gunicorn → PID 1 dans le
+    # container (meilleure gestion de SIGTERM, log gunicorn direct).
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        python manage.py collectstatic --noinput
+        exec gunicorn parcelaireKG.wsgi:application \
+            --bind 0.0.0.0:8000 \
+            --workers 3 \
+            --timeout 120 \
+            --access-logfile - \
+            --error-logfile -
     volumes:
       # NB : ce bind écrase /app par le code source de l'hôte.
       # En prod, considérer un compose dédié sans cette ligne pour
