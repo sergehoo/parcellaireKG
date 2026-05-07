@@ -1277,19 +1277,28 @@
                     if (this.search) params.set('search', this.search);
                     if (this.tagFilter) params.set('tag', this.tagFilter);
 
+                    // Le `zoom` est toujours envoyé (sert au backend à choisir
+                    // la précision géométrique). En revanche le `bbox` n'est
+                    // ENVOYÉ QUE si l'appelant l'a explicitement fourni —
+                    // sinon on récupère TOUS les programmes (cas du 1er
+                    // chargement et des changements de filtre programme).
                     if (this.map) {
                         try {
                             const z = this.map.getZoom();
                             if (Number.isFinite(z)) params.set('zoom', String(z));
-                            const b = boundsForFetch || this.map.getBounds();
-                            if (b && b.isValid()) {
-                                const round = (v) => Number(v).toFixed(5);
-                                params.set(
-                                    'bbox',
-                                    [round(b.getWest()), round(b.getSouth()), round(b.getEast()), round(b.getNorth())].join(',')
-                                );
-                            }
                         } catch (_) {/* map pas encore prête */}
+                    }
+                    if (boundsForFetch && boundsForFetch.isValid && boundsForFetch.isValid()) {
+                        const round = (v) => Number(v).toFixed(5);
+                        params.set(
+                            'bbox',
+                            [
+                                round(boundsForFetch.getWest()),
+                                round(boundsForFetch.getSouth()),
+                                round(boundsForFetch.getEast()),
+                                round(boundsForFetch.getNorth()),
+                            ].join(','),
+                        );
                     }
                     return params;
                 },
