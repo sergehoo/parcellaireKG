@@ -335,9 +335,18 @@
         }
 
         const data = new FormData(form);
-        if (programInput) {
-  data.set('program', programInput.value);
-}
+        // Filet : si le <select> est temporairement désactivé pour une
+        // raison X, on ré-injecte sa valeur explicitement.
+        if (programInput && programInput.value) {
+          data.set('program', programInput.value);
+        }
+        // Log de diagnostic — visible dans F12 console.
+        console.log('[orthophoto upload] program select state :', {
+          name: programInput?.name,
+          value: programInput?.value,
+          disabled: programInput?.disabled,
+          selected_option: programInput?.selectedOptions[0]?.textContent?.trim(),
+        });
         const file = data.get('{{ form.source_file.name }}');
 
         if (!file || !file.size) {

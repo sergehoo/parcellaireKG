@@ -1313,14 +1313,22 @@ class OrthophotoCreateView(_OrthophotoBaseMixin, SuccessMessageMixin, CreateView
 
     def form_invalid(self, form):
         # Journalise les erreurs de validation pour les voir dans
-        # `docker compose logs parcelaireweb` — sinon le 200 silencieux
-        # ne donne aucune indication sur ce qui a été rejeté.
+        # `docker compose logs parcelaireweb`. On dump aussi
+        # `request.POST` et `request.FILES` pour diagnostiquer les
+        # cas où le multipart parser n'a pas récupéré un champ.
         import logging
         logger = logging.getLogger("parcelaire")
         logger.warning(
-            "OrthophotoCreateView form rejeté par %s : %s",
+            "OrthophotoCreateView form rejeté par %s\n"
+            "  errors  : %s\n"
+            "  POST    : %s\n"
+            "  FILES   : %s\n"
+            "  raw_program : %r",
             self.request.user,
             form.errors.as_json(),
+            dict(self.request.POST.lists()),
+            {k: f"<{v.size} bytes, {v.content_type}>" for k, v in self.request.FILES.items()},
+            self.request.POST.get("program"),
         )
         return super().form_invalid(form)
 
