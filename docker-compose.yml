@@ -101,18 +101,15 @@ services:
       - "traefik.http.middlewares.parcelaire-sec.headers.frameDeny=true"
       - "traefik.http.middlewares.parcelaire-sec.headers.contentTypeNosniff=true"
 
-      # Buffering : autorise jusqu'à 8 Go de body (upload orthophoto TIFF).
-      # `memRequestBodyBytes=10 MiB` → tout body plus gros est écrit dans un
-      # fichier tampon côté Traefik au lieu de saturer la RAM.
-      # `retryExpression` : retente automatiquement la requête en cas
-      # d'erreur réseau côté backend (ex. worker en plein reboot).
-      - "traefik.http.middlewares.parcelaire-buf.buffering.maxRequestBodyBytes=8589934592"
-      - "traefik.http.middlewares.parcelaire-buf.buffering.memRequestBodyBytes=10485760"
-      - "traefik.http.middlewares.parcelaire-buf.buffering.maxResponseBodyBytes=8589934592"
-      - "traefik.http.middlewares.parcelaire-buf.buffering.memResponseBodyBytes=10485760"
-      - "traefik.http.middlewares.parcelaire-buf.buffering.retryExpression=IsNetworkError() && Attempts() <= 2"
+      # ATTENTION : NE PAS ajouter de middleware `buffering` ici.
+      # Par défaut Traefik stream le body directement vers Gunicorn
+      # (= comportement souhaité pour les gros uploads orthophoto).
+      # Le middleware `buffering` tente de tout charger en mémoire/disque
+      # tampon AVANT de relayer, ce qui casse les uploads >100 Mo
+      # (timeout interne, /tmp saturé, etc.) → 500/502 sans même que
+      # Gunicorn voie passer la requête.
 
-      - "traefik.http.routers.parcelaire.middlewares=parcelaire-buf,parcelaire-compress,parcelaire-sec"
+      - "traefik.http.routers.parcelaire.middlewares=parcelaire-compress,parcelaire-sec"
 
     restart: unless-stopped
 

@@ -313,6 +313,44 @@ EXTERNAL_LOTS_API_PASSWORD = os.environ.get("EXTERNAL_LOTS_API_PASSWORD")
 
 
 # =====================================================================
+# Logging — pour voir les exceptions Django dans `docker compose logs`
+# =====================================================================
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "[{asctime}] {levelname} {name} — {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": "INFO",
+    },
+    "loggers": {
+        # Tout ce qui crashe dans une vue (500) sera affiché en clair.
+        "django.request": {
+            "handlers": ["console"],
+            "level": "ERROR",
+            "propagate": False,
+        },
+        # Notre app
+        "parcelaire": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+}
+
+# =====================================================================
 # Orthophotos — pipeline GDAL
 # =====================================================================
 # Taille maximale d'upload (8 Go par défaut). Augmenter au besoin si vos
@@ -324,8 +362,20 @@ ORTHOPHOTO_GDAL_PROCESSES = int(os.environ.get("ORTHOPHOTO_GDAL_PROCESSES", "4")
 # Permet à Django d'accepter les très gros uploads sans tomber sur la
 # limite par défaut de 2,5 Mo (DATA_UPLOAD_MAX_MEMORY_SIZE).
 DATA_UPLOAD_MAX_MEMORY_SIZE = ORTHOPHOTO_MAX_BYTES
-FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # bascule sur fichier temp >10 Mo
+FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024   # bascule sur fichier temp >5 Mo
 FILE_UPLOAD_PERMISSIONS = 0o644
+DATA_UPLOAD_MAX_NUMBER_FIELDS = None             # pas de limite sur le nb de champs form
+
+# Répertoire tampon pour les uploads : on l'isole dans `MEDIA_ROOT/_tmp_uploads`
+# plutôt que d'utiliser `/tmp` (souvent petit dans un container Linux et qui
+# peut saturer pendant un upload de plusieurs Go).
+_orthophoto_tmp = Path(os.environ.get("FILE_UPLOAD_TEMP_DIR") or (Path(os.environ.get("MEDIA_ROOT", str(BASE_DIR / "media"))) / "_tmp_uploads"))
+try:
+    _orthophoto_tmp.mkdir(parents=True, exist_ok=True)
+    FILE_UPLOAD_TEMP_DIR = str(_orthophoto_tmp)
+except OSError:
+    # Échec silencieux : Django retombera sur `/tmp` par défaut.
+    pass
 
 SAP_BASE_URL = os.getenv("SAP_BASE_URL", "").rstrip("/")
 SAP_TOKEN_URL = os.getenv("SAP_TOKEN_URL", "")
