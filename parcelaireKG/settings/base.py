@@ -362,7 +362,7 @@ ORTHOPHOTO_GDAL_PROCESSES = int(os.environ.get("ORTHOPHOTO_GDAL_PROCESSES", "4")
 # Permet à Django d'accepter les très gros uploads sans tomber sur la
 # limite par défaut de 2,5 Mo (DATA_UPLOAD_MAX_MEMORY_SIZE).
 DATA_UPLOAD_MAX_MEMORY_SIZE = ORTHOPHOTO_MAX_BYTES
-FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024   # bascule sur fichier temp >5 Mo
+FILE_UPLOAD_MAX_MEMORY_SIZE = 25 * 1024 * 1024   # bascule sur fichier temp >5 Mo
 FILE_UPLOAD_PERMISSIONS = 0o644
 DATA_UPLOAD_MAX_NUMBER_FIELDS = None             # pas de limite sur le nb de champs form
 

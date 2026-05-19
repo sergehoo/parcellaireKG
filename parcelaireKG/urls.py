@@ -36,7 +36,8 @@ from parcelaire.views import HomeView, MapView, ParcellaireDashboardView, Projet
     LeadUpdateView, LeadCreateView, PropertyAssetDeleteView, PropertyAssetListView, PropertyAssetCreateView, \
     PropertyAssetDetailView, PropertyAssetUpdateView, MapCommercialView, \
     OrthophotoListView, OrthophotoCreateView, OrthophotoDetailView, OrthophotoStatusAPIView, \
-    OrthophotoRetryView, OrthophotoSetCurrentView, OrthophotoDeleteTilesView, OrthophotoDownloadLogsView
+    OrthophotoRetryView, OrthophotoSetCurrentView, OrthophotoDeleteTilesView, OrthophotoDownloadLogsView, \
+    OrthophotoUploadInitView, OrthophotoUploadChunkView, OrthophotoUploadFinalizeView
 
 urlpatterns = [
                   path('admin/', admin.site.urls),
@@ -148,6 +149,13 @@ urlpatterns = [
                   path("orthophotos/<int:pk>/set-current/", OrthophotoSetCurrentView.as_view(), name="orthophoto_set_current"),
                   path("orthophotos/<int:pk>/delete-tiles/", OrthophotoDeleteTilesView.as_view(), name="orthophoto_delete_tiles"),
                   path("orthophotos/<int:pk>/logs.txt", OrthophotoDownloadLogsView.as_view(), name="orthophoto_logs"),
+
+                  # -------- UPLOAD CHUNKED --------
+                  # Contourne les limites des proxies (Cloudflare, ISP, Traefik
+                  # timeouts) : on envoie le TIFF par tranches de 5 Mo.
+                  path("orthophotos/upload/init/", OrthophotoUploadInitView.as_view(), name="orthophoto_upload_init"),
+                  path("orthophotos/upload/chunk/<str:upload_id>/", OrthophotoUploadChunkView.as_view(), name="orthophoto_upload_chunk"),
+                  path("orthophotos/upload/finalize/<str:upload_id>/", OrthophotoUploadFinalizeView.as_view(), name="orthophoto_upload_finalize"),
               ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 if settings.DEBUG:
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

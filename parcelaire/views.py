@@ -1318,17 +1318,39 @@ class OrthophotoCreateView(_OrthophotoBaseMixin, SuccessMessageMixin, CreateView
         # cas où le multipart parser n'a pas récupéré un champ.
         import logging
         logger = logging.getLogger("parcelaire")
+        # Si POST ne contient QUE le csrfmiddlewaretoken alors que le
+        # navigateur prétend envoyer un fichier (Content-Length élevé),
+        # c'est presque toujours un body tronqué (réseau mobile, proxy
+        # ISP, Cloudflare free plan limité à 100 Mo, …).
+        content_length = self.request.META.get("CONTENT_LENGTH") or "0"
+        try:
+            content_length_int = int(content_length)
+        except ValueError:
+            content_length_int = -1
+        suspect_truncated = (
+            content_length_int > 50 * 1024 * 1024
+            and len(self.request.POST) <= 1
+            and not self.request.FILES
+        )
         logger.warning(
             "OrthophotoCreateView form rejeté par %s\n"
-            "  errors  : %s\n"
-            "  POST    : %s\n"
-            "  FILES   : %s\n"
-            "  raw_program : %r",
+            "  errors        : %s\n"
+            "  POST keys     : %s\n"
+            "  FILES         : %s\n"
+            "  raw_program   : %r\n"
+            "  Content-Length: %s octets\n"
+            "  Content-Type  : %s\n"
+            "  User-Agent    : %s\n"
+            "  TRUNCATED?    : %s",
             self.request.user,
             form.errors.as_json(),
-            dict(self.request.POST.lists()),
+            list(self.request.POST.keys()),
             {k: f"<{v.size} bytes, {v.content_type}>" for k, v in self.request.FILES.items()},
             self.request.POST.get("program"),
+            content_length,
+            self.request.META.get("CONTENT_TYPE", ""),
+            self.request.META.get("HTTP_USER_AGENT", "")[:120],
+            suspect_truncated,
         )
         return super().form_invalid(form)
 
@@ -1514,3 +1536,271 @@ class OrthophotoDownloadLogsView(_OrthophotoBaseMixin, View):
         resp = HttpResponse(body, content_type="text/plain; charset=utf-8")
         resp["Content-Disposition"] = f'attachment; filename="orthophoto-{ortho.pk}-logs.txt"'
         return resp
+
+
+# =====================================================================
+# UPLOAD CHUNKED — orthophotos
+# =====================================================================
+# Permet d'uploader un TIFF de plusieurs Go par tranches de quelques Mo
+# pour s'affranchir des limites de taille / timeouts des proxies (Traefik,
+# CDN, ISP). Une orthophoto en statut PENDING est créée à l'init ; on
+# append les chunks à `/media/_tmp_uploads/<uuid>.tif` ; à la finalisation
+# on déplace le fichier dans `source_file` et on déclenche Celery.
+
+import json as _json
+import logging as _logging
+import os as _os
+import uuid as _uuid
+from datetime import datetime as _datetime
+from pathlib import Path as _Path
+from django.utils.text import slugify as _slugify
+
+_logger_orth = _logging.getLogger("parcelaire")
+
+
+def _orthophoto_tmp_dir():
+    base = getattr(dj_settings, "FILE_UPLOAD_TEMP_DIR", None) or (_Path(dj_settings.MEDIA_ROOT) / "_tmp_uploads")
+    base = _Path(base)
+    base.mkdir(parents=True, exist_ok=True)
+    return base
+
+
+@method_decorator(require_POST, name="dispatch")
+class OrthophotoUploadInitView(_OrthophotoBaseMixin, View):
+    """
+    POST /orthophotos/upload/init/
+    Crée une ProgramOrthophoto en statut PENDING et retourne :
+        { upload_id, chunk_size }
+    Le payload JSON doit contenir : program, reference_year, reference_month,
+    name (opt), period_label (opt), min_zoom (opt), max_zoom (opt),
+    is_current (opt), filename, total_size.
+    """
+
+    CHUNK_SIZE = 5 * 1024 * 1024  # 5 Mo
+
+    def post(self, request, *args, **kwargs):
+        try:
+            payload = _json.loads(request.body.decode("utf-8") or "{}")
+        except _json.JSONDecodeError as exc:
+            return JsonResponse({"error": f"JSON invalide : {exc}"}, status=400)
+
+        program_id = payload.get("program")
+        if not program_id:
+            return JsonResponse({"error": "program est obligatoire."}, status=400)
+        try:
+            program = RealEstateProgram.objects.get(pk=program_id, is_active=True)
+        except RealEstateProgram.DoesNotExist:
+            return JsonResponse({"error": "Programme introuvable."}, status=404)
+
+        try:
+            year = int(payload.get("reference_year")) if payload.get("reference_year") else None
+            month = int(payload.get("reference_month")) if payload.get("reference_month") else None
+        except (TypeError, ValueError):
+            return JsonResponse({"error": "Année / mois invalides."}, status=400)
+
+        if year and month and not (1 <= month <= 12):
+            return JsonResponse({"error": "Mois entre 1 et 12."}, status=400)
+
+        filename = (payload.get("filename") or "upload.tif").strip()
+        if not filename.lower().endswith((".tif", ".tiff")):
+            return JsonResponse({"error": "Extension acceptée : .tif ou .tiff."}, status=400)
+
+        try:
+            total_size = int(payload.get("total_size", 0))
+        except (TypeError, ValueError):
+            total_size = 0
+
+        max_bytes = int(getattr(dj_settings, "ORTHOPHOTO_MAX_BYTES", 8 * 1024 ** 3))
+        if total_size > max_bytes:
+            return JsonResponse(
+                {"error": f"Fichier trop volumineux ({total_size / 1024**3:.1f} Go). Max {max_bytes / 1024**3:.1f} Go."},
+                status=413,
+            )
+
+        # Vérifie le conflit (programme, année, mois) déjà existant.
+        replace_existing = bool(payload.get("replace_existing"))
+        existing = None
+        if year and month:
+            existing = ProgramOrthophoto.objects.filter(
+                program=program,
+                reference_year=year,
+                reference_month=month,
+            ).first()
+        if existing and not replace_existing:
+            return JsonResponse(
+                {"error": "Une orthophoto existe déjà pour ce programme / mois.",
+                 "conflict": True,
+                 "existing_id": existing.pk},
+                status=409,
+            )
+
+        # Réutilisation ou création.
+        if existing:
+            ortho = existing
+            ortho.name = payload.get("name") or ortho.name
+            ortho.period_label = payload.get("period_label") or ortho.period_label
+            ortho.min_zoom = int(payload.get("min_zoom") or 15)
+            ortho.max_zoom = int(payload.get("max_zoom") or 22)
+            ortho.is_current = bool(payload.get("is_current"))
+            ortho.status = "PENDING"
+            ortho.progress_percent = 0
+            ortho.current_step = "Upload en cours…"
+            ortho.error_message = None
+            ortho.processed_at = None
+            ortho.created_by = request.user if request.user.is_authenticated else None
+            ortho.save()
+        else:
+            ortho = ProgramOrthophoto.objects.create(
+                program=program,
+                name=payload.get("name") or "",
+                period_label=payload.get("period_label") or "",
+                reference_year=year,
+                reference_month=month,
+                min_zoom=int(payload.get("min_zoom") or 15),
+                max_zoom=int(payload.get("max_zoom") or 22),
+                is_current=bool(payload.get("is_current")),
+                status="PENDING",
+                progress_percent=0,
+                current_step="Upload en cours…",
+                created_by=request.user if request.user.is_authenticated else None,
+            )
+
+        upload_id = _uuid.uuid4().hex
+        # Le fichier tampon est lié à l'orthophoto via son metadata pour
+        # qu'on puisse retrouver l'ortho à finalize.
+        ortho.metadata = ortho.metadata or {}
+        ortho.metadata["chunked_upload"] = {
+            "upload_id": upload_id,
+            "filename": filename,
+            "total_size": total_size,
+            "received_size": 0,
+            "started_at": _datetime.utcnow().isoformat() + "Z",
+        }
+        ortho.save(update_fields=["metadata"])
+
+        # Crée le fichier vide.
+        tmp_path = _orthophoto_tmp_dir() / f"{upload_id}.part"
+        tmp_path.touch()
+
+        _logger_orth.info(
+            "Upload init: ortho=%s upload_id=%s total=%s filename=%s",
+            ortho.pk, upload_id, total_size, filename,
+        )
+        return JsonResponse({
+            "upload_id": upload_id,
+            "orthophoto_id": ortho.pk,
+            "chunk_size": self.CHUNK_SIZE,
+        })
+
+
+@method_decorator(require_POST, name="dispatch")
+class OrthophotoUploadChunkView(_OrthophotoBaseMixin, View):
+    """
+    POST /orthophotos/upload/chunk/<upload_id>/?index=N
+    Body : binaire brut (Content-Type: application/octet-stream).
+    Append au fichier tampon. Retourne la taille totale reçue.
+    """
+
+    def post(self, request, upload_id, *args, **kwargs):
+        try:
+            index = int(request.GET.get("index", -1))
+        except (TypeError, ValueError):
+            return JsonResponse({"error": "index manquant ou invalide."}, status=400)
+        if index < 0:
+            return JsonResponse({"error": "index négatif."}, status=400)
+
+        # Cherche l'orthophoto correspondante via metadata.
+        ortho = ProgramOrthophoto.objects.filter(
+            metadata__chunked_upload__upload_id=upload_id,
+        ).first()
+        if not ortho:
+            return JsonResponse({"error": "Session upload introuvable."}, status=404)
+
+        tmp_path = _orthophoto_tmp_dir() / f"{upload_id}.part"
+        if not tmp_path.exists():
+            return JsonResponse({"error": "Fichier tampon manquant."}, status=410)
+
+        # Append le chunk.
+        chunk = request.body  # binaire brut
+        if not chunk:
+            return JsonResponse({"error": "Chunk vide."}, status=400)
+
+        with open(tmp_path, "ab") as fh:
+            fh.write(chunk)
+
+        received = tmp_path.stat().st_size
+        ortho.metadata = ortho.metadata or {}
+        ortho.metadata.setdefault("chunked_upload", {})["received_size"] = received
+        ortho.progress_percent = min(
+            95,
+            int((received / max(1, ortho.metadata["chunked_upload"].get("total_size", 1))) * 90),
+        )
+        ortho.current_step = f"Upload {received / (1024 ** 2):.0f} Mo / {ortho.metadata['chunked_upload'].get('total_size', 0) / (1024 ** 2):.0f} Mo"
+        ortho.save(update_fields=["metadata", "progress_percent", "current_step"])
+
+        return JsonResponse({
+            "received_size": received,
+            "expected_size": ortho.metadata["chunked_upload"].get("total_size", 0),
+        })
+
+
+@method_decorator(require_POST, name="dispatch")
+class OrthophotoUploadFinalizeView(_OrthophotoBaseMixin, View):
+    """
+    POST /orthophotos/upload/finalize/<upload_id>/
+    Renomme le fichier tampon, l'attache à l'orthophoto, déclenche Celery.
+    """
+
+    def post(self, request, upload_id, *args, **kwargs):
+        ortho = ProgramOrthophoto.objects.filter(
+            metadata__chunked_upload__upload_id=upload_id,
+        ).first()
+        if not ortho:
+            return JsonResponse({"error": "Session upload introuvable."}, status=404)
+
+        tmp_path = _orthophoto_tmp_dir() / f"{upload_id}.part"
+        if not tmp_path.exists():
+            return JsonResponse({"error": "Fichier tampon manquant."}, status=410)
+
+        meta = (ortho.metadata or {}).get("chunked_upload") or {}
+        expected = int(meta.get("total_size") or 0)
+        actual = tmp_path.stat().st_size
+
+        if expected and actual != expected:
+            return JsonResponse(
+                {"error": f"Taille incohérente ({actual} reçu vs {expected} attendu). Recommencez."},
+                status=400,
+            )
+
+        # Renomme dans le dossier média définitif.
+        filename = meta.get("filename") or "upload.tif"
+        safe_name = _slugify(_Path(filename).stem)[:80] or "ortho"
+        ext = _Path(filename).suffix.lower() or ".tif"
+        final_rel = f"orthophotos/sources/{ortho.pk}_{safe_name}{ext}"
+        final_abs = _Path(dj_settings.MEDIA_ROOT) / final_rel
+        final_abs.parent.mkdir(parents=True, exist_ok=True)
+        # Move atomique (mv) si possible, fallback copy.
+        try:
+            _os.replace(str(tmp_path), str(final_abs))
+        except OSError:
+            shutil.copy(str(tmp_path), str(final_abs))
+            tmp_path.unlink(missing_ok=True)
+
+        ortho.source_file.name = final_rel
+        ortho.current_step = "En attente du worker"
+        ortho.progress_percent = 0
+        ortho.metadata = ortho.metadata or {}
+        ortho.metadata["chunked_upload"]["finalized_at"] = _datetime.utcnow().isoformat() + "Z"
+        ortho.save()
+
+        # Lance le pipeline Celery.
+        try:
+            from parcelaire.tasks import process_orthophoto
+            process_orthophoto.delay(ortho.pk)
+        except Exception as exc:  # noqa: BLE001
+            _logger_orth.warning("Celery indispo, pipeline non lancé pour ortho %s : %s", ortho.pk, exc)
+
+        return JsonResponse({
+            "redirect": reverse("orthophoto_detail", kwargs={"pk": ortho.pk}),
+            "orthophoto_id": ortho.pk,
+        })

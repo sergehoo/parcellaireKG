@@ -304,156 +304,150 @@
         return n.toFixed(1) + ' ' + u[i];
       },
 
-      // Soumission XHR → permet de suivre la progression en temps réel.
-      submitForm(ev) {
+      // -----------------------------------------------------------
+      // Upload CHUNKED — chaque tranche de 5 Mo passe sous les limites
+      // de tous les proxies (Cloudflare, Traefik, ISP).
+      //   1. POST /orthophotos/upload/init/         (JSON, méta)
+      //   2. POST /orthophotos/upload/chunk/<id>/?index=N  (binaire)
+      //   3. POST /orthophotos/upload/finalize/<id>/   (JSON)
+      // -----------------------------------------------------------
+      _aborted: false,
+      _uploadId: null,
+
+      async submitForm(ev) {
         if (this.uploading) return;
         const form = ev.target;
 
-        // ---- Validation client : le programme est obligatoire ----
-        // On lit la valeur directement sur le <select> ET on s'assure
-        // qu'il n'est pas désactivé (sinon FormData ne le sérialise pas).
         const programInput = form.querySelector('select[name="program"]');
-        if (programInput) {
-          // Si Alpine a désactivé l'option sélectionnée pour cause de
-          // filtre Projet, on la ré-active avant d'envoyer.
-          programInput.disabled = false;
-          for (const opt of programInput.options) {
-            opt.disabled = false;
-          }
-        }
-        if (programInput && !programInput.value) {
-          programInput.classList.add('ring-2', 'ring-rose-400', 'border-rose-400');
-          programInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          programInput.focus();
+        const file = form.querySelector('input[name="{{ form.source_file.name }}"]')?.files[0];
+
+        // ---- Validations rapides ----
+        if (!programInput || !programInput.value) {
+          programInput?.classList.add('ring-2', 'ring-rose-400', 'border-rose-400');
+          programInput?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          programInput?.focus();
           alert('Choisissez un programme avant de lancer le traitement.');
-          const cleanup = () => {
-            programInput.classList.remove('ring-2', 'ring-rose-400', 'border-rose-400');
-            programInput.removeEventListener('change', cleanup);
-          };
-          programInput.addEventListener('change', cleanup);
           return;
         }
-
-        const data = new FormData(form);
-        // Filet : si le <select> est temporairement désactivé pour une
-        // raison X, on ré-injecte sa valeur explicitement.
-        if (programInput && programInput.value) {
-          data.set('program', programInput.value);
-        }
-        // Log de diagnostic — visible dans F12 console.
-        console.log('[orthophoto upload] program select state :', {
-          name: programInput?.name,
-          value: programInput?.value,
-          disabled: programInput?.disabled,
-          selected_option: programInput?.selectedOptions[0]?.textContent?.trim(),
-        });
-        const file = data.get('{{ form.source_file.name }}');
-
         if (!file || !file.size) {
           alert('Sélectionnez un fichier GeoTIFF.');
           return;
         }
 
-        // Debug : log de ce qui part réellement vers le serveur.
-        // (Visible dans la console F12 ; à retirer une fois le flux stable.)
-        const dbg = {};
-        for (const [k, v] of data.entries()) {
-          dbg[k] = (v instanceof File) ? `<file ${v.name} ${v.size}o>` : v;
-        }
-        console.log('[orthophoto upload] FormData payload :', dbg);
+        const csrf = form.querySelector('input[name="csrfmiddlewaretoken"]').value;
 
         this.uploading = true;
+        this._aborted = false;
         this.uploadProgress = 0;
         this.bytesSent = 0;
-        this.bytesTotal = file.size || 0;
+        this.bytesTotal = file.size;
         this.uploadStartedAt = Date.now();
-        this.uploadStatusLabel = 'Connexion au serveur…';
+        this.uploadStatusLabel = 'Initialisation…';
         this.canCancel = true;
 
-        const xhr = new XMLHttpRequest();
-        this._xhr = xhr;
-        xhr.open('POST', form.action || window.location.href, true);
-        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+        try {
+          // ---------- 1. INIT ----------
+          const initBody = {
+            program: programInput.value,
+            name: form.querySelector('input[name="name"]')?.value || '',
+            period_label: form.querySelector('input[name="period_label"]')?.value || '',
+            reference_year: form.querySelector('input[name="reference_year"]')?.value || null,
+            reference_month: form.querySelector('input[name="reference_month"]')?.value || null,
+            min_zoom: form.querySelector('input[name="min_zoom"]')?.value || 15,
+            max_zoom: form.querySelector('input[name="max_zoom"]')?.value || 22,
+            is_current: !!form.querySelector('input[name="is_current"]:checked'),
+            replace_existing: !!form.querySelector('input[name="replace_existing"]:checked'),
+            filename: file.name,
+            total_size: file.size,
+          };
+          const initRes = await fetch("{% url 'orthophoto_upload_init' %}", {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': csrf,
+              'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'same-origin',
+            body: JSON.stringify(initBody),
+          });
+          if (!initRes.ok) {
+            const err = await initRes.json().catch(() => ({error: 'Erreur init.'}));
+            throw new Error(err.error || `init: HTTP ${initRes.status}`);
+          }
+          const { upload_id, orthophoto_id, chunk_size } = await initRes.json();
+          this._uploadId = upload_id;
 
-        // Progression côté upload (octets envoyés).
-        xhr.upload.onprogress = (e) => {
-          if (!e.lengthComputable) return;
-          this.bytesSent = e.loaded;
-          this.bytesTotal = e.total;
-          this.uploadProgress = Math.min(100, Math.round((e.loaded / e.total) * 100));
+          // ---------- 2. CHUNKS ----------
+          const total = file.size;
+          let offset = 0;
+          let index = 0;
+          const chunkUrlBase = "{% url 'orthophoto_upload_chunk' upload_id='__UID__' %}".replace('__UID__', upload_id);
 
-          const elapsed = (Date.now() - this.uploadStartedAt) / 1000;
-          const speed = elapsed > 0 ? e.loaded / elapsed : 0;
-          const remaining = speed > 0 ? (e.total - e.loaded) / speed : 0;
-          this.uploadStatusLabel =
-            this.uploadProgress < 100
-              ? `Transfert ${this.prettySize(speed)}/s — ${Math.ceil(remaining)} s restantes`
-              : 'Fichier reçu — le serveur prépare la tâche…';
-        };
+          while (offset < total) {
+            if (this._aborted) throw new Error('Annulé.');
+            const end = Math.min(offset + chunk_size, total);
+            const chunk = file.slice(offset, end);
+            const url = `${chunkUrlBase}?index=${index}`;
 
-        xhr.upload.onloadend = () => {
-          // Fin du transfert HTTP : la suite (validation/save) peut prendre
-          // quelques secondes selon la taille — on signale visuellement.
-          this.uploadProgress = 100;
-          this.uploadStatusLabel = 'Fichier reçu — le serveur prépare la tâche…';
+            const res = await fetch(url, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/octet-stream',
+                'X-CSRFToken': csrf,
+                'X-Requested-With': 'XMLHttpRequest',
+              },
+              credentials: 'same-origin',
+              body: chunk,
+            });
+            if (!res.ok) {
+              const err = await res.json().catch(() => ({error: `HTTP ${res.status}`}));
+              throw new Error(`chunk #${index}: ${err.error || res.status}`);
+            }
+            const j = await res.json();
+            this.bytesSent = j.received_size || end;
+            this.uploadProgress = Math.min(99, Math.round((this.bytesSent / total) * 100));
+
+            const elapsed = (Date.now() - this.uploadStartedAt) / 1000;
+            const speed = elapsed > 0 ? this.bytesSent / elapsed : 0;
+            const remaining = speed > 0 ? (total - this.bytesSent) / speed : 0;
+            this.uploadStatusLabel = `Chunk ${index + 1} envoyé — ${this.prettySize(speed)}/s — ${Math.ceil(remaining)} s restantes`;
+
+            offset = end;
+            index += 1;
+          }
+
+          // ---------- 3. FINALIZE ----------
+          this.uploadStatusLabel = 'Finalisation côté serveur…';
           this.canCancel = false;
-        };
-
-        xhr.onload = () => {
-          // Django CreateView :
-          //   - succès → 302 vers success_url ; XMLHttpRequest suit la
-          //     redirection automatiquement, donc `xhr.responseURL`
-          //     pointera sur `/orthophotos/<id>/`.
-          //   - form invalide → 200 sur la même URL ; le body est le
-          //     HTML du formulaire ré-rendu avec ses erreurs.
-          //
-          // → On considère "succès" UNIQUEMENT si l'URL finale est
-          //   différente de l'URL du POST. Sinon, on ré-affiche le form
-          //   pour que l'utilisateur voie les messages d'erreur Django.
-          const submitUrl = form.action || window.location.href;
-          const finalUrl = xhr.responseURL || '';
-          const isRedirect =
-            xhr.status >= 200 && xhr.status < 400
-            && finalUrl
-            && new URL(finalUrl, window.location.origin).pathname
-                 !== new URL(submitUrl, window.location.origin).pathname;
-
-          if (isRedirect) {
-            this.uploadStatusLabel = 'Redirection vers la page de suivi…';
-            window.location.assign(finalUrl);
-            return;
+          const finalizeUrl = "{% url 'orthophoto_upload_finalize' upload_id='__UID__' %}".replace('__UID__', upload_id);
+          const finRes = await fetch(finalizeUrl, {
+            method: 'POST',
+            headers: {
+              'X-CSRFToken': csrf,
+              'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'same-origin',
+          });
+          if (!finRes.ok) {
+            const err = await finRes.json().catch(() => ({error: `HTTP ${finRes.status}`}));
+            throw new Error(`finalize: ${err.error || finRes.status}`);
           }
-
-          // Cas form invalide (200 même URL) OU erreur 4xx/5xx :
-          // on remplace le document par la réponse complète pour
-          // afficher les messages d'erreur Django.
+          const { redirect } = await finRes.json();
+          this.uploadProgress = 100;
+          this.uploadStatusLabel = 'Téléversement complet. Redirection…';
+          window.location.assign(redirect);
+        } catch (err) {
+          console.error('[orthophoto upload]', err);
           this.uploading = false;
-          if (xhr.status >= 400) {
-            this.uploadStatusLabel = `Erreur ${xhr.status}.`;
-          } else {
-            this.uploadStatusLabel = 'Le formulaire contient des erreurs.';
-          }
-          document.open();
-          document.write(xhr.responseText || '<h1>Erreur ' + xhr.status + '</h1>');
-          document.close();
-        };
-
-        xhr.onerror = () => {
-          this.uploading = false;
-          alert('Erreur réseau pendant le téléversement. Réessayez.');
-        };
-
-        xhr.onabort = () => {
-          this.uploading = false;
-        };
-
-        xhr.send(data);
+          this.canCancel = false;
+          alert('Échec du téléversement : ' + err.message);
+        }
       },
 
       cancelUpload() {
-        if (this._xhr) this._xhr.abort();
-        this._xhr = null;
+        this._aborted = true;
         this.uploading = false;
+        this.canCancel = false;
       },
     };
   }
