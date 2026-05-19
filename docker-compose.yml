@@ -13,10 +13,24 @@ services:
       - |
         set -e
         python manage.py collectstatic --noinput
+        # --workers gthread + --threads = workers asynchrones (l'I/O des
+        #   gros uploads ne bloque pas le worker, qui peut continuer à
+        #   accepter d'autres requêtes).
+        # --timeout 600 = 10 min : un GeoTIFF de plusieurs Go transite
+        #   sans être coupé. La tâche GDAL, elle, tourne dans Celery.
+        # --limit-request-line 16384 et --limit-request-field_size 65536
+        #   évitent les "Request Line too long" si l'URL ou des cookies
+        #   sont gros.
         exec gunicorn parcelaireKG.wsgi:application \
             --bind 0.0.0.0:8000 \
+            --worker-class gthread \
             --workers 3 \
-            --timeout 120 \
+            --threads 4 \
+            --timeout 600 \
+            --graceful-timeout 60 \
+            --keep-alive 5 \
+            --limit-request-line 16384 \
+            --limit-request-field_size 65536 \
             --access-logfile - \
             --error-logfile -
     volumes:
@@ -86,7 +100,19 @@ services:
       - "traefik.http.middlewares.parcelaire-sec.headers.forceSTSHeader=true"
       - "traefik.http.middlewares.parcelaire-sec.headers.frameDeny=true"
       - "traefik.http.middlewares.parcelaire-sec.headers.contentTypeNosniff=true"
-      - "traefik.http.routers.parcelaire.middlewares=parcelaire-compress,parcelaire-sec"
+
+      # Buffering : autorise jusqu'à 8 Go de body (upload orthophoto TIFF).
+      # `memRequestBodyBytes=10 MiB` → tout body plus gros est écrit dans un
+      # fichier tampon côté Traefik au lieu de saturer la RAM.
+      # `retryExpression` : retente automatiquement la requête en cas
+      # d'erreur réseau côté backend (ex. worker en plein reboot).
+      - "traefik.http.middlewares.parcelaire-buf.buffering.maxRequestBodyBytes=8589934592"
+      - "traefik.http.middlewares.parcelaire-buf.buffering.memRequestBodyBytes=10485760"
+      - "traefik.http.middlewares.parcelaire-buf.buffering.maxResponseBodyBytes=8589934592"
+      - "traefik.http.middlewares.parcelaire-buf.buffering.memResponseBodyBytes=10485760"
+      - "traefik.http.middlewares.parcelaire-buf.buffering.retryExpression=IsNetworkError() && Attempts() <= 2"
+
+      - "traefik.http.routers.parcelaire.middlewares=parcelaire-buf,parcelaire-compress,parcelaire-sec"
 
     restart: unless-stopped
 
