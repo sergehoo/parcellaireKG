@@ -7,7 +7,6 @@
     <meta name="referrer" content="origin-when-cross-origin">
     <title>KAYDAN Programmes Immobiliers</title>
 
-    {# Tailwind compilé localement (npm run build:css) — remplace cdn.tailwindcss.com #}
     <link rel="stylesheet" href="{% static 'css/tailwind.css' %}"/>
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
@@ -401,8 +400,7 @@
             background: transparent !important;
         }
     </style>
-    {# Tailwind est compilé via tailwind.config.js (theme.extend) ;
-       l'ancien bloc `tailwind.config = {...}` runtime n'a plus lieu d'être. #}
+
     <script>
         function estateMapApp() {
             return {
