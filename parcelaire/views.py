@@ -1550,6 +1550,7 @@ import json as _json
 import logging as _logging
 from datetime import datetime as _datetime
 from pathlib import Path as _Path
+from django.db import transaction as _transaction
 from django.utils.text import slugify as _slugify
 
 from parcelaire.services import storage as _s3
@@ -1621,35 +1622,49 @@ class OrthophotoUploadInitView(_OrthophotoBaseMixin, View):
             )
 
         # ----- Création ou réutilisation -----
-        if existing:
-            ortho = existing
-            ortho.name = payload.get("name") or ortho.name
-            ortho.period_label = payload.get("period_label") or ortho.period_label
-            ortho.min_zoom = int(payload.get("min_zoom") or 15)
-            ortho.max_zoom = int(payload.get("max_zoom") or 22)
-            ortho.is_current = bool(payload.get("is_current"))
-            ortho.status = "PENDING"
-            ortho.progress_percent = 0
-            ortho.current_step = "Upload S3 en cours…"
-            ortho.error_message = None
-            ortho.processed_at = None
-            ortho.created_by = request.user if request.user.is_authenticated else None
-            ortho.save()
-        else:
-            ortho = ProgramOrthophoto.objects.create(
-                program=program,
-                name=payload.get("name") or "",
-                period_label=payload.get("period_label") or "",
-                reference_year=year,
-                reference_month=month,
-                min_zoom=int(payload.get("min_zoom") or 15),
-                max_zoom=int(payload.get("max_zoom") or 22),
-                is_current=bool(payload.get("is_current")),
-                status="PENDING",
-                progress_percent=0,
-                current_step="Upload S3 en cours…",
-                created_by=request.user if request.user.is_authenticated else None,
-            )
+        # Le modèle a une contrainte unique `uniq_current_orthophoto_per_program`
+        # (UniqueConstraint(fields=["program"], condition=Q(is_current=True))).
+        # Si l'utilisateur coche "Définir comme courante", il faut DÉCOCHER
+        # d'abord les autres orthophotos courantes du même programme, dans
+        # la même transaction, sinon le `full_clean()` du `save()` plante
+        # avec ValidationError.
+        is_current_flag = bool(payload.get("is_current"))
+
+        with _transaction.atomic():
+            if is_current_flag:
+                ProgramOrthophoto.objects.filter(
+                    program=program, is_current=True,
+                ).exclude(pk=getattr(existing, "pk", None) or -1).update(is_current=False)
+
+            if existing:
+                ortho = existing
+                ortho.name = payload.get("name") or ortho.name
+                ortho.period_label = payload.get("period_label") or ortho.period_label
+                ortho.min_zoom = int(payload.get("min_zoom") or 15)
+                ortho.max_zoom = int(payload.get("max_zoom") or 22)
+                ortho.is_current = is_current_flag
+                ortho.status = "PENDING"
+                ortho.progress_percent = 0
+                ortho.current_step = "Upload S3 en cours…"
+                ortho.error_message = None
+                ortho.processed_at = None
+                ortho.created_by = request.user if request.user.is_authenticated else None
+                ortho.save()
+            else:
+                ortho = ProgramOrthophoto.objects.create(
+                    program=program,
+                    name=payload.get("name") or "",
+                    period_label=payload.get("period_label") or "",
+                    reference_year=year,
+                    reference_month=month,
+                    min_zoom=int(payload.get("min_zoom") or 15),
+                    max_zoom=int(payload.get("max_zoom") or 22),
+                    is_current=is_current_flag,
+                    status="PENDING",
+                    progress_percent=0,
+                    current_step="Upload S3 en cours…",
+                    created_by=request.user if request.user.is_authenticated else None,
+                )
 
         # ----- Initiate multipart sur MinIO -----
         s3_key = _build_s3_key(ortho, filename)
