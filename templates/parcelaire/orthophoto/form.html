@@ -1,0 +1,294 @@
+{% extends "layouts/base.html" %}
+{% load static widget_tweaks %}
+
+{% block title %}Nouvelle orthophoto — Parcellaire KAYDAN{% endblock %}
+
+{% block content %}
+<section class="mx-auto max-w-3xl px-4 py-8 lg:px-8" x-data="orthophotoUpload()">
+
+  <header class="card-glass mb-6 rounded-2xl p-5">
+    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-premium-600">Import</p>
+    <h1 class="mt-1 text-2xl font-extrabold text-slate-900">Nouvelle orthophoto</h1>
+    <p class="mt-1 text-sm text-slate-600">
+      Téléverse un fichier GeoTIFF (.tif / .tiff). Le pipeline GDAL est lancé automatiquement
+      à l'enregistrement (reprojection EPSG:3857, overviews, tuiles XYZ).
+    </p>
+  </header>
+
+  <!-- Overlay de progression de l'upload -->
+  <div x-show="uploading"
+       x-cloak
+       x-transition.opacity
+       class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur"
+       role="dialog"
+       aria-modal="true"
+       aria-label="Téléversement en cours">
+    <div class="card-glass w-[min(92vw,440px)] rounded-2xl p-6 text-center">
+      <div class="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-full bg-premium-100 text-premium-600">
+        <i class="fa-solid fa-cloud-arrow-up animate-pulse text-xl"></i>
+      </div>
+      <h3 class="text-lg font-extrabold text-slate-900">Téléversement…</h3>
+      <p class="mt-1 text-xs text-slate-500" x-text="uploadStatusLabel"></p>
+
+      <div class="mt-4 h-3 w-full overflow-hidden rounded-full bg-slate-200">
+        <div class="h-full bg-premium-500 transition-all duration-200"
+             :style="'width:' + uploadProgress + '%'"></div>
+      </div>
+
+      <div class="mt-2 flex items-center justify-between text-xs font-semibold text-slate-600">
+        <span x-text="uploadProgress + ' %'"></span>
+        <span x-text="prettySize(bytesSent) + ' / ' + prettySize(bytesTotal)"></span>
+      </div>
+
+      <p class="mt-3 text-[11px] text-slate-500">
+        Une fois le fichier reçu, le pipeline GDAL prend la suite côté serveur.
+      </p>
+
+      <button type="button"
+              @click="cancelUpload()"
+              x-show="canCancel"
+              class="mt-4 text-xs font-semibold text-rose-600 hover:underline">
+        Annuler le téléversement
+      </button>
+    </div>
+  </div>
+
+  <form method="post"
+        enctype="multipart/form-data"
+        @submit.prevent="submitForm($event)"
+        class="card-glass space-y-5 rounded-2xl p-6">
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+        {{ form.non_field_errors }}
+      </div>
+    {% endif %}
+
+    <!-- Drag & drop -->
+    <div>
+      <label class="mb-1 block text-sm font-bold text-slate-700">Fichier GeoTIFF</label>
+      <div class="relative rounded-2xl border-2 border-dashed transition-colors"
+           :class="dragging ? 'border-premium-500 bg-premium-50' : (file ? 'border-emerald-400 bg-emerald-50' : 'border-slate-300 bg-white')"
+           @dragover.prevent="dragging = true"
+           @dragleave.prevent="dragging = false"
+           @drop.prevent="onDrop($event)">
+        <input type="file" name="{{ form.source_file.name }}" id="{{ form.source_file.id_for_label }}"
+               accept=".tif,.tiff,image/tiff"
+               @change="onPick($event)"
+               class="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0">
+        <div class="pointer-events-none flex flex-col items-center justify-center gap-2 px-6 py-10 text-center">
+          <i class="fa-solid fa-cloud-arrow-up text-3xl text-premium-500"></i>
+          <p class="text-sm font-semibold text-slate-700" x-show="!file">Glisse-dépose un fichier .tif/.tiff ici ou clique pour parcourir</p>
+          <p class="text-sm font-semibold text-emerald-700" x-show="file" x-cloak>
+            <i class="fa-solid fa-circle-check"></i>
+            <span x-text="file?.name"></span> (<span x-text="prettySize(file?.size)"></span>)
+          </p>
+          <p class="text-[11px] text-slate-500" x-show="!file">Taille max ~8 Go</p>
+        </div>
+      </div>
+      {{ form.source_file.errors }}
+    </div>
+
+    <!-- Projet / Programme -->
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div>
+        <label for="{{ form.project.id_for_label }}" class="mb-1 block text-sm font-bold text-slate-700">Projet</label>
+        {{ form.project|add_class:"w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" }}
+        <p class="mt-1 text-[11px] text-slate-500">Optionnel — sert juste à filtrer les programmes.</p>
+      </div>
+      <div>
+        <label for="{{ form.program.id_for_label }}" class="mb-1 block text-sm font-bold text-slate-700">Programme *</label>
+        {{ form.program|add_class:"w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" }}
+        {{ form.program.errors }}
+      </div>
+    </div>
+
+    <!-- Période -->
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div>
+        <label for="{{ form.reference_year.id_for_label }}" class="mb-1 block text-sm font-bold text-slate-700">Année</label>
+        {{ form.reference_year|add_class:"w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" }}
+      </div>
+      <div>
+        <label for="{{ form.reference_month.id_for_label }}" class="mb-1 block text-sm font-bold text-slate-700">Mois</label>
+        {{ form.reference_month|add_class:"w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" }}
+      </div>
+      <div>
+        <label for="{{ form.period_label.id_for_label }}" class="mb-1 block text-sm font-bold text-slate-700">Libellé (optionnel)</label>
+        {{ form.period_label|add_class:"w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" }}
+      </div>
+    </div>
+
+    <!-- Nom + zoom -->
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div class="md:col-span-1">
+        <label for="{{ form.name.id_for_label }}" class="mb-1 block text-sm font-bold text-slate-700">Nom</label>
+        {{ form.name|add_class:"w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" }}
+      </div>
+      <div>
+        <label for="{{ form.min_zoom.id_for_label }}" class="mb-1 block text-sm font-bold text-slate-700">Zoom min</label>
+        {{ form.min_zoom|add_class:"w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" }}
+      </div>
+      <div>
+        <label for="{{ form.max_zoom.id_for_label }}" class="mb-1 block text-sm font-bold text-slate-700">Zoom max</label>
+        {{ form.max_zoom|add_class:"w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" }}
+      </div>
+    </div>
+
+    <!-- Switches -->
+    <div class="flex flex-wrap items-center gap-6">
+      <label class="inline-flex items-center gap-2 text-sm">
+        {{ form.is_current }}
+        <span class="font-semibold text-slate-700">Définir comme orthophoto courante</span>
+      </label>
+      <label class="inline-flex items-center gap-2 text-sm">
+        {{ form.replace_existing }}
+        <span class="font-semibold text-slate-700">Remplacer la version existante pour ce mois</span>
+      </label>
+    </div>
+
+    <!-- Submit -->
+    <div class="flex items-center justify-between border-t border-slate-200 pt-4">
+      <a href="{% url 'orthophoto_list' %}" class="btn-secondary">Annuler</a>
+      <button type="submit"
+              :disabled="uploading"
+              class="btn-primary disabled:cursor-not-allowed disabled:opacity-60">
+        <i class="fa-solid fa-rocket" x-show="!uploading"></i>
+        <i class="fa-solid fa-spinner fa-spin" x-show="uploading" x-cloak></i>
+        <span x-text="uploading ? 'Téléversement…' : 'Lancer le traitement'"></span>
+      </button>
+    </div>
+  </form>
+
+</section>
+
+<script>
+  function orthophotoUpload() {
+    return {
+      file: null,
+      dragging: false,
+      uploading: false,
+      uploadProgress: 0,
+      bytesSent: 0,
+      bytesTotal: 0,
+      uploadStartedAt: 0,
+      uploadStatusLabel: 'Préparation du transfert…',
+      canCancel: false,
+      _xhr: null,
+
+      onPick(ev) {
+        const f = ev.target.files?.[0];
+        this.file = f || null;
+        this.dragging = false;
+      },
+      onDrop(ev) {
+        this.dragging = false;
+        const f = ev.dataTransfer?.files?.[0];
+        if (!f) return;
+        const ext = (f.name || '').toLowerCase().split('.').pop();
+        if (!['tif', 'tiff'].includes(ext)) {
+          alert("Extension non supportée. Utilisez .tif ou .tiff");
+          return;
+        }
+        const input = document.getElementById('{{ form.source_file.id_for_label }}');
+        const dt = new DataTransfer();
+        dt.items.add(f);
+        input.files = dt.files;
+        this.file = f;
+      },
+      prettySize(n) {
+        if (!n) return '0 o';
+        const u = ['o','Ko','Mo','Go','To']; let i = 0;
+        while (n > 1024 && i < u.length - 1) { n /= 1024; i++; }
+        return n.toFixed(1) + ' ' + u[i];
+      },
+
+      // Soumission XHR → permet de suivre la progression en temps réel.
+      submitForm(ev) {
+        if (this.uploading) return;
+        const form = ev.target;
+        const data = new FormData(form);
+        const file = data.get('{{ form.source_file.name }}');
+
+        if (!file || !file.size) {
+          alert('Sélectionnez un fichier GeoTIFF.');
+          return;
+        }
+
+        this.uploading = true;
+        this.uploadProgress = 0;
+        this.bytesSent = 0;
+        this.bytesTotal = file.size || 0;
+        this.uploadStartedAt = Date.now();
+        this.uploadStatusLabel = 'Connexion au serveur…';
+        this.canCancel = true;
+
+        const xhr = new XMLHttpRequest();
+        this._xhr = xhr;
+        xhr.open('POST', form.action || window.location.href, true);
+        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+
+        // Progression côté upload (octets envoyés).
+        xhr.upload.onprogress = (e) => {
+          if (!e.lengthComputable) return;
+          this.bytesSent = e.loaded;
+          this.bytesTotal = e.total;
+          this.uploadProgress = Math.min(100, Math.round((e.loaded / e.total) * 100));
+
+          const elapsed = (Date.now() - this.uploadStartedAt) / 1000;
+          const speed = elapsed > 0 ? e.loaded / elapsed : 0;
+          const remaining = speed > 0 ? (e.total - e.loaded) / speed : 0;
+          this.uploadStatusLabel =
+            this.uploadProgress < 100
+              ? `Transfert ${this.prettySize(speed)}/s — ${Math.ceil(remaining)} s restantes`
+              : 'Fichier reçu — le serveur prépare la tâche…';
+        };
+
+        xhr.upload.onloadend = () => {
+          // Fin du transfert HTTP : la suite (validation/save) peut prendre
+          // quelques secondes selon la taille — on signale visuellement.
+          this.uploadProgress = 100;
+          this.uploadStatusLabel = 'Fichier reçu — le serveur prépare la tâche…';
+          this.canCancel = false;
+        };
+
+        xhr.onload = () => {
+          // Django (CreateView) redirige (302) en cas de succès. Avec XHR
+          // on récupère soit la redirection (xhr.responseURL pointera sur
+          // la page détail), soit le HTML du formulaire avec les erreurs.
+          if (xhr.status >= 200 && xhr.status < 400) {
+            const target = xhr.responseURL || form.dataset.successUrl || '{% url "orthophoto_list" %}';
+            this.uploadStatusLabel = 'Redirection vers la page de suivi…';
+            window.location.assign(target);
+            return;
+          }
+          // Erreur 4xx : on injecte la réponse pour afficher les messages d'erreur Django.
+          this.uploading = false;
+          this.uploadStatusLabel = 'Le serveur a refusé le fichier.';
+          document.open();
+          document.write(xhr.responseText || '<h1>Erreur ' + xhr.status + '</h1>');
+          document.close();
+        };
+
+        xhr.onerror = () => {
+          this.uploading = false;
+          alert('Erreur réseau pendant le téléversement. Réessayez.');
+        };
+
+        xhr.onabort = () => {
+          this.uploading = false;
+        };
+
+        xhr.send(data);
+      },
+
+      cancelUpload() {
+        if (this._xhr) this._xhr.abort();
+        this._xhr = null;
+        this.uploading = false;
+      },
+    };
+  }
+</script>
+{% endblock %}

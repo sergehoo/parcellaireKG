@@ -112,6 +112,11 @@ class RealEstateMapAPIView(APIView):
             "bounds": bounds,
             "centroid": centroid,
             "metadata": orthophoto.metadata or {},
+            # Pipeline GDAL : permet au frontend de filtrer (n'afficher que
+            # les orthophotos terminées) et d'ignorer celles en cours.
+            "status": getattr(orthophoto, "status", "DONE"),
+            "progress_percent": getattr(orthophoto, "progress_percent", 100),
+            "is_ready": bool(getattr(orthophoto, "tiles_url", None)) and getattr(orthophoto, "status", "DONE") == "DONE",
         }
 
     # ---------------------------------------------------------------
@@ -128,12 +133,20 @@ class RealEstateMapAPIView(APIView):
         On filtre côté SQL et on attache la liste pré-triée à
         `program.active_orthophotos`.
         """
-        ordered = ProgramOrthophoto.objects.filter(is_active=True).order_by(
-            "-is_current",
-            "-reference_year",
-            "-reference_month",
-            "-capture_date",
-            "-created_at",
+        ordered = (
+            ProgramOrthophoto.objects
+            # Statut DONE uniquement : on n'expose pas une orthophoto encore
+            # en cours de traitement (les tuiles n'existent pas).
+            .filter(is_active=True, status="DONE")
+            .exclude(tiles_url__isnull=True)
+            .exclude(tiles_url="")
+            .order_by(
+                "-is_current",
+                "-reference_year",
+                "-reference_month",
+                "-capture_date",
+                "-created_at",
+            )
         )
         return Prefetch(
             "program__orthophotos",

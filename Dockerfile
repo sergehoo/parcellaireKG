@@ -53,13 +53,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         gcc \
         g++ \
         libpq-dev \
+        # --- GDAL / GIS ---
         gdal-bin \
         libgdal-dev \
+        # `python3-gdal` fournit notamment `gdal2tiles.py` utilisé par le
+        # pipeline orthophoto (sinon : "command not found").
+        python3-gdal \
         binutils \
         libproj-dev \
         proj-data \
         proj-bin \
         libgeos-dev \
+        # --- WeasyPrint ---
         libpango-1.0-0 \
         libpangoft2-1.0-0 \
         libcairo2 \

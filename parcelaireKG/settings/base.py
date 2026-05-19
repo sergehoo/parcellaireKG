@@ -312,6 +312,21 @@ EXTERNAL_LOTS_API_PASSWORD = os.environ.get("EXTERNAL_LOTS_API_PASSWORD")
 
 
 
+# =====================================================================
+# Orthophotos — pipeline GDAL
+# =====================================================================
+# Taille maximale d'upload (8 Go par défaut). Augmenter au besoin si vos
+# GeoTIFF dépassent cette taille.
+ORTHOPHOTO_MAX_BYTES = int(os.environ.get("ORTHOPHOTO_MAX_BYTES", str(8 * 1024 * 1024 * 1024)))
+# Nombre de processus utilisés par gdal2tiles.py (un par CPU est un bon défaut).
+ORTHOPHOTO_GDAL_PROCESSES = int(os.environ.get("ORTHOPHOTO_GDAL_PROCESSES", "4"))
+
+# Permet à Django d'accepter les très gros uploads sans tomber sur la
+# limite par défaut de 2,5 Mo (DATA_UPLOAD_MAX_MEMORY_SIZE).
+DATA_UPLOAD_MAX_MEMORY_SIZE = ORTHOPHOTO_MAX_BYTES
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # bascule sur fichier temp >10 Mo
+FILE_UPLOAD_PERMISSIONS = 0o644
+
 SAP_BASE_URL = os.getenv("SAP_BASE_URL", "").rstrip("/")
 SAP_TOKEN_URL = os.getenv("SAP_TOKEN_URL", "")
 SAP_CLIENT_ID = os.getenv("SAP_CLIENT_ID", "")

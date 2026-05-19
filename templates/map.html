@@ -92,6 +92,50 @@
             background: rgba(255, 255, 255, 0.78) !important;
             border-radius: 12px 0 0 0;
             padding: 4px 8px !important;
+            font-size: 10px;
+        }
+
+        /* ----------------------------------------------------------
+           Responsive : ajustements pour les petits écrans
+           ---------------------------------------------------------- */
+        @media (max-width: 1023.98px) {
+            /* Le header brand fait ~80 px : on cale les contrôles Leaflet sous lui. */
+            .leaflet-top.leaflet-left {
+                top: 96px !important;
+                left: 10px !important;
+            }
+            .leaflet-control-zoom a {
+                width: 44px !important;
+                height: 44px !important;
+                line-height: 44px !important;  /* tap target accessible >= 44 px */
+            }
+            /* Popups plus étroits sur mobile pour éviter le débord. */
+            .leaflet-popup-content {
+                margin: 10px !important;
+                font-size: 12px;
+            }
+            /* Cluster pin un peu réduit. */
+            .cluster-pin {
+                width: 48px !important;
+                height: 48px !important;
+                font-size: 14px !important;
+            }
+            .cluster-program-label {
+                display: none !important;   /* on cache le label complet */
+            }
+            .cluster-shell {
+                transform: translate(-4px, -2px) !important;
+            }
+        }
+        @media (max-width: 639.98px) {
+            /* Sur très petits écrans, on cache l'attribution Leaflet par défaut
+               et on la rebascule via un swipe Leaflet (icône ⓘ). */
+            .leaflet-control-attribution {
+                max-width: 60vw;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
         }
 
         .marker-pin {
@@ -433,6 +477,9 @@
                 debounceTimers: {},           // pour debounce loadData / recherche
                 bboxPadRatio: 0.5,            // marge autour de l'écran pour préfetcher
                 hasInitialLoad: false,        // false tant qu'on n'a pas reçu un premier dataset
+
+                // ---- Responsive ----
+                mobileFiltersOpen: false,     // drawer "Filtres" sur mobile (<lg)
 
                 get filteredProgramOptions() {
                     if (!this.projectFilter) return this.programOptions;
@@ -832,8 +879,8 @@
 
                         const sortYear = Number(o.reference_year || 0);
                         const sortMonth = Number(o.reference_month || 0);
-
                         const key = `${o.program_id || 'na'}::${value}`;
+
                         if (!map.has(key)) {
                             map.set(key, {
                                 value,
@@ -841,17 +888,34 @@
                                 project: o.project || '',
                                 program: o.program || '',
                                 program_id: o.program_id || null,
+                                is_current: !!o.is_current,
+                                version: o.version || '',
                                 sort_year: sortYear,
                                 sort_month: sortMonth,
                             });
+                        } else if (o.is_current) {
+                            // Si plusieurs orthophotos ont le même couple
+                            // (programme/période), on garde l'info "courante".
+                            map.get(key).is_current = true;
                         }
                     });
 
                     return Array.from(map.values()).sort((a, b) => {
+                        // is_current en tête, puis ordre chronologique décroissant.
+                        if (a.is_current !== b.is_current) return a.is_current ? -1 : 1;
                         if (a.sort_year !== b.sort_year) return b.sort_year - a.sort_year;
                         if (a.sort_month !== b.sort_month) return b.sort_month - a.sort_month;
                         return String(a.label || '').localeCompare(String(b.label || ''));
                     });
+                },
+
+                // Texte court affiché dans le badge "version active" en haut de la carte.
+                get activeOrthoVersionLabel() {
+                    if (!this.orthoPeriodFilter) return '';
+                    const found = (this.orthoPeriodOptions || []).find(
+                        (p) => p.value === this.orthoPeriodFilter,
+                    );
+                    return found ? found.label : '';
                 },
 
                 getFilteredOrthophotos() {
@@ -2255,6 +2319,8 @@
                     this.selectedAsset = found;
                     this.sidebarImageIndex = 0;
                     this.sidebarOpen = true;
+                    // Ferme le drawer des filtres mobile pour libérer la sidebar.
+                    this.mobileFiltersOpen = false;
                     this.applySelectedStyle();
 
                     if (recenter) {
@@ -2396,26 +2462,41 @@
         <div id="map" class="absolute inset-0 z-0"></div>
         <div class="top-fade absolute inset-x-0 top-0 z-10 h-36"></div>
 
-        <div class="pointer-events-none absolute inset-x-0 top-0 z-20 px-4 pt-4 lg:px-6">
+        <div class="pointer-events-none absolute inset-x-0 top-0 z-20 px-3 pt-3 sm:px-4 sm:pt-4 lg:px-6">
             <div class="pointer-events-auto flex flex-col gap-3">
                 <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                    <div class="glass sidebar-shadow rounded-[28px] border border-white/20 bg-white/75 px-4 py-4 shadow-premium lg:px-5">
-                        <div class="flex items-center gap-4">
-                            <div class="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-premium-500 to-premium-700 text-white shadow-premium">
-                                <i class="fa-solid fa-city text-xl"></i>
+                    <!-- Header brand + bouton Filtres mobile -->
+                    <div class="glass sidebar-shadow flex items-center justify-between gap-3 rounded-[24px] border border-white/20 bg-white/85 px-3 py-2.5 shadow-premium sm:rounded-[28px] sm:px-4 sm:py-3 lg:px-5 lg:py-4">
+                        <div class="flex min-w-0 items-center gap-3">
+                            <div class="grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-premium-500 to-premium-700 text-white shadow-premium sm:h-12 sm:w-12">
+                                <i class="fa-solid fa-city text-base sm:text-xl"></i>
                             </div>
-                            <div>
-                                <a href="{% url 'parcelaire_dashboard' %}">
-                                    <img src="{% static 'logo/logo_kaydanG_B.png' %}" width="150"
-                                         class="text-lg font-extrabold tracking-tight text-slate-900 lg:text-xl"
-                                         alt="Kaydan">
-                                    <p class="text-sm text-slate-600">Parcellaire immobilier</p>
-                                </a>
-                            </div>
+                            <a href="{% url 'parcelaire_dashboard' %}" class="min-w-0">
+                                <img src="{% static 'logo/logo_kaydanG_B.png' %}"
+                                     class="h-7 w-auto sm:h-8 lg:h-9"
+                                     alt="Kaydan">
+                                <p class="hidden text-xs text-slate-600 sm:block">Parcellaire immobilier</p>
+                            </a>
                         </div>
+
+                        <!-- Bouton FAB Filtres : visible <lg uniquement -->
+                        <button type="button"
+                                @click="mobileFiltersOpen = !mobileFiltersOpen"
+                                aria-label="Filtres"
+                                class="grid h-11 w-11 place-items-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95 lg:hidden"
+                                :class="mobileFiltersOpen ? 'bg-slate-900 text-white border-slate-900' : ''">
+                            <i class="fa-solid fa-sliders text-base"></i>
+                            <span class="sr-only">Ouvrir les filtres</span>
+                        </button>
                     </div>
 
-                    <div class="flex flex-wrap items-center gap-2">
+                    <!-- Barre des filtres : flex sur desktop, drawer sur mobile -->
+                    <div class="flex flex-wrap items-center gap-2 max-lg:fixed max-lg:inset-x-0 max-lg:top-[88px] max-lg:z-30 max-lg:max-h-[calc(100vh-100px)] max-lg:overflow-y-auto max-lg:scroll-thin max-lg:rounded-t-[24px] max-lg:bg-white/95 max-lg:backdrop-blur max-lg:p-4 max-lg:shadow-glass max-lg:border max-lg:border-slate-200 max-lg:transition-transform"
+                         :class="{
+                           'max-lg:translate-y-0 max-lg:opacity-100 max-lg:pointer-events-auto': mobileFiltersOpen,
+                           'max-lg:-translate-y-2 max-lg:opacity-0 max-lg:pointer-events-none': !mobileFiltersOpen,
+                         }"
+                         x-cloak>
                         <div class="glass flex items-center gap-3 rounded-2xl border border-white/20 bg-white/80 px-4 py-3 shadow-soft">
                             <svg class="h-5 w-5 text-premium-600" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                  stroke-width="1.8">
@@ -2450,16 +2531,47 @@
                                 </template>
                             </select>
                         </div>
-                        <div class="glass rounded-2xl border border-white/20 bg-white/80 px-3 py-2 shadow-soft"
-                             x-show="filteredOrthoPeriodOptions.length">
-                            <select x-model="orthoPeriodFilter" @change="onOrthoPeriodChange()"
-                                    class="bg-transparent text-sm font-semibold text-slate-700 outline-none">
-                                <option value="">Toutes les périodes ortho</option>
-                                <template x-for="period in filteredOrthoPeriodOptions"
-                                          :key="`${period.program_id || 'na'}-${period.value}`">
-                                    <option :value="period.value" x-text="period.label"></option>
-                                </template>
-                            </select>
+                        <!-- Filtre version orthophoto (versionning mensuel) -->
+                        <div class="glass flex items-center gap-2 rounded-2xl border border-white/20 bg-white/80 px-3 py-2 shadow-soft"
+                             x-show="orthoPeriodOptions.length"
+                             x-cloak
+                             title="Sélectionner une version d'orthophoto (par mois/année).">
+                            <span class="grid h-7 w-7 place-items-center rounded-xl bg-premium-100 text-premium-700"
+                                  aria-hidden="true">
+                                <i class="fa-solid fa-layer-group text-xs"></i>
+                            </span>
+                            <div class="flex flex-col leading-tight">
+                                <label for="orthoPeriodSelect"
+                                       class="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                                    Version orthophoto
+                                </label>
+                                <select id="orthoPeriodSelect"
+                                        x-model="orthoPeriodFilter"
+                                        @change="onOrthoPeriodChange()"
+                                        class="-mx-1 max-w-[220px] bg-transparent px-1 text-sm font-semibold text-slate-700 outline-none focus-visible:ring-2 focus-visible:ring-premium-300">
+                                    <option value="">
+                                        <template x-if="filteredOrthoPeriodOptions.length">
+                                            <span>Toutes les versions</span>
+                                        </template>
+                                        Toutes les versions
+                                    </option>
+                                    <template x-for="period in filteredOrthoPeriodOptions"
+                                              :key="`${period.program_id || 'na'}-${period.value}`">
+                                        <option :value="period.value"
+                                                x-text="(period.is_current ? '★ ' : '') + period.label + (period.program && !programFilter ? ' — ' + period.program : '')">
+                                        </option>
+                                    </template>
+                                </select>
+                            </div>
+                            <button type="button"
+                                    x-show="orthoPeriodFilter"
+                                    x-cloak
+                                    @click="orthoPeriodFilter=''; onOrthoPeriodChange();"
+                                    aria-label="Réinitialiser le filtre version"
+                                    class="grid h-7 w-7 place-items-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                                    title="Réinitialiser">
+                                <i class="fa-solid fa-xmark text-xs"></i>
+                            </button>
                         </div>
                         <div x-show="programFilter && filteredTagOptions.length"
                              x-transition
@@ -2556,16 +2668,25 @@
             </div>
         </div>
 
-        <div class="pointer-events-none absolute inset-y-0 right-0 z-20 flex w-full justify-end p-4 lg:p-12">
+        <!-- Backdrop mobile (assombrit la carte derrière la sidebar) -->
+        <div x-cloak
+             x-show="sidebarOpen"
+             x-transition.opacity
+             @click="sidebarOpen = false"
+             class="absolute inset-0 z-20 bg-slate-950/40 lg:hidden"></div>
+
+        <div class="pointer-events-none absolute inset-y-0 right-0 z-30 flex w-full justify-end p-0 lg:p-12">
             <aside x-cloak
                     x-show="sidebarOpen"
                     x-transition:enter="transition ease-out duration-300"
-                    x-transition:enter-start="opacity-0 translate-x-8"
-                    x-transition:enter-end="opacity-100 translate-x-0"
+                    x-transition:enter-start="opacity-0 translate-y-8 lg:translate-y-0 lg:translate-x-8"
+                    x-transition:enter-end="opacity-100 translate-y-0 lg:translate-x-0"
                     x-transition:leave="transition ease-in duration-200"
-                    x-transition:leave-start="opacity-100 translate-x-0"
-                    x-transition:leave-end="opacity-0 translate-x-8"
-                    class="pointer-events-auto mt-10 flex h-full w-full max-w-[520px] flex-col overflow-hidden rounded-[32px] border border-white/20 bg-white/78 shadow-premium glass sidebar-shadow">
+                    x-transition:leave-start="opacity-100 translate-y-0 lg:translate-x-0"
+                    x-transition:leave-end="opacity-0 translate-y-8 lg:translate-y-0 lg:translate-x-8"
+                    class="pointer-events-auto glass sidebar-shadow flex flex-col overflow-hidden border border-white/20 bg-white/95 shadow-premium
+                           max-lg:mt-auto max-lg:h-[88vh] max-lg:w-full max-lg:rounded-t-[28px]
+                           lg:mt-10 lg:h-full lg:w-full lg:max-w-[520px] lg:rounded-[32px] lg:bg-white/78">
                 <div class="border-b border-slate-200/70 px-5 py-5 lg:px-6">
                     <div class="flex items-start justify-between gap-3">
                         <div class="min-w-0">
@@ -3229,6 +3350,28 @@
                     </div>
                 </div>
             </div>
+        </div>
+
+        <!-- Badge "version orthophoto active" — affiché dès qu'un filtre version est appliqué.
+             Sur mobile, on le pose plus bas pour ne pas chevaucher avec le header brand
+             et le bouton "Filtres". Sur desktop on garde le coin haut-droit classique. -->
+        <div x-show="activeOrthoVersionLabel"
+             x-cloak
+             x-transition
+             class="pointer-events-auto absolute z-30 flex items-center gap-2 rounded-2xl border border-white/30 bg-slate-900/90 px-3 py-2 text-white shadow-glass backdrop-blur
+                    max-lg:left-3 max-lg:top-[88px] max-lg:right-3
+                    lg:right-4 lg:top-4">
+            <i class="fa-solid fa-layer-group text-premium-300"></i>
+            <div class="leading-tight">
+                <p class="text-[10px] font-extrabold uppercase tracking-[0.2em] text-premium-200">Version orthophoto</p>
+                <p class="text-sm font-bold" x-text="activeOrthoVersionLabel"></p>
+            </div>
+            <button type="button"
+                    @click="orthoPeriodFilter=''; onOrthoPeriodChange();"
+                    aria-label="Désélectionner la version"
+                    class="ml-1 grid h-7 w-7 place-items-center rounded-full bg-white/10 text-white hover:bg-white/20">
+                <i class="fa-solid fa-xmark text-xs"></i>
+            </button>
         </div>
 
         <div x-show="loading"

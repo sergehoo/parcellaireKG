@@ -1,0 +1,337 @@
+{% extends "layouts/base.html" %}
+{% load static %}
+
+{% block title %}{{ orthophoto.name|default:orthophoto.period_label|default:orthophoto.program.name }} — Orthophoto{% endblock %}
+
+{% block content %}
+
+
+<section class="mx-auto max-w-5xl px-4 py-6 lg:px-8"
+         x-data="orthophotoPoll({ id: {{ orthophoto.pk }} })"
+         x-init="start()">
+
+  <!-- En-tête -->
+  <header class="card-glass mb-6 rounded-2xl p-5">
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-premium-600">
+          {{ orthophoto.program.project.nom|default:"—" }} • {{ orthophoto.program.name }}
+        </p>
+        <h1 class="mt-1 text-2xl font-extrabold text-slate-900">
+          {{ orthophoto.name|default:orthophoto.period_label|default:"Orthophoto" }}
+        </h1>
+        <p class="mt-1 text-sm text-slate-600">
+          Période :
+          {% if orthophoto.reference_month and orthophoto.reference_year %}
+            {{ orthophoto.reference_month|stringformat:'02d' }}/{{ orthophoto.reference_year }}
+          {% else %}—{% endif %}
+          • Zoom {{ orthophoto.min_zoom }}–{{ orthophoto.max_zoom }}
+        </p>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="rounded-full px-3 py-1 text-xs font-bold"
+              :class="badgeClass(state.status)"
+              x-text="state.status_display || state.status"></span>
+        <template x-if="state.is_current">
+          <span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">
+            <i class="fa-solid fa-star"></i> Courante
+          </span>
+        </template>
+      </div>
+    </div>
+  </header>
+
+  <!-- Progress + Stepper -->
+  <section class="card-glass mb-6 rounded-2xl p-5">
+    <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+      <div class="flex items-center gap-2">
+        <h2 class="text-sm font-bold uppercase tracking-[0.15em] text-slate-600">Pipeline GDAL</h2>
+        <!-- Pulse "live" tant que pipeline en cours -->
+        <span x-show="['PENDING','PROCESSING'].includes(state.status)"
+              class="relative inline-flex h-2 w-2"
+              aria-label="Mise à jour live">
+          <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+          <span class="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
+        </span>
+      </div>
+      <div class="flex items-center gap-3 text-xs text-slate-500">
+        <span x-show="state.status === 'PROCESSING' || state.status === 'PENDING'"
+              x-text="'⏱  ' + elapsedLabel"></span>
+        <span class="text-sm font-bold text-slate-900" x-text="(state.progress_percent || 0) + ' %'"></span>
+      </div>
+    </div>
+
+    <div class="h-3 w-full overflow-hidden rounded-full bg-slate-200">
+      <div class="h-full transition-all duration-500"
+           :class="state.status === 'FAILED' ? 'bg-rose-500' : 'bg-premium-500'"
+           :style="'width:' + (state.progress_percent || 0) + '%'"></div>
+    </div>
+
+    <p class="mt-3 text-sm text-slate-700">
+      <i class="fa-solid fa-circle-info text-premium-500 mr-1"></i>
+      Étape : <span class="font-semibold text-slate-900" x-text="state.current_step || '—'"></span>
+    </p>
+
+    <!-- Stepper visuel des 7 étapes -->
+    <ol class="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-7">
+      <template x-for="step in steps" :key="step.key">
+        <li class="flex flex-col items-center gap-1 rounded-xl border p-3 text-center transition-all"
+            :class="{
+              'border-emerald-300 bg-emerald-50': stepStatus(step) === 'done',
+              'border-premium-400 bg-premium-50 ring-2 ring-premium-200': stepStatus(step) === 'current',
+              'border-slate-200 bg-white/60': stepStatus(step) === 'pending',
+              'border-rose-300 bg-rose-50': stepStatus(step) === 'failed',
+            }">
+          <span class="grid h-8 w-8 place-items-center rounded-full text-xs font-bold"
+                :class="{
+                  'bg-emerald-500 text-white': stepStatus(step) === 'done',
+                  'bg-premium-500 text-white': stepStatus(step) === 'current',
+                  'bg-slate-200 text-slate-500': stepStatus(step) === 'pending',
+                  'bg-rose-500 text-white': stepStatus(step) === 'failed',
+                }">
+            <template x-if="stepStatus(step) === 'done'"><i class="fa-solid fa-check"></i></template>
+            <template x-if="stepStatus(step) === 'current'"><i class="fa-solid fa-spinner animate-spin"></i></template>
+            <template x-if="stepStatus(step) === 'failed'"><i class="fa-solid fa-xmark"></i></template>
+            <template x-if="stepStatus(step) === 'pending'"><span x-text="step.index"></span></template>
+          </span>
+          <span class="text-[11px] font-semibold text-slate-700 leading-tight" x-text="step.label"></span>
+          <span class="text-[10px] uppercase tracking-[0.12em]"
+                :class="stepStatus(step) === 'current' ? 'text-premium-700' : 'text-slate-400'"
+                x-text="stepStatus(step) === 'current' ? 'en cours' : (stepStatus(step) === 'done' ? 'terminé' : (stepStatus(step) === 'failed' ? 'échec' : 'en attente'))"></span>
+        </li>
+      </template>
+    </ol>
+
+    <!-- Erreur -->
+    <template x-if="state.error_message">
+      <div class="mt-4 flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+        <i class="fa-solid fa-triangle-exclamation mt-0.5"></i>
+        <div class="flex-1 min-w-0">
+          <p class="font-bold">Le traitement a échoué.</p>
+          <p class="mt-1 break-words" x-text="state.error_message"></p>
+          <p class="mt-2 text-xs text-rose-600">Vous pouvez « Relancer le traitement » ci-dessous une fois la cause corrigée.</p>
+        </div>
+      </div>
+    </template>
+
+    <!-- Toast "PENDING : worker pas encore disponible" -->
+    <template x-if="state.status === 'PENDING' && elapsedSeconds > 10">
+      <div class="mt-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+        <i class="fa-solid fa-clock mt-0.5"></i>
+        <div>
+          <p class="font-bold">En attente d'un worker Celery</p>
+          <p class="mt-1 text-xs">
+            La tâche est en file d'attente depuis plus de 10 s. Vérifiez qu'un worker
+            (<code>parcelairecelery</code>) tourne, sinon la tâche restera bloquée.
+          </p>
+        </div>
+      </div>
+    </template>
+  </section>
+
+  <!-- Actions -->
+  <section class="mb-6 flex flex-wrap gap-2">
+    <form method="post" action="{% url 'orthophoto_retry' orthophoto.pk %}">{% csrf_token %}
+      <button type="submit" class="btn-secondary">
+        <i class="fa-solid fa-arrow-rotate-right"></i> Relancer le traitement
+      </button>
+    </form>
+    <template x-if="state.tiles_url">
+      <a href="{% url 'map' %}?ortho={{ orthophoto.pk }}" class="btn-primary">
+        <i class="fa-solid fa-map-location-dot"></i> Voir sur la carte
+      </a>
+    </template>
+    <template x-if="state.tiles_url && !state.is_current">
+      <form method="post" action="{% url 'orthophoto_set_current' orthophoto.pk %}">{% csrf_token %}
+        <button type="submit" class="btn-secondary">
+          <i class="fa-solid fa-star"></i> Définir comme courante
+        </button>
+      </form>
+    </template>
+    <template x-if="state.tiles_url">
+      <form method="post" action="{% url 'orthophoto_delete_tiles' orthophoto.pk %}"
+            onsubmit="return confirm('Supprimer définitivement les tuiles de cette orthophoto ?')">
+        {% csrf_token %}
+        <button type="submit" class="btn-secondary text-rose-700">
+          <i class="fa-solid fa-trash"></i> Supprimer les tuiles
+        </button>
+      </form>
+    </template>
+    <a href="{% url 'orthophoto_logs' orthophoto.pk %}" class="btn-secondary">
+      <i class="fa-solid fa-file-lines"></i> Télécharger logs
+    </a>
+    <a href="{% url 'orthophoto_list' %}" class="btn-secondary">
+      <i class="fa-solid fa-arrow-left"></i> Retour
+    </a>
+  </section>
+
+  <!-- Détails techniques -->
+  <section class="card-glass mb-6 grid grid-cols-1 gap-4 rounded-2xl p-5 md:grid-cols-2">
+    <div>
+      <h3 class="text-sm font-bold uppercase tracking-[0.15em] text-slate-600 mb-2">Fichiers</h3>
+      <dl class="space-y-1 text-sm">
+        <dt class="text-slate-500">Source</dt>
+        <dd class="text-slate-800 break-all">{{ orthophoto.source_file.name|default:"—" }}</dd>
+        <dt class="text-slate-500 mt-2">Reprojeté</dt>
+        <dd class="text-slate-800 break-all">{{ orthophoto.processed_file.name|default:"—" }}</dd>
+        {% if orthophoto.vrt_file %}
+          <dt class="text-slate-500 mt-2">VRT (palette → RGBA)</dt>
+          <dd class="text-slate-800 break-all">{{ orthophoto.vrt_file.name }}</dd>
+        {% endif %}
+      </dl>
+    </div>
+    <div>
+      <h3 class="text-sm font-bold uppercase tracking-[0.15em] text-slate-600 mb-2">Tuiles</h3>
+      <dl class="space-y-1 text-sm">
+        <dt class="text-slate-500">URL pattern</dt>
+        <dd class="text-slate-800 break-all" x-text="state.tiles_url || '—'"></dd>
+        <dt class="text-slate-500 mt-2">Téléversée par</dt>
+        <dd class="text-slate-800">{{ orthophoto.created_by|default:"—" }}</dd>
+        <dt class="text-slate-500 mt-2">Terminée le</dt>
+        <dd class="text-slate-800">{{ orthophoto.processed_at|default:"—" }}</dd>
+      </dl>
+    </div>
+  </section>
+
+  <!-- Logs -->
+  <section class="card-glass rounded-2xl p-5">
+    <h3 class="text-sm font-bold uppercase tracking-[0.15em] text-slate-600 mb-3">
+      <i class="fa-solid fa-list-timeline"></i> Logs du traitement
+    </h3>
+    <ol class="space-y-2 max-h-[480px] overflow-auto scroll-thin pr-2">
+      <template x-for="log in (state.logs || [])" :key="log.created_at + log.message">
+        <li class="flex items-start gap-3 rounded-xl border border-slate-200 bg-white/70 p-3 text-sm">
+          <span class="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold"
+                :class="{
+                  'bg-emerald-100 text-emerald-700': log.level === 'INFO',
+                  'bg-amber-100 text-amber-700':  log.level === 'WARNING',
+                  'bg-rose-100 text-rose-700':    log.level === 'ERROR',
+                }">
+            <span x-text="log.level[0]"></span>
+          </span>
+          <div class="flex-1 min-w-0">
+            <p class="font-medium text-slate-800 break-words" x-text="log.message"></p>
+            <template x-if="log.command">
+              <code class="mt-1 block break-all rounded bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                    x-text="log.command"></code>
+            </template>
+            <p class="mt-1 text-[10px] uppercase tracking-[0.1em] text-slate-400" x-text="log.created_at"></p>
+          </div>
+        </li>
+      </template>
+      <template x-if="!state.logs || state.logs.length === 0">
+        <li class="rounded-xl border border-dashed border-slate-300 bg-white/40 p-4 text-center text-sm text-slate-500">
+          Aucun log pour l'instant.
+        </li>
+      </template>
+    </ol>
+  </section>
+</section>
+
+<script>
+function orthophotoPoll({ id }) {
+  // Récupère l'état initial sérialisé par Django via |json_script.
+  let initial = {};
+  try {
+    initial = JSON.parse(document.getElementById('orthophoto-initial').textContent || '{}');
+  } catch (_) {/* fallback aux defaults */}
+
+  // Définition du pipeline — aligné sur la tâche Celery process_orthophoto.
+  // `min_pct` = seuil de progress_percent à partir duquel l'étape est
+  // considérée "en cours" puis "terminée".
+  const STEPS = [
+    { key: 'prepare',     index: 1, label: 'Préparation',          min_pct: 0  },
+    { key: 'reproject',   index: 2, label: 'Reprojection 3857',    min_pct: 15 },
+    { key: 'inspect',     index: 3, label: 'Lecture gdalinfo',     min_pct: 30 },
+    { key: 'overviews',   index: 4, label: 'Overviews',            min_pct: 50 },
+    { key: 'palette',     index: 5, label: 'Palette → RGBA',       min_pct: 60 },
+    { key: 'tiles',       index: 6, label: 'Tuiles XYZ',           min_pct: 70 },
+    { key: 'finalize',    index: 7, label: 'Finalisation',         min_pct: 95 },
+  ];
+
+  return {
+    id,
+    state: Object.assign(
+      { status: 'PENDING', progress_percent: 0, current_step: '', tiles_url: '', is_current: false, logs: [] },
+      initial || {}
+    ),
+    steps: STEPS,
+    timer: null,
+    startedAt: Date.now(),
+    nowTick: Date.now(),  // pour rafraîchir le chrono
+
+    start() {
+      this.tick();
+      // Rafraîchit le chrono "elapsed" toutes les 1s même sans polling backend.
+      setInterval(() => { this.nowTick = Date.now(); }, 1000);
+    },
+
+    async tick() {
+      try {
+        const r = await fetch(`/orthophotos/${this.id}/status/`, {
+          headers: { 'X-Requested-With': 'XMLHttpRequest' },
+          credentials: 'same-origin',
+        });
+        if (r.ok) {
+          const data = await r.json();
+          this.state = data;
+        }
+      } catch (_) {/* ignore */}
+
+      // Continue à poller tant que pipeline en cours (3 s).
+      if (['PENDING', 'PROCESSING'].includes(this.state.status)) {
+        this.timer = setTimeout(() => this.tick(), 3000);
+      }
+    },
+
+    // Statut d'une étape : 'done' | 'current' | 'pending' | 'failed'
+    stepStatus(step) {
+      const pct = this.state.progress_percent || 0;
+      const status = this.state.status;
+
+      if (status === 'DONE') return 'done';
+      if (status === 'FAILED') {
+        // L'étape qui contenait le pct au moment de l'échec porte la croix,
+        // les précédentes restent "done", les suivantes "pending".
+        if (pct >= step.min_pct) {
+          // est-ce la dernière étape >= min_pct ?
+          const next = STEPS[STEPS.indexOf(step) + 1];
+          if (!next || pct < next.min_pct) return 'failed';
+          return 'done';
+        }
+        return 'pending';
+      }
+      // En cours
+      if (pct >= step.min_pct) {
+        const next = STEPS[STEPS.indexOf(step) + 1];
+        if (!next || pct < next.min_pct) return 'current';
+        return 'done';
+      }
+      return 'pending';
+    },
+
+    badgeClass(status) {
+      switch (status) {
+        case 'DONE':       return 'bg-emerald-100 text-emerald-700';
+        case 'PROCESSING': return 'bg-amber-100 text-amber-700';
+        case 'FAILED':     return 'bg-rose-100 text-rose-700';
+        default:           return 'bg-slate-100 text-slate-700';
+      }
+    },
+
+    // ---- Chrono ----
+    get elapsedSeconds() {
+      return Math.floor((this.nowTick - this.startedAt) / 1000);
+    },
+    get elapsedLabel() {
+      const s = this.elapsedSeconds;
+      if (s < 60) return s + ' s';
+      const m = Math.floor(s / 60);
+      const r = s % 60;
+      return `${m} min ${String(r).padStart(2, '0')} s`;
+    },
+  };
+}
+</script>
+{% endblock %}

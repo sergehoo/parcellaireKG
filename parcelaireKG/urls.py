@@ -34,7 +34,9 @@ from parcelaire.views import HomeView, MapView, ParcellaireDashboardView, Projet
     ConstructionPhotoCreateView, ConstructionPhotoUpdateView, ConstructionMediaCreateView, ProgramByProjectAjaxView, \
     PhaseByProgramAjaxView, BlockByProgramAjaxView, ParcelByBlockAjaxView, ProgramStatsAjaxView, LeadListView, \
     LeadUpdateView, LeadCreateView, PropertyAssetDeleteView, PropertyAssetListView, PropertyAssetCreateView, \
-    PropertyAssetDetailView, PropertyAssetUpdateView, MapCommercialView
+    PropertyAssetDetailView, PropertyAssetUpdateView, MapCommercialView, \
+    OrthophotoListView, OrthophotoCreateView, OrthophotoDetailView, OrthophotoStatusAPIView, \
+    OrthophotoRetryView, OrthophotoSetCurrentView, OrthophotoDeleteTilesView, OrthophotoDownloadLogsView
 
 urlpatterns = [
                   path('admin/', admin.site.urls),
@@ -136,6 +138,16 @@ urlpatterns = [
                   path("ajax/blocks-by-program/", BlockByProgramAjaxView.as_view(), name="ajax_blocks_by_program"),
                   path("ajax/parcels-by-block/", ParcelByBlockAjaxView.as_view(), name="ajax_parcels_by_block"),
                   path("ajax/program-stats/", ProgramStatsAjaxView.as_view(), name="ajax_program_stats"),
+
+                  # -------- ORTHOPHOTOS --------
+                  path("orthophotos/", OrthophotoListView.as_view(), name="orthophoto_list"),
+                  path("orthophotos/add/", OrthophotoCreateView.as_view(), name="orthophoto_add"),
+                  path("orthophotos/<int:pk>/", OrthophotoDetailView.as_view(), name="orthophoto_detail"),
+                  path("orthophotos/<int:pk>/status/", OrthophotoStatusAPIView.as_view(), name="orthophoto_status"),
+                  path("orthophotos/<int:pk>/retry/", OrthophotoRetryView.as_view(), name="orthophoto_retry"),
+                  path("orthophotos/<int:pk>/set-current/", OrthophotoSetCurrentView.as_view(), name="orthophoto_set_current"),
+                  path("orthophotos/<int:pk>/delete-tiles/", OrthophotoDeleteTilesView.as_view(), name="orthophoto_delete_tiles"),
+                  path("orthophotos/<int:pk>/logs.txt", OrthophotoDownloadLogsView.as_view(), name="orthophoto_logs"),
               ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 if settings.DEBUG:
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

@@ -1227,3 +1227,269 @@ class ProgramStatsAjaxView(LoginRequiredMixin, View):
             "datasets_count": program.parcel_datasets.filter(is_active=True).count(),
         }
         return JsonResponse(data)
+
+
+# =====================================================================
+# ORTHOPHOTOS — pipeline GDAL
+# =====================================================================
+import shutil
+from pathlib import Path
+from django.conf import settings as dj_settings
+from django.contrib.auth.mixins import PermissionRequiredMixin
+from django.http import JsonResponse, Http404, HttpResponse
+from django.shortcuts import redirect
+from django.contrib import messages
+from django.views.decorators.http import require_POST
+from django.utils.decorators import method_decorator
+
+from parcelaire.forms import OrthophotoForm
+from parcelaire.models import ProgramOrthophoto, OrthophotoProcessingLog
+
+
+class _OrthophotoBaseMixin(LoginRequiredMixin):
+    """Permission métier : seul `parcelaire.add_programorthophoto`
+    autorise la création / relance ; lecture libre pour les
+    utilisateurs authentifiés ayant `view_programorthophoto`."""
+    raise_exception = False
+
+
+class OrthophotoListView(_OrthophotoBaseMixin, SearchFilterMixin, ListView):
+    model = ProgramOrthophoto
+    template_name = "parcelaire/orthophoto/list.html"
+    context_object_name = "orthophotos"
+    paginate_by = 25
+
+    def apply_filters(self, queryset):
+        qs = queryset.select_related("program", "program__project", "created_by")
+        project_id = self.request.GET.get("project")
+        program_id = self.request.GET.get("program")
+        year = self.request.GET.get("year")
+        month = self.request.GET.get("month")
+        status_ = self.request.GET.get("status")
+        q = self.get_search_query()
+
+        if project_id:
+            qs = qs.filter(program__project_id=project_id)
+        if program_id:
+            qs = qs.filter(program_id=program_id)
+        if year:
+            qs = qs.filter(reference_year=year)
+        if month:
+            qs = qs.filter(reference_month=month)
+        if status_:
+            qs = qs.filter(status=status_)
+        if q:
+            qs = qs.filter(
+                Q(name__icontains=q)
+                | Q(period_label__icontains=q)
+                | Q(program__name__icontains=q)
+                | Q(program__project__nom__icontains=q)
+            )
+        return qs.order_by("-reference_year", "-reference_month", "-created_at")
+
+    def get_context_data(self, **kwargs):
+        from datetime import datetime
+        ctx = super().get_context_data(**kwargs)
+        ctx["projects"] = ProjetImmobilier.objects.filter(is_active=True).order_by("nom")
+        ctx["programs"] = RealEstateProgram.objects.filter(is_active=True).order_by("name")
+        ctx["status_choices"] = ProgramOrthophoto.STATUS_CHOICES
+        # Listes pré-calculées (Django n'a pas de filter `|split`).
+        current_year = datetime.now().year
+        ctx["years"] = list(range(current_year - 3, current_year + 2))   # ex. 2023..2027
+        ctx["months"] = list(range(1, 13))
+        ctx["selected_project"] = self.request.GET.get("project", "")
+        ctx["selected_program"] = self.request.GET.get("program", "")
+        ctx["selected_year"] = self.request.GET.get("year", "")
+        ctx["selected_month"] = self.request.GET.get("month", "")
+        ctx["selected_status"] = self.request.GET.get("status", "")
+        return ctx
+
+
+class OrthophotoCreateView(_OrthophotoBaseMixin, SuccessMessageMixin, CreateView):
+    model = ProgramOrthophoto
+    form_class = OrthophotoForm
+    template_name = "parcelaire/orthophoto/form.html"
+    success_message = "Orthophoto importée — traitement lancé."
+
+    def form_valid(self, form):
+        existing = getattr(form, "_existing_to_replace", None)
+        if existing:
+            # Mode "remplacer" : on réutilise l'instance existante.
+            existing.source_file = form.cleaned_data["source_file"]
+            existing.name = form.cleaned_data.get("name") or existing.name
+            existing.period_label = form.cleaned_data.get("period_label") or existing.period_label
+            existing.min_zoom = form.cleaned_data["min_zoom"]
+            existing.max_zoom = form.cleaned_data["max_zoom"]
+            existing.is_current = form.cleaned_data["is_current"]
+            existing.status = "PENDING"
+            existing.progress_percent = 0
+            existing.current_step = "En attente du worker"
+            existing.error_message = None
+            existing.processed_at = None
+            existing.created_by = self.request.user
+            existing.save()
+            self.object = existing
+        else:
+            self.object = form.save(commit=False)
+            self.object.created_by = self.request.user
+            self.object.status = "PENDING"
+            self.object.progress_percent = 0
+            self.object.current_step = "En attente du worker"
+            self.object.save()
+
+        # Lance la tâche Celery (asynchrone).
+        try:
+            from parcelaire.tasks import process_orthophoto
+            process_orthophoto.delay(self.object.pk)
+        except Exception as exc:  # noqa: BLE001
+            messages.warning(
+                self.request,
+                f"Orthophoto enregistrée, mais Celery est injoignable ({exc}). "
+                "Lance manuellement « Relancer le traitement » depuis le détail.",
+            )
+        return redirect(self.get_success_url())
+
+    def get_success_url(self):
+        return reverse("orthophoto_detail", kwargs={"pk": self.object.pk})
+
+
+class OrthophotoDetailView(_OrthophotoBaseMixin, DetailView):
+    model = ProgramOrthophoto
+    template_name = "parcelaire/orthophoto/detail.html"
+    context_object_name = "orthophoto"
+
+    def get_queryset(self):
+        return (
+            super()
+            .get_queryset()
+            .select_related("program", "program__project", "created_by")
+            .prefetch_related("processing_logs")
+        )
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["logs"] = self.object.processing_logs.all()[:200]
+        # État initial sérialisé proprement via `|json_script` côté
+        # template — évite les soucis de quoting dans `x-data`.
+        ortho = self.object
+        ctx["orthophoto_initial"] = {
+            "id": ortho.pk,
+            "status": ortho.status,
+            "status_display": ortho.get_status_display(),
+            "progress_percent": ortho.progress_percent or 0,
+            "current_step": ortho.current_step or "",
+            "tiles_url": ortho.tiles_url or "",
+            "is_current": bool(ortho.is_current),
+            "error_message": ortho.error_message or "",
+            "logs": [],
+        }
+        return ctx
+
+
+class OrthophotoStatusAPIView(LoginRequiredMixin, View):
+    """API JSON pour le polling Alpine.js (3 s)."""
+
+    def get(self, request, pk, *args, **kwargs):
+        ortho = get_object_or_404(ProgramOrthophoto, pk=pk)
+        logs = list(
+            ortho.processing_logs.order_by("-created_at")[:50].values(
+                "level", "message", "command", "created_at"
+            )
+        )
+        return JsonResponse({
+            "id": ortho.pk,
+            "status": ortho.status,
+            "status_display": ortho.get_status_display(),
+            "progress_percent": ortho.progress_percent,
+            "current_step": ortho.current_step or "",
+            "tiles_url": ortho.tiles_url or "",
+            "is_current": bool(ortho.is_current),
+            "error_message": ortho.error_message or "",
+            "processed_at": ortho.processed_at.isoformat() if ortho.processed_at else None,
+            "logs": [
+                {
+                    "level": l["level"],
+                    "message": l["message"],
+                    "command": l["command"],
+                    "created_at": l["created_at"].isoformat() if l["created_at"] else None,
+                }
+                for l in logs
+            ],
+        })
+
+
+@method_decorator(require_POST, name="dispatch")
+class OrthophotoRetryView(_OrthophotoBaseMixin, View):
+    """Relance la tâche Celery."""
+
+    def post(self, request, pk, *args, **kwargs):
+        ortho = get_object_or_404(ProgramOrthophoto, pk=pk)
+        ortho.status = "PENDING"
+        ortho.progress_percent = 0
+        ortho.current_step = "Relance demandée"
+        ortho.error_message = None
+        ortho.processed_at = None
+        ortho.save(update_fields=[
+            "status", "progress_percent", "current_step",
+            "error_message", "processed_at", "updated_at",
+        ])
+        from parcelaire.tasks import process_orthophoto
+        process_orthophoto.delay(ortho.pk)
+        messages.success(request, "Traitement relancé.")
+        return redirect(reverse("orthophoto_detail", kwargs={"pk": ortho.pk}))
+
+
+@method_decorator(require_POST, name="dispatch")
+class OrthophotoSetCurrentView(_OrthophotoBaseMixin, View):
+    """Marque une orthophoto comme courante (les autres du même programme sont décochées)."""
+
+    def post(self, request, pk, *args, **kwargs):
+        ortho = get_object_or_404(ProgramOrthophoto, pk=pk)
+        ProgramOrthophoto.objects.filter(program=ortho.program).exclude(pk=ortho.pk).update(is_current=False)
+        ortho.is_current = True
+        ortho.save(update_fields=["is_current", "updated_at"])
+        messages.success(request, "Définie comme orthophoto courante.")
+        return redirect(reverse("orthophoto_detail", kwargs={"pk": ortho.pk}))
+
+
+@method_decorator(require_POST, name="dispatch")
+class OrthophotoDeleteTilesView(_OrthophotoBaseMixin, View):
+    """Supprime physiquement les tuiles et remet le statut à PENDING."""
+
+    def post(self, request, pk, *args, **kwargs):
+        ortho = get_object_or_404(ProgramOrthophoto, pk=pk)
+        tiles_root = Path(dj_settings.MEDIA_ROOT) / (ortho.tiles_folder or "")
+        if ortho.tiles_folder and tiles_root.exists():
+            try:
+                shutil.rmtree(tiles_root)
+            except OSError as exc:
+                messages.error(request, f"Échec de suppression des tuiles : {exc}")
+                return redirect(reverse("orthophoto_detail", kwargs={"pk": ortho.pk}))
+        ortho.tiles_url = None
+        ortho.tiles_folder = None
+        ortho.status = "PENDING"
+        ortho.progress_percent = 0
+        ortho.current_step = "Tuiles supprimées"
+        ortho.save(update_fields=[
+            "tiles_url", "tiles_folder", "status",
+            "progress_percent", "current_step", "updated_at",
+        ])
+        messages.success(request, "Tuiles supprimées avec succès.")
+        return redirect(reverse("orthophoto_detail", kwargs={"pk": ortho.pk}))
+
+
+class OrthophotoDownloadLogsView(_OrthophotoBaseMixin, View):
+    """Export texte des logs (utile au debug GDAL)."""
+
+    def get(self, request, pk, *args, **kwargs):
+        ortho = get_object_or_404(ProgramOrthophoto, pk=pk)
+        lines = []
+        for log in ortho.processing_logs.all():
+            ts = log.created_at.strftime("%Y-%m-%d %H:%M:%S") if log.created_at else "-"
+            lines.append(f"[{ts}] [{log.level}] {log.message}")
+            if log.command:
+                lines.append(f"  $ {log.command}")
+        body = "\n".join(lines) or "(aucun log)"
+        resp = HttpResponse(body, content_type="text/plain; charset=utf-8")
+        resp["Content-Disposition"] = f'attachment; filename="orthophoto-{ortho.pk}-logs.txt"'
+        return resp

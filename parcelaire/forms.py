@@ -27,6 +27,7 @@ from .models import (
     ConstructionUpdate,
     ConstructionPhoto,
     ConstructionMedia, LandUseType,
+    ProgramOrthophoto,
 )
 
 
@@ -1058,3 +1059,128 @@ class ConstructionMediaForm(BaseModelForm):
             self.add_error("update", "La mise à jour doit appartenir au même chantier.")
 
         return cleaned_data
+
+# =====================================================================
+# ORTHOPHOTOS — upload TIFF
+# =====================================================================
+
+class OrthophotoForm(BaseModelForm):
+    """
+    Formulaire d'import d'une orthophoto TIFF.
+
+    Le `project` (champ virtuel hors modèle) sert juste à filtrer la liste
+    déroulante des programmes côté UI ; la persistance ne stocke que le
+    `program`.
+    """
+    ALLOWED_EXTENSIONS = (".tif", ".tiff")
+    # 8 GiB par défaut, surchargeable via settings.ORTHOPHOTO_MAX_BYTES.
+    DEFAULT_MAX_BYTES = 8 * 1024 * 1024 * 1024
+
+    project = forms.ModelChoiceField(
+        queryset=ProjetImmobilier.objects.filter(is_active=True).order_by("nom"),
+        required=False,
+        label="Projet",
+        help_text="Filtre la liste des programmes ci-dessous.",
+    )
+    replace_existing = forms.BooleanField(
+        required=False,
+        initial=False,
+        label="Remplacer la version existante pour ce mois",
+        help_text="Si décoché et qu'une orthophoto existe déjà pour ce programme/mois, l'upload est refusé.",
+    )
+
+    class Meta:
+        model = ProgramOrthophoto
+        fields = [
+            "program",
+            "name",
+            "source_file",
+            "reference_year",
+            "reference_month",
+            "period_label",
+            "min_zoom",
+            "max_zoom",
+            "is_current",
+        ]
+        widgets = {
+            "name": forms.TextInput(attrs={"placeholder": "Ex. BR Orthophoto Mai 2026"}),
+            "period_label": forms.TextInput(attrs={"placeholder": "Ex. Mai 2026"}),
+            "reference_year": forms.NumberInput(attrs={"min": 2000, "max": 2100, "placeholder": "2026"}),
+            "reference_month": forms.NumberInput(attrs={"min": 1, "max": 12, "placeholder": "5"}),
+            "min_zoom": forms.NumberInput(attrs={"min": 0, "max": 25, "value": 15}),
+            "max_zoom": forms.NumberInput(attrs={"min": 0, "max": 25, "value": 22}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["program"].queryset = (
+            RealEstateProgram.objects.filter(is_active=True)
+            .select_related("project")
+            .order_by("project__nom", "name")
+        )
+        # Defaults UX : zoom 15-22 sur les créations vierges.
+        if not self.instance.pk:
+            self.fields["min_zoom"].initial = 15
+            self.fields["max_zoom"].initial = 22
+
+    # ------------------------------------------------------------------
+    # Validations
+    # ------------------------------------------------------------------
+    def clean_source_file(self):
+        from django.conf import settings as dj_settings  # local pour éviter import circulaire
+        upload = self.cleaned_data.get("source_file")
+        if not upload:
+            return upload
+
+        name = (getattr(upload, "name", "") or "").lower()
+        if not name.endswith(self.ALLOWED_EXTENSIONS):
+            raise ValidationError(
+                "Format non supporté. Seuls les fichiers .tif et .tiff sont acceptés."
+            )
+
+        max_bytes = int(getattr(dj_settings, "ORTHOPHOTO_MAX_BYTES", self.DEFAULT_MAX_BYTES))
+        if getattr(upload, "size", 0) > max_bytes:
+            raise ValidationError(
+                f"Fichier trop volumineux ({upload.size / (1024 ** 3):.1f} Go). "
+                f"Maximum autorisé : {max_bytes / (1024 ** 3):.1f} Go."
+            )
+        return upload
+
+    def clean(self):
+        cleaned = super().clean()
+        program = cleaned.get("program")
+        year = cleaned.get("reference_year")
+        month = cleaned.get("reference_month")
+        replace = cleaned.get("replace_existing")
+
+        if month and not (1 <= int(month) <= 12):
+            self.add_error("reference_month", "Le mois doit être compris entre 1 et 12.")
+
+        if (year and not month) or (month and not year):
+            self.add_error("reference_year", "Année et mois doivent être renseignés ensemble.")
+            self.add_error("reference_month", "Année et mois doivent être renseignés ensemble.")
+
+        # Conflit doublon (programme, année, mois)
+        if program and year and month and not self.instance.pk:
+            qs = ProgramOrthophoto.objects.filter(
+                program=program,
+                reference_year=year,
+                reference_month=month,
+            )
+            if qs.exists():
+                if not replace:
+                    self.add_error(
+                        None,
+                        "Une orthophoto existe déjà pour ce programme et ce mois. "
+                        "Cochez « Remplacer » pour la mettre à jour, ou choisissez une autre période.",
+                    )
+                else:
+                    # Marqueur consulté par la vue pour basculer en update.
+                    self._existing_to_replace = qs.first()
+
+        min_z = cleaned.get("min_zoom")
+        max_z = cleaned.get("max_zoom")
+        if min_z is not None and max_z is not None and min_z > max_z:
+            self.add_error("min_zoom", "Le zoom minimum ne peut pas dépasser le zoom maximum.")
+
+        return cleaned

@@ -1,0 +1,163 @@
+{% extends "layouts/base.html" %}
+{% load static %}
+
+{% block title %}Orthophotos — Parcellaire KAYDAN{% endblock %}
+
+{% block content %}
+<section class="mx-auto max-w-[1500px] px-4 py-6 lg:px-8">
+
+  <!-- Header -->
+  <header class="card-glass mb-6 flex flex-col gap-4 rounded-2xl p-5 lg:flex-row lg:items-center lg:justify-between">
+    <div>
+      <p class="text-xs font-semibold uppercase tracking-[0.2em] text-premium-600">Cartographie aérienne</p>
+      <h1 class="mt-1 text-2xl font-extrabold text-slate-900">Orthophotos</h1>
+      <p class="mt-1 text-sm text-slate-600">
+        Gestion centralisée des prises de vue aériennes, versionning mensuel et génération des tuiles XYZ.
+      </p>
+    </div>
+    <div class="flex flex-wrap items-center gap-3">
+      <a href="{% url 'map' %}"
+         class="btn-secondary">
+        <i class="fa-solid fa-map-location-dot"></i> Voir la carte
+      </a>
+      <a href="{% url 'orthophoto_add' %}"
+         class="btn-primary">
+        <i class="fa-solid fa-cloud-arrow-up"></i> Nouvelle orthophoto
+      </a>
+    </div>
+  </header>
+
+  <!-- Filtres -->
+  <form method="get" class="card-glass mb-6 grid grid-cols-1 gap-3 rounded-2xl p-5 md:grid-cols-2 lg:grid-cols-6">
+    <input type="text" name="q" value="{{ q }}"
+           placeholder="Rechercher..."
+           class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-premium-400 focus:outline-none focus:ring-2 focus:ring-premium-200" />
+
+    <select name="project" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
+      <option value="">Tous les projets</option>
+      {% for p in projects %}
+        <option value="{{ p.pk }}" {% if selected_project == p.pk|stringformat:'s' %}selected{% endif %}>{{ p.nom }}</option>
+      {% endfor %}
+    </select>
+
+    <select name="program" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
+      <option value="">Tous les programmes</option>
+      {% for p in programs %}
+        <option value="{{ p.pk }}" {% if selected_program == p.pk|stringformat:'s' %}selected{% endif %}>{{ p.name }}</option>
+      {% endfor %}
+    </select>
+
+    <select name="year" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
+      <option value="">Toutes années</option>
+      {% for y in years %}
+        <option value="{{ y }}" {% if selected_year == y|stringformat:'s' %}selected{% endif %}>{{ y }}</option>
+      {% endfor %}
+    </select>
+
+    <select name="month" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
+      <option value="">Tous mois</option>
+      {% for m in months %}
+        <option value="{{ m }}" {% if selected_month == m|stringformat:'s' %}selected{% endif %}>{{ m }}</option>
+      {% endfor %}
+    </select>
+
+    <div class="flex items-center gap-2">
+      <select name="status" class="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
+        <option value="">Tous statuts</option>
+        {% for code, label in status_choices %}
+          <option value="{{ code }}" {% if selected_status == code %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="btn-secondary">Filtrer</button>
+    </div>
+  </form>
+
+  <!-- Cards -->
+  <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+    {% for ortho in orthophotos %}
+      <article class="card-glass flex flex-col gap-3 rounded-2xl p-5">
+        <header class="flex items-start justify-between gap-3">
+          <div>
+            <p class="text-[11px] uppercase tracking-[0.18em] text-premium-600 font-semibold">
+              {{ ortho.program.project.nom|default:"—" }}
+            </p>
+            <h2 class="mt-1 text-lg font-extrabold text-slate-900 leading-tight">
+              {{ ortho.name|default:ortho.period_label|default:ortho.program.name }}
+            </h2>
+            <p class="text-xs text-slate-500 mt-0.5">{{ ortho.program.name }}</p>
+          </div>
+
+          {% with s=ortho.status %}
+          <span class="rounded-full px-3 py-1 text-[11px] font-bold
+            {% if s == 'DONE' %}bg-emerald-100 text-emerald-700
+            {% elif s == 'PROCESSING' %}bg-amber-100 text-amber-700
+            {% elif s == 'FAILED' %}bg-rose-100 text-rose-700
+            {% else %}bg-slate-100 text-slate-700{% endif %}">
+            {{ ortho.get_status_display }}
+          </span>
+          {% endwith %}
+        </header>
+
+        <div class="grid grid-cols-2 gap-3 text-xs text-slate-600">
+          <div>
+            <p class="font-semibold text-slate-500">Période</p>
+            <p class="text-sm text-slate-800">
+              {% if ortho.reference_month and ortho.reference_year %}
+                {{ ortho.reference_month|stringformat:'02d' }}/{{ ortho.reference_year }}
+              {% else %}—{% endif %}
+            </p>
+          </div>
+          <div>
+            <p class="font-semibold text-slate-500">Zoom</p>
+            <p class="text-sm text-slate-800">{{ ortho.min_zoom }} – {{ ortho.max_zoom }}</p>
+          </div>
+          <div>
+            <p class="font-semibold text-slate-500">Tuiles</p>
+            <p class="text-sm text-slate-800">{% if ortho.tiles_url %}prêtes{% else %}—{% endif %}</p>
+          </div>
+          <div>
+            <p class="font-semibold text-slate-500">Courante</p>
+            <p class="text-sm text-slate-800">{% if ortho.is_current %}<i class="fa-solid fa-circle-check text-emerald-500"></i> oui{% else %}non{% endif %}</p>
+          </div>
+        </div>
+
+        {% if ortho.status == 'PROCESSING' or ortho.status == 'PENDING' %}
+          <div class="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+            <div class="h-full bg-premium-500 transition-all" style="width: {{ ortho.progress_percent }}%"></div>
+          </div>
+          <p class="text-[11px] text-slate-500">{{ ortho.current_step|default:"En attente" }} — {{ ortho.progress_percent }} %</p>
+        {% endif %}
+
+        <footer class="mt-2 flex flex-wrap gap-2">
+          <a href="{% url 'orthophoto_detail' ortho.pk %}" class="btn-secondary !py-1.5 !text-xs">
+            <i class="fa-solid fa-circle-info"></i> Détail
+          </a>
+          {% if ortho.tiles_url %}
+            <a href="{% url 'map' %}?ortho={{ ortho.pk }}" class="btn-secondary !py-1.5 !text-xs">
+              <i class="fa-solid fa-map"></i> Voir sur la carte
+            </a>
+          {% endif %}
+        </footer>
+      </article>
+    {% empty %}
+      <p class="col-span-full rounded-2xl border border-dashed border-slate-300 bg-white/60 p-10 text-center text-slate-500">
+        Aucune orthophoto pour ces filtres.
+        <a href="{% url 'orthophoto_add' %}" class="font-semibold text-premium-600 underline ml-1">Importer une orthophoto</a>.
+      </p>
+    {% endfor %}
+  </div>
+
+  {% if is_paginated %}
+    <nav class="mt-6 flex items-center justify-center gap-2 text-sm">
+      {% if page_obj.has_previous %}
+        <a href="?{{ request.GET.urlencode }}&page={{ page_obj.previous_page_number }}" class="btn-secondary !py-1.5">‹</a>
+      {% endif %}
+      <span class="text-slate-500">Page {{ page_obj.number }} / {{ paginator.num_pages }}</span>
+      {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}" class="btn-secondary !py-1.5">›</a>
+      {% endif %}
+    </nav>
+  {% endif %}
+
+</section>
+{% endblock %}

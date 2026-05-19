@@ -313,6 +313,13 @@ class RealEstateProgram(TimeStampedModel, SoftDeleteModel):
 
 
 class ProgramOrthophoto(TimeStampedModel):
+    STATUS_CHOICES = [
+        ("PENDING", "En attente"),
+        ("PROCESSING", "Traitement en cours"),
+        ("DONE", "Terminée"),
+        ("FAILED", "Échec"),
+    ]
+
     program = models.ForeignKey(
         "RealEstateProgram",
         on_delete=models.CASCADE,
@@ -415,6 +422,69 @@ class ProgramOrthophoto(TimeStampedModel):
         verbose_name="Métadonnées"
     )
 
+    # =====================================================
+    # PIPELINE GDAL (statut traitement, fichiers dérivés)
+    # =====================================================
+    processed_file = models.FileField(
+        upload_to="orthophotos/processed/",
+        blank=True,
+        null=True,
+        verbose_name="GeoTIFF reprojeté (EPSG:3857)"
+    )
+    vrt_file = models.FileField(
+        upload_to="orthophotos/processed/",
+        blank=True,
+        null=True,
+        verbose_name="VRT RGBA (si palette)"
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default="PENDING",
+        db_index=True,
+        verbose_name="Statut"
+    )
+    progress_percent = models.PositiveSmallIntegerField(
+        default=0,
+        verbose_name="Avancement (%)"
+    )
+    current_step = models.CharField(
+        max_length=120,
+        blank=True,
+        null=True,
+        verbose_name="Étape courante"
+    )
+    error_message = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Message d'erreur"
+    )
+    created_by = models.ForeignKey(
+        "auth.User",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="orthophotos_created",
+        verbose_name="Téléversée par"
+    )
+    processed_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name="Traitement terminé le"
+    )
+
+    @property
+    def tiles_root(self):
+        """Alias rétrocompatible : utilise tiles_folder qui existait déjà."""
+        return self.tiles_folder
+
+    @property
+    def is_in_progress(self):
+        return self.status in {"PENDING", "PROCESSING"}
+
+    def progress_step_label(self):
+        return self.current_step or self.get_status_display()
+
     class Meta:
         verbose_name = "Orthophoto programme"
         verbose_name_plural = "Orthophotos programmes"
@@ -467,14 +537,17 @@ class ProgramOrthophoto(TimeStampedModel):
             )
             self.slug = slugify(base)
 
-        if not self.tiles_folder and self.program_id:
-            if self.reference_year and self.reference_month:
-                self.tiles_folder = f"tiles_ortho/{self.program.slug}/{self.reference_year}/{self.reference_month:02d}"
-            else:
-                self.tiles_folder = f"tiles_ortho/{self.program.slug}/{self.slug}"
-
-        if not self.tiles_url and self.tiles_folder:
-            self.tiles_url = f"/media/{self.tiles_folder}/{{z}}/{{x}}/{{y}}.png"
+        # Le `tiles_folder` / `tiles_url` est désormais calculé exclusivement
+        # par la tâche Celery (`process_orthophoto`) une fois les tuiles
+        # générées. On ne pré-remplit plus ici pour éviter les pathologies
+        # type `tiles_ortho/<slug>/<slug>` quand année/mois ne sont pas
+        # encore renseignés. Les anciennes lignes de calcul sont conservées
+        # ci-dessous uniquement à titre de référence (commentaires).
+        #
+        # if not self.tiles_folder and self.program_id:
+        #     if self.reference_year and self.reference_month:
+        #         self.tiles_folder = f"tiles_ortho/{program.slug}/{year}/{month:02d}"
+        #     # else: ne RIEN générer — la task écrira la bonne valeur.
 
         self.full_clean()
         super().save(*args, **kwargs)
@@ -492,6 +565,55 @@ class ProgramOrthophoto(TimeStampedModel):
             label = self.version or f"Orthophoto #{self.pk}"
 
         return f"{self.program.name} - {label}"
+
+
+class OrthophotoProcessingLog(models.Model):
+    """
+    Log structuré du pipeline GDAL pour une orthophoto.
+
+    Chaque commande shell exécutée par la tâche Celery écrit une ligne
+    ici, ce qui permet d'afficher une vraie timeline à l'utilisateur
+    sans avoir à parser un blob texte dans `error_message` ou `metadata`.
+    """
+
+    LEVEL_CHOICES = [
+        ("INFO", "Info"),
+        ("WARNING", "Avertissement"),
+        ("ERROR", "Erreur"),
+    ]
+
+    orthophoto = models.ForeignKey(
+        ProgramOrthophoto,
+        on_delete=models.CASCADE,
+        related_name="processing_logs",
+        verbose_name="Orthophoto"
+    )
+    level = models.CharField(
+        max_length=10,
+        choices=LEVEL_CHOICES,
+        default="INFO",
+        verbose_name="Niveau"
+    )
+    message = models.TextField(verbose_name="Message")
+    command = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Commande shell"
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+        verbose_name = "Log de traitement orthophoto"
+        verbose_name_plural = "Logs de traitement orthophotos"
+        indexes = [
+            models.Index(fields=["orthophoto", "created_at"]),
+            models.Index(fields=["level"]),
+        ]
+
+    def __str__(self):
+        return f"[{self.level}] {self.orthophoto_id} - {self.message[:60]}"
+
 
 class ProgramPhase(TimeStampedModel, SoftDeleteModel):
     STATUS_CHOICES = [
