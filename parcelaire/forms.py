@@ -1129,6 +1129,30 @@ class OrthophotoForm(BaseModelForm):
             lambda obj: f"{obj.project.nom} · {obj.name}" if obj.project_id else obj.name
         )
 
+        # Widget enrichi : on injecte un `data-project-id` sur chaque
+        # <option> pour permettre au filtre "Projet" côté Alpine.js de
+        # masquer dynamiquement les programmes hors-projet.
+        class _ProgramSelect(forms.Select):
+            def __init__(self, programs):
+                super().__init__()
+                self._program_to_project = {p.pk: p.project_id for p in programs}
+
+            def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
+                option = super().create_option(name, value, label, selected, index, subindex=subindex, attrs=attrs)
+                try:
+                    pk = int(value) if value not in (None, "", "None") else None
+                except (TypeError, ValueError):
+                    pk = None
+                project_id = self._program_to_project.get(pk) if pk else None
+                if project_id:
+                    option["attrs"]["data-project-id"] = str(project_id)
+                return option
+
+        self.fields["program"].widget = _ProgramSelect(programs=list(self.fields["program"].queryset))
+        # `required` HTML : le navigateur affichera une infobulle native
+        # si on tente de soumettre avec "— Sélectionner —" choisi.
+        self.fields["program"].widget.attrs.setdefault("required", "required")
+
         # Defaults pré-remplis (et non requis) — le pipeline GDAL
         # accepte parfaitement les valeurs par défaut.
         self.fields["min_zoom"].required = False
