@@ -98,9 +98,16 @@
         <p class="mt-1 text-[11px] text-slate-500">Optionnel — sert juste à filtrer les programmes.</p>
       </div>
       <div>
-        <label for="{{ form.program.id_for_label }}" class="mb-1 block text-sm font-bold text-slate-700">Programme *</label>
-        {{ form.program|add_class:"w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" }}
-        {{ form.program.errors }}
+        <label for="{{ form.program.id_for_label }}" class="mb-1 block text-sm font-bold text-slate-700">
+          Programme <span class="text-rose-600">*</span>
+        </label>
+        {{ form.program|add_class:"w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-premium-400 focus:ring-2 focus:ring-premium-200" }}
+        <p class="mt-1 text-[11px] text-slate-500">
+          Choisissez le programme auquel cette orthophoto sera rattachée.
+        </p>
+        {% if form.program.errors %}
+          <p class="mt-1 text-xs font-semibold text-rose-600">{{ form.program.errors.0 }}</p>
+        {% endif %}
       </div>
     </div>
 

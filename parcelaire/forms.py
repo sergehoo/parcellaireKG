@@ -1107,8 +1107,11 @@ class OrthophotoForm(BaseModelForm):
             "period_label": forms.TextInput(attrs={"placeholder": "Ex. Mai 2026"}),
             "reference_year": forms.NumberInput(attrs={"min": 2000, "max": 2100, "placeholder": "2026"}),
             "reference_month": forms.NumberInput(attrs={"min": 1, "max": 12, "placeholder": "5"}),
-            "min_zoom": forms.NumberInput(attrs={"min": 0, "max": 25, "value": 15}),
-            "max_zoom": forms.NumberInput(attrs={"min": 0, "max": 25, "value": 22}),
+            # NB : on ne met PAS de `value` ici — Django Form ne lit pas
+            # cet attribut HTML, c'est le `initial` Python qui pré-remplit
+            # le champ (cf. __init__ ci-dessous).
+            "min_zoom": forms.NumberInput(attrs={"min": 0, "max": 25}),
+            "max_zoom": forms.NumberInput(attrs={"min": 0, "max": 25}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -1118,10 +1121,26 @@ class OrthophotoForm(BaseModelForm):
             .select_related("project")
             .order_by("project__nom", "name")
         )
-        # Defaults UX : zoom 15-22 sur les créations vierges.
-        if not self.instance.pk:
-            self.fields["min_zoom"].initial = 15
-            self.fields["max_zoom"].initial = 22
+        # Le ModelChoiceField ajoute par défaut un libellé vide "---------"
+        # qui rend ambigu le caractère obligatoire ; on le remplace par un
+        # placeholder plus parlant.
+        self.fields["program"].empty_label = "— Sélectionner un programme —"
+        self.fields["program"].label_from_instance = (
+            lambda obj: f"{obj.project.nom} · {obj.name}" if obj.project_id else obj.name
+        )
+
+        # Defaults pré-remplis (et non requis) — le pipeline GDAL
+        # accepte parfaitement les valeurs par défaut.
+        self.fields["min_zoom"].required = False
+        self.fields["max_zoom"].required = False
+        self.fields["min_zoom"].initial = 15
+        self.fields["max_zoom"].initial = 22
+
+    def clean_min_zoom(self):
+        return self.cleaned_data.get("min_zoom") or 15
+
+    def clean_max_zoom(self):
+        return self.cleaned_data.get("max_zoom") or 22
 
     # ------------------------------------------------------------------
     # Validations
