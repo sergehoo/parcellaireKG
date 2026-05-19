@@ -139,6 +139,26 @@ STORAGES = {
 }
 
 # =====================================================================
+# Stockage S3 (MinIO self-hosted) pour les gros fichiers orthophotos
+# =====================================================================
+# `S3_ENDPOINT_URL`        = URL interne réseau Docker (http://minio:9000)
+# `S3_ENDPOINT_URL_EXTERNAL` = URL publique HTTPS pour les presigned URLs
+#                            que le navigateur va appeler (https://s3.…).
+# Doit être défini AVANT le bloc CSP qui en référence la valeur.
+S3_ENDPOINT_URL = os.environ.get("S3_ENDPOINT_URL", "")
+S3_ENDPOINT_URL_EXTERNAL = os.environ.get("S3_ENDPOINT_URL_EXTERNAL", "") or S3_ENDPOINT_URL
+S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY", "")
+S3_SECRET_KEY = os.environ.get("S3_SECRET_KEY", "")
+S3_BUCKET = os.environ.get("S3_BUCKET", "parcelaire-orthophotos")
+S3_REGION = os.environ.get("S3_REGION", "us-east-1")
+S3_PRESIGNED_EXPIRY = int(os.environ.get("S3_PRESIGNED_EXPIRY", "7200"))  # 2 h
+
+# Taille d'une "part" multipart S3 (max 5 GiB, min 5 MiB).
+# 50 MiB est un bon compromis : assez gros pour limiter le nb de PUT,
+# assez petit pour passer sous tous les proxies.
+S3_MULTIPART_PART_SIZE = int(os.environ.get("S3_MULTIPART_PART_SIZE", str(50 * 1024 * 1024)))
+
+# =====================================================================
 # Content Security Policy (django-csp 4.x)
 # =====================================================================
 # La cartographie utilise Leaflet, Tailwind CDN, Alpine.js, Font Awesome,
@@ -352,25 +372,6 @@ LOGGING = {
         },
     },
 }
-
-# =====================================================================
-# Stockage S3 (MinIO self-hosted) pour les gros fichiers orthophotos
-# =====================================================================
-# `S3_ENDPOINT_URL`        = URL interne réseau Docker (http://minio:9000)
-# `S3_ENDPOINT_URL_EXTERNAL` = URL publique HTTPS pour les presigned URLs
-#                            que le navigateur va appeler (https://s3.…).
-S3_ENDPOINT_URL = os.environ.get("S3_ENDPOINT_URL", "")
-S3_ENDPOINT_URL_EXTERNAL = os.environ.get("S3_ENDPOINT_URL_EXTERNAL", "") or S3_ENDPOINT_URL
-S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY", "")
-S3_SECRET_KEY = os.environ.get("S3_SECRET_KEY", "")
-S3_BUCKET = os.environ.get("S3_BUCKET", "parcelaire-orthophotos")
-S3_REGION = os.environ.get("S3_REGION", "us-east-1")
-S3_PRESIGNED_EXPIRY = int(os.environ.get("S3_PRESIGNED_EXPIRY", "7200"))  # 2 h
-
-# Taille d'une "part" multipart S3 (max 5 GiB, min 5 MiB).
-# 50 MiB est un bon compromis : assez gros pour limiter le nb de PUT,
-# assez petit pour passer sous tous les proxies.
-S3_MULTIPART_PART_SIZE = int(os.environ.get("S3_MULTIPART_PART_SIZE", str(50 * 1024 * 1024)))
 
 # =====================================================================
 # Orthophotos — pipeline GDAL
