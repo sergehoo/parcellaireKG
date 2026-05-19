@@ -95,10 +95,39 @@ def process_orthophoto(self, orthophoto_id: int):
         for k, v in fields.items():
             setattr(ortho, k, v)
 
+    # --------------------------------------------------------------
+    # Récupération du TIFF source.
+    # Le fichier source peut être :
+    #   (a) directement dans `source_file` (FileField local — workflow
+    #       classique ou ancien upload chunked sur disque) ;
+    #   (b) stocké sur MinIO/S3 (workflow presigned multipart : la clé
+    #       est dans `metadata.s3_object.key`). On télécharge alors la
+    #       clé S3 dans le filesystem local et on l'attache à
+    #       `source_file` pour la suite du pipeline (et l'historique).
+    # --------------------------------------------------------------
     if not ortho.source_file:
-        update(status="FAILED", error_message="Aucun fichier source.", current_step="—")
-        log("ERROR", "Aucun fichier source associé à l'orthophoto.")
-        return {"status": "FAILED", "id": ortho.pk}
+        s3_obj = (ortho.metadata or {}).get("s3_object") or {}
+        s3_key = s3_obj.get("key")
+        if s3_key:
+            try:
+                from parcelaire.services import storage as _s3
+                local_dir = Path(settings.MEDIA_ROOT) / "orthophotos" / "sources" / str(ortho.pk)
+                local_dir.mkdir(parents=True, exist_ok=True)
+                local_path = local_dir / Path(s3_key).name
+                update(current_step=f"Téléchargement S3 ({Path(s3_key).name})")
+                log("INFO", f"Téléchargement depuis S3 : {s3_key} → {local_path}")
+                _s3.download_to_path(s3_key, local_path)
+                rel = local_path.relative_to(settings.MEDIA_ROOT)
+                update(source_file=str(rel))
+                log("INFO", f"Source téléchargée ({local_path.stat().st_size} octets).")
+            except Exception as exc:  # noqa: BLE001
+                update(status="FAILED", error_message=f"Téléchargement S3 KO : {exc}", current_step="Échec S3")
+                log("ERROR", f"Téléchargement S3 KO : {exc}")
+                return {"status": "FAILED", "id": ortho.pk, "error": str(exc)}
+        else:
+            update(status="FAILED", error_message="Aucun fichier source.", current_step="—")
+            log("ERROR", "Aucun fichier source associé à l'orthophoto.")
+            return {"status": "FAILED", "id": ortho.pk}
 
     # ----------------------------------------------------------
     # Étape 1 — préparation

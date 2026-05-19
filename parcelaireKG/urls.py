@@ -37,7 +37,7 @@ from parcelaire.views import HomeView, MapView, ParcellaireDashboardView, Projet
     PropertyAssetDetailView, PropertyAssetUpdateView, MapCommercialView, \
     OrthophotoListView, OrthophotoCreateView, OrthophotoDetailView, OrthophotoStatusAPIView, \
     OrthophotoRetryView, OrthophotoSetCurrentView, OrthophotoDeleteTilesView, OrthophotoDownloadLogsView, \
-    OrthophotoUploadInitView, OrthophotoUploadChunkView, OrthophotoUploadFinalizeView
+    OrthophotoUploadInitView, OrthophotoUploadCompleteView, OrthophotoUploadAbortView
 
 urlpatterns = [
                   path('admin/', admin.site.urls),
@@ -150,12 +150,12 @@ urlpatterns = [
                   path("orthophotos/<int:pk>/delete-tiles/", OrthophotoDeleteTilesView.as_view(), name="orthophoto_delete_tiles"),
                   path("orthophotos/<int:pk>/logs.txt", OrthophotoDownloadLogsView.as_view(), name="orthophoto_logs"),
 
-                  # -------- UPLOAD CHUNKED --------
-                  # Contourne les limites des proxies (Cloudflare, ISP, Traefik
-                  # timeouts) : on envoie le TIFF par tranches de 5 Mo.
+                  # -------- UPLOAD MULTIPART S3 (MinIO) --------
+                  # Le navigateur PUT directement vers MinIO via des
+                  # presigned URLs ; Django ne reçoit que init/complete.
                   path("orthophotos/upload/init/", OrthophotoUploadInitView.as_view(), name="orthophoto_upload_init"),
-                  path("orthophotos/upload/chunk/<str:upload_id>/", OrthophotoUploadChunkView.as_view(), name="orthophoto_upload_chunk"),
-                  path("orthophotos/upload/finalize/<str:upload_id>/", OrthophotoUploadFinalizeView.as_view(), name="orthophoto_upload_finalize"),
+                  path("orthophotos/upload/complete/", OrthophotoUploadCompleteView.as_view(), name="orthophoto_upload_complete"),
+                  path("orthophotos/upload/abort/", OrthophotoUploadAbortView.as_view(), name="orthophoto_upload_abort"),
               ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 if settings.DEBUG:
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

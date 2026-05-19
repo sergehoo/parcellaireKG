@@ -305,14 +305,15 @@
       },
 
       // -----------------------------------------------------------
-      // Upload CHUNKED — chaque tranche de 5 Mo passe sous les limites
-      // de tous les proxies (Cloudflare, Traefik, ISP).
-      //   1. POST /orthophotos/upload/init/         (JSON, méta)
-      //   2. POST /orthophotos/upload/chunk/<id>/?index=N  (binaire)
-      //   3. POST /orthophotos/upload/finalize/<id>/   (JSON)
+      // Upload MULTIPART S3 (MinIO presigned URLs).
+      //   1. POST /orthophotos/upload/init/      → renvoie parts[] avec URLs PUT signées
+      //   2. PUT  <presigned-url>                → chaque chunk va DIRECTEMENT à MinIO
+      //   3. POST /orthophotos/upload/complete/  → finalise et lance Celery
+      //
+      // Avantage : aucun gros body ne traverse Django/Traefik.
       // -----------------------------------------------------------
       _aborted: false,
-      _uploadId: null,
+      _orthophotoId: null,
 
       async submitForm(ev) {
         if (this.uploading) return;
@@ -347,6 +348,8 @@
 
         try {
           // ---------- 1. INIT ----------
+          // Django démarre un multipart upload S3 et nous renvoie une URL
+          // signée PUT par chunk.
           const initBody = {
             program: programInput.value,
             name: form.querySelector('input[name="name"]')?.value || '',
@@ -371,73 +374,99 @@
             body: JSON.stringify(initBody),
           });
           if (!initRes.ok) {
-            const err = await initRes.json().catch(() => ({error: 'Erreur init.'}));
-            throw new Error(err.error || `init: HTTP ${initRes.status}`);
+            let body = '';
+            try { body = await initRes.text(); } catch (_) {}
+            let err = null;
+            try { err = JSON.parse(body); } catch (_) {}
+            throw new Error((err && err.error) ? `init: ${err.error}` : `init HTTP ${initRes.status}`);
           }
-          const { upload_id, orthophoto_id, chunk_size } = await initRes.json();
-          this._uploadId = upload_id;
+          const { orthophoto_id, part_size, parts } = await initRes.json();
+          this._orthophotoId = orthophoto_id;
 
-          // ---------- 2. CHUNKS ----------
+          // ---------- 2. PUT chunks DIRECTEMENT vers MinIO ----------
           const total = file.size;
-          let offset = 0;
-          let index = 0;
-          const chunkUrlBase = "{% url 'orthophoto_upload_chunk' upload_id='__UID__' %}".replace('__UID__', upload_id);
+          const uploadedParts = [];
 
-          while (offset < total) {
+          for (let i = 0; i < parts.length; i++) {
             if (this._aborted) throw new Error('Annulé.');
-            const end = Math.min(offset + chunk_size, total);
+            const partInfo = parts[i];
+            const offset = i * part_size;
+            const end = Math.min(offset + part_size, total);
             const chunk = file.slice(offset, end);
-            const url = `${chunkUrlBase}?index=${index}`;
 
-            const res = await fetch(url, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/octet-stream',
-                'X-CSRFToken': csrf,
-                'X-Requested-With': 'XMLHttpRequest',
-              },
-              credentials: 'same-origin',
+            // ATTENTION : pas de header personnalisé sinon CORS preflight
+            // bloque (Content-Type custom = preflight, et MinIO/Traefik
+            // doivent répondre OPTIONS). On laisse fetch envoyer le chunk
+            // brut. MinIO accepte sans Content-Type explicite.
+            const putRes = await fetch(partInfo.url, {
+              method: 'PUT',
               body: chunk,
+              // PAS credentials: 'same-origin' → cross-origin, sans cookies.
             });
-            if (!res.ok) {
-              const err = await res.json().catch(() => ({error: `HTTP ${res.status}`}));
-              throw new Error(`chunk #${index}: ${err.error || res.status}`);
+            if (!putRes.ok) {
+              throw new Error(`PUT part #${partInfo.part_number}: HTTP ${putRes.status}`);
             }
-            const j = await res.json();
-            this.bytesSent = j.received_size || end;
+            // ETag indispensable pour CompleteMultipartUpload.
+            const etag = putRes.headers.get('ETag') || putRes.headers.get('etag');
+            if (!etag) {
+              throw new Error(
+                `PUT part #${partInfo.part_number}: ETag non récupéré (CORS ?). ` +
+                `Vérifie que MinIO expose le header ETag.`
+              );
+            }
+            uploadedParts.push({
+              PartNumber: partInfo.part_number,
+              ETag: etag.replace(/^"|"$/g, ''),
+            });
+
+            this.bytesSent = end;
             this.uploadProgress = Math.min(99, Math.round((this.bytesSent / total) * 100));
 
             const elapsed = (Date.now() - this.uploadStartedAt) / 1000;
             const speed = elapsed > 0 ? this.bytesSent / elapsed : 0;
             const remaining = speed > 0 ? (total - this.bytesSent) / speed : 0;
-            this.uploadStatusLabel = `Chunk ${index + 1} envoyé — ${this.prettySize(speed)}/s — ${Math.ceil(remaining)} s restantes`;
-
-            offset = end;
-            index += 1;
+            this.uploadStatusLabel = `Part ${i + 1}/${parts.length} envoyée — ${this.prettySize(speed)}/s — ${Math.ceil(remaining)} s restantes`;
           }
 
-          // ---------- 3. FINALIZE ----------
+          // ---------- 3. COMPLETE ----------
           this.uploadStatusLabel = 'Finalisation côté serveur…';
           this.canCancel = false;
-          const finalizeUrl = "{% url 'orthophoto_upload_finalize' upload_id='__UID__' %}".replace('__UID__', upload_id);
-          const finRes = await fetch(finalizeUrl, {
+          const compRes = await fetch("{% url 'orthophoto_upload_complete' %}", {
             method: 'POST',
             headers: {
+              'Content-Type': 'application/json',
               'X-CSRFToken': csrf,
               'X-Requested-With': 'XMLHttpRequest',
             },
             credentials: 'same-origin',
+            body: JSON.stringify({
+              orthophoto_id: orthophoto_id,
+              parts: uploadedParts,
+            }),
           });
-          if (!finRes.ok) {
-            const err = await finRes.json().catch(() => ({error: `HTTP ${finRes.status}`}));
-            throw new Error(`finalize: ${err.error || finRes.status}`);
+          if (!compRes.ok) {
+            const err = await compRes.json().catch(() => ({error: `HTTP ${compRes.status}`}));
+            throw new Error(`complete: ${err.error || compRes.status}`);
           }
-          const { redirect } = await finRes.json();
+          const { redirect } = await compRes.json();
           this.uploadProgress = 100;
           this.uploadStatusLabel = 'Téléversement complet. Redirection…';
           window.location.assign(redirect);
         } catch (err) {
           console.error('[orthophoto upload]', err);
+          // Tente d'annuler le multipart S3 pour libérer le bucket.
+          if (this._orthophotoId) {
+            fetch("{% url 'orthophoto_upload_abort' %}", {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrf,
+                'X-Requested-With': 'XMLHttpRequest',
+              },
+              credentials: 'same-origin',
+              body: JSON.stringify({orthophoto_id: this._orthophotoId}),
+            }).catch(() => {});
+          }
           this.uploading = false;
           this.canCancel = false;
           alert('Échec du téléversement : ' + err.message);

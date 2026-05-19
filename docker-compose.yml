@@ -67,6 +67,16 @@ services:
       - EXTERNAL_LOTS_API_USERNAME=${EXTERNAL_LOTS_API_USERNAME}
       - EXTERNAL_LOTS_API_PASSWORD=${EXTERNAL_LOTS_API_PASSWORD}
 
+      # MinIO / S3 — stockage objet pour les TIFF source
+      # Hostname interne = nom du service Docker (Docker DNS) ;
+      # hostname externe = sous-domaine Traefik configurable via .env.
+      - S3_ENDPOINT_URL=http://parcelaire-orthos3:9000
+      - S3_ENDPOINT_URL_EXTERNAL=https://${MINIO_S3_HOST:-s3-parcelaire.${DOMAIN}}
+      - S3_ACCESS_KEY=${MINIO_ROOT_USER}
+      - S3_SECRET_KEY=${MINIO_ROOT_PASSWORD}
+      - S3_BUCKET=${MINIO_BUCKET:-parcelaire-orthophotos}
+      - S3_REGION=us-east-1
+
       # Django
       - SECRET_KEY=${SECRET_KEY}
       - ALLOWED_HOSTS=${ALLOWED_HOSTS}
@@ -146,6 +156,16 @@ services:
       - EXTERNAL_LOTS_API_USERNAME=${EXTERNAL_LOTS_API_USERNAME}
       - EXTERNAL_LOTS_API_PASSWORD=${EXTERNAL_LOTS_API_PASSWORD}
 
+      # MinIO / S3 — stockage objet pour les TIFF source
+      # Hostname interne = nom du service Docker (Docker DNS) ;
+      # hostname externe = sous-domaine Traefik configurable via .env.
+      - S3_ENDPOINT_URL=http://parcelaire-orthos3:9000
+      - S3_ENDPOINT_URL_EXTERNAL=https://${MINIO_S3_HOST:-s3-parcelaire.${DOMAIN}}
+      - S3_ACCESS_KEY=${MINIO_ROOT_USER}
+      - S3_SECRET_KEY=${MINIO_ROOT_PASSWORD}
+      - S3_BUCKET=${MINIO_BUCKET:-parcelaire-orthophotos}
+      - S3_REGION=us-east-1
+
       - SECRET_KEY=${SECRET_KEY}
       - TIME_ZONE=${TIME_ZONE:-Africa/Abidjan}
     env_file:
@@ -191,6 +211,16 @@ services:
       - EXTERNAL_LOTS_API_KEY=${EXTERNAL_LOTS_API_KEY}
       - EXTERNAL_LOTS_API_USERNAME=${EXTERNAL_LOTS_API_USERNAME}
       - EXTERNAL_LOTS_API_PASSWORD=${EXTERNAL_LOTS_API_PASSWORD}
+
+      # MinIO / S3 — stockage objet pour les TIFF source
+      # Hostname interne = nom du service Docker (Docker DNS) ;
+      # hostname externe = sous-domaine Traefik configurable via .env.
+      - S3_ENDPOINT_URL=http://parcelaire-orthos3:9000
+      - S3_ENDPOINT_URL_EXTERNAL=https://${MINIO_S3_HOST:-s3-parcelaire.${DOMAIN}}
+      - S3_ACCESS_KEY=${MINIO_ROOT_USER}
+      - S3_SECRET_KEY=${MINIO_ROOT_PASSWORD}
+      - S3_BUCKET=${MINIO_BUCKET:-parcelaire-orthophotos}
+      - S3_REGION=us-east-1
 
       - SECRET_KEY=${SECRET_KEY}
       - TIME_ZONE=${TIME_ZONE:-Africa/Abidjan}
@@ -248,11 +278,79 @@ services:
     labels:
       - "traefik.enable=false"
 
+  # =================================================================
+  # MinIO dédié au parcellaire — stockage S3-compatible des orthophotos.
+  # Tous les noms (service / container / volume / routes Traefik) sont
+  # préfixés `parcelaire-orthos3` pour ne pas entrer en conflit avec une
+  # autre instance MinIO déjà présente sur l'hôte.
+  # Les sous-domaines publics sont configurables via `.env` :
+  #   MINIO_S3_HOST       (default s3-parcelaire.${DOMAIN})
+  #   MINIO_CONSOLE_HOST  (default minio-parcelaire.${DOMAIN})
+  # =================================================================
+  parcelaire-orthos3:
+    image: minio/minio:latest
+    container_name: parcelaire-orthos3
+    hostname: parcelaire-orthos3
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      # URLs publiques utilisées pour les redirections de la console et
+      # l'affichage de l'API S3 dans l'UI.
+      MINIO_BROWSER_REDIRECT_URL: https://${MINIO_CONSOLE_HOST:-minio-parcelaire.${DOMAIN}}
+      MINIO_SERVER_URL: https://${MINIO_S3_HOST:-s3-parcelaire.${DOMAIN}}
+    volumes:
+      - parcelaire_orthos3_data:/data
+    networks:
+      - default
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+
+      # ----- Router 1 : API S3 (presigned PUT, GET) -----
+      - "traefik.http.routers.parcelaire-orthos3-api.rule=Host(`${MINIO_S3_HOST:-s3-parcelaire.${DOMAIN}}`)"
+      - "traefik.http.routers.parcelaire-orthos3-api.entrypoints=websecure"
+      - "traefik.http.routers.parcelaire-orthos3-api.tls.certresolver=lets"
+      - "traefik.http.routers.parcelaire-orthos3-api.service=parcelaire-orthos3-api"
+      - "traefik.http.services.parcelaire-orthos3-api.loadbalancer.server.port=9000"
+
+      # ----- Router 2 : Console MinIO (UI admin) -----
+      - "traefik.http.routers.parcelaire-orthos3-ui.rule=Host(`${MINIO_CONSOLE_HOST:-minio-parcelaire.${DOMAIN}}`)"
+      - "traefik.http.routers.parcelaire-orthos3-ui.entrypoints=websecure"
+      - "traefik.http.routers.parcelaire-orthos3-ui.tls.certresolver=lets"
+      - "traefik.http.routers.parcelaire-orthos3-ui.service=parcelaire-orthos3-ui"
+      - "traefik.http.services.parcelaire-orthos3-ui.loadbalancer.server.port=9001"
+
+  # Bootstrap : crée le bucket et configure la policy au premier démarrage.
+  parcelaire-orthos3-init:
+    image: minio/mc:latest
+    container_name: parcelaire-orthos3-init
+    depends_on:
+      - parcelaire-orthos3
+    networks:
+      - default
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: ${MINIO_BUCKET:-parcelaire-orthophotos}
+    entrypoint: >
+      /bin/sh -c "
+      sleep 5;
+      mc alias set parc http://parcelaire-orthos3:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD;
+      mc mb --ignore-existing parc/$$MINIO_BUCKET;
+      mc anonymous set download parc/$$MINIO_BUCKET || true;
+      echo 'MinIO bucket prêt : '$$MINIO_BUCKET;
+      "
+    restart: "no"
+
 volumes:
   postgres_data:
   redis_data:
   static_volume:
   media_volume:
+  parcelaire_orthos3_data:
 
 networks:
   proxy:

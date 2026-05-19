@@ -1538,45 +1538,39 @@ class OrthophotoDownloadLogsView(_OrthophotoBaseMixin, View):
         return resp
 
 
+
 # =====================================================================
-# UPLOAD CHUNKED — orthophotos
+# UPLOAD MULTIPART S3 (MinIO) — orthophotos
 # =====================================================================
-# Permet d'uploader un TIFF de plusieurs Go par tranches de quelques Mo
-# pour s'affranchir des limites de taille / timeouts des proxies (Traefik,
-# CDN, ISP). Une orthophoto en statut PENDING est créée à l'init ; on
-# append les chunks à `/media/_tmp_uploads/<uuid>.tif` ; à la finalisation
-# on déplace le fichier dans `source_file` et on déclenche Celery.
+# Le navigateur PUT chaque chunk directement vers MinIO via des URLs
+# signées ; Django ne reçoit que les méta-requêtes init/complete (~1 Ko).
+# Du coup tous les soucis de Traefik / proxy / timeout disparaissent.
 
 import json as _json
 import logging as _logging
-import os as _os
-import uuid as _uuid
 from datetime import datetime as _datetime
 from pathlib import Path as _Path
 from django.utils.text import slugify as _slugify
 
+from parcelaire.services import storage as _s3
+
 _logger_orth = _logging.getLogger("parcelaire")
 
 
-def _orthophoto_tmp_dir():
-    base = getattr(dj_settings, "FILE_UPLOAD_TEMP_DIR", None) or (_Path(dj_settings.MEDIA_ROOT) / "_tmp_uploads")
-    base = _Path(base)
-    base.mkdir(parents=True, exist_ok=True)
-    return base
+def _build_s3_key(ortho, filename):
+    """Construit la clé S3 pour le TIFF source d'une orthophoto."""
+    safe = _slugify(_Path(filename).stem)[:80] or "ortho"
+    ext = _Path(filename).suffix.lower() or ".tif"
+    return f"orthophotos/sources/{ortho.pk}/{safe}{ext}"
 
 
 @method_decorator(require_POST, name="dispatch")
 class OrthophotoUploadInitView(_OrthophotoBaseMixin, View):
     """
     POST /orthophotos/upload/init/
-    Crée une ProgramOrthophoto en statut PENDING et retourne :
-        { upload_id, chunk_size }
-    Le payload JSON doit contenir : program, reference_year, reference_month,
-    name (opt), period_label (opt), min_zoom (opt), max_zoom (opt),
-    is_current (opt), filename, total_size.
+    Crée une orthophoto PENDING et démarre un multipart upload S3.
+    Renvoie la liste des `parts` avec leurs URLs signées PUT.
     """
-
-    CHUNK_SIZE = 5 * 1024 * 1024  # 5 Mo
 
     def post(self, request, *args, **kwargs):
         try:
@@ -1609,32 +1603,24 @@ class OrthophotoUploadInitView(_OrthophotoBaseMixin, View):
             total_size = int(payload.get("total_size", 0))
         except (TypeError, ValueError):
             total_size = 0
+        if total_size <= 0:
+            return JsonResponse({"error": "Taille de fichier inconnue."}, status=400)
 
-        max_bytes = int(getattr(dj_settings, "ORTHOPHOTO_MAX_BYTES", 8 * 1024 ** 3))
-        if total_size > max_bytes:
-            return JsonResponse(
-                {"error": f"Fichier trop volumineux ({total_size / 1024**3:.1f} Go). Max {max_bytes / 1024**3:.1f} Go."},
-                status=413,
-            )
-
-        # Vérifie le conflit (programme, année, mois) déjà existant.
+        # ----- Conflit programme/période -----
         replace_existing = bool(payload.get("replace_existing"))
         existing = None
         if year and month:
             existing = ProgramOrthophoto.objects.filter(
-                program=program,
-                reference_year=year,
-                reference_month=month,
+                program=program, reference_year=year, reference_month=month,
             ).first()
         if existing and not replace_existing:
             return JsonResponse(
                 {"error": "Une orthophoto existe déjà pour ce programme / mois.",
-                 "conflict": True,
-                 "existing_id": existing.pk},
+                 "conflict": True, "existing_id": existing.pk},
                 status=409,
             )
 
-        # Réutilisation ou création.
+        # ----- Création ou réutilisation -----
         if existing:
             ortho = existing
             ortho.name = payload.get("name") or ortho.name
@@ -1644,7 +1630,7 @@ class OrthophotoUploadInitView(_OrthophotoBaseMixin, View):
             ortho.is_current = bool(payload.get("is_current"))
             ortho.status = "PENDING"
             ortho.progress_percent = 0
-            ortho.current_step = "Upload en cours…"
+            ortho.current_step = "Upload S3 en cours…"
             ortho.error_message = None
             ortho.processed_at = None
             ortho.created_by = request.user if request.user.is_authenticated else None
@@ -1661,146 +1647,151 @@ class OrthophotoUploadInitView(_OrthophotoBaseMixin, View):
                 is_current=bool(payload.get("is_current")),
                 status="PENDING",
                 progress_percent=0,
-                current_step="Upload en cours…",
+                current_step="Upload S3 en cours…",
                 created_by=request.user if request.user.is_authenticated else None,
             )
 
-        upload_id = _uuid.uuid4().hex
-        # Le fichier tampon est lié à l'orthophoto via son metadata pour
-        # qu'on puisse retrouver l'ortho à finalize.
+        # ----- Initiate multipart sur MinIO -----
+        s3_key = _build_s3_key(ortho, filename)
+        try:
+            _s3.ensure_bucket_and_cors()
+            upload_id = _s3.initiate_multipart_upload(s3_key, content_type="image/tiff")
+        except Exception as exc:  # noqa: BLE001
+            _logger_orth.exception("Init multipart S3 KO pour ortho %s", ortho.pk)
+            ortho.status = "FAILED"
+            ortho.error_message = f"Erreur stockage S3 : {exc}"
+            ortho.save(update_fields=["status", "error_message", "updated_at"])
+            return JsonResponse({"error": f"Stockage S3 indisponible : {exc}"}, status=502)
+
+        # ----- Génère les presigned URLs des parts -----
+        part_size = int(getattr(dj_settings, "S3_MULTIPART_PART_SIZE", 50 * 1024 * 1024))
+        nb_parts = max(1, (total_size + part_size - 1) // part_size)
+        parts = [
+            {"part_number": i + 1, "url": _s3.presign_part_url(s3_key, upload_id, i + 1)}
+            for i in range(nb_parts)
+        ]
+
+        # ----- Sauvegarde la session d'upload dans metadata -----
         ortho.metadata = ortho.metadata or {}
-        ortho.metadata["chunked_upload"] = {
+        ortho.metadata["s3_upload"] = {
+            "key": s3_key,
             "upload_id": upload_id,
             "filename": filename,
             "total_size": total_size,
-            "received_size": 0,
+            "part_size": part_size,
+            "nb_parts": nb_parts,
             "started_at": _datetime.utcnow().isoformat() + "Z",
         }
         ortho.save(update_fields=["metadata"])
 
-        # Crée le fichier vide.
-        tmp_path = _orthophoto_tmp_dir() / f"{upload_id}.part"
-        tmp_path.touch()
-
         _logger_orth.info(
-            "Upload init: ortho=%s upload_id=%s total=%s filename=%s",
-            ortho.pk, upload_id, total_size, filename,
+            "S3 init ok | ortho=%s | key=%s | upload_id=%s | parts=%s | total=%s",
+            ortho.pk, s3_key, upload_id[:12], nb_parts, total_size,
         )
         return JsonResponse({
-            "upload_id": upload_id,
             "orthophoto_id": ortho.pk,
-            "chunk_size": self.CHUNK_SIZE,
+            "upload_id": upload_id,
+            "s3_key": s3_key,
+            "part_size": part_size,
+            "parts": parts,
         })
 
 
 @method_decorator(require_POST, name="dispatch")
-class OrthophotoUploadChunkView(_OrthophotoBaseMixin, View):
+class OrthophotoUploadCompleteView(_OrthophotoBaseMixin, View):
     """
-    POST /orthophotos/upload/chunk/<upload_id>/?index=N
-    Body : binaire brut (Content-Type: application/octet-stream).
-    Append au fichier tampon. Retourne la taille totale reçue.
+    POST /orthophotos/upload/complete/
+    Body JSON :
+        { orthophoto_id, parts: [{PartNumber, ETag}, ...] }
+    Finalise le multipart, attache l'objet à l'orthophoto, lance Celery.
     """
 
-    def post(self, request, upload_id, *args, **kwargs):
+    def post(self, request, *args, **kwargs):
         try:
-            index = int(request.GET.get("index", -1))
-        except (TypeError, ValueError):
-            return JsonResponse({"error": "index manquant ou invalide."}, status=400)
-        if index < 0:
-            return JsonResponse({"error": "index négatif."}, status=400)
+            payload = _json.loads(request.body.decode("utf-8") or "{}")
+        except _json.JSONDecodeError as exc:
+            return JsonResponse({"error": f"JSON invalide : {exc}"}, status=400)
 
-        # Cherche l'orthophoto correspondante via metadata.
-        ortho = ProgramOrthophoto.objects.filter(
-            metadata__chunked_upload__upload_id=upload_id,
-        ).first()
-        if not ortho:
-            return JsonResponse({"error": "Session upload introuvable."}, status=404)
+        ortho_id = payload.get("orthophoto_id")
+        if not ortho_id:
+            return JsonResponse({"error": "orthophoto_id manquant."}, status=400)
+        try:
+            ortho = ProgramOrthophoto.objects.get(pk=ortho_id)
+        except ProgramOrthophoto.DoesNotExist:
+            return JsonResponse({"error": "Orthophoto introuvable."}, status=404)
 
-        tmp_path = _orthophoto_tmp_dir() / f"{upload_id}.part"
-        if not tmp_path.exists():
-            return JsonResponse({"error": "Fichier tampon manquant."}, status=410)
+        meta = (ortho.metadata or {}).get("s3_upload") or {}
+        s3_key = meta.get("key")
+        upload_id = meta.get("upload_id")
+        if not s3_key or not upload_id:
+            return JsonResponse({"error": "Session S3 manquante (init non appelé ?)."}, status=400)
 
-        # Append le chunk.
-        chunk = request.body  # binaire brut
-        if not chunk:
-            return JsonResponse({"error": "Chunk vide."}, status=400)
+        parts = payload.get("parts") or []
+        if not parts:
+            return JsonResponse({"error": "Aucun part fourni."}, status=400)
 
-        with open(tmp_path, "ab") as fh:
-            fh.write(chunk)
+        try:
+            _s3.complete_multipart_upload(s3_key, upload_id, parts)
+        except Exception as exc:  # noqa: BLE001
+            _logger_orth.exception("Complete multipart S3 KO pour ortho %s", ortho.pk)
+            ortho.status = "FAILED"
+            ortho.error_message = f"Erreur finalisation S3 : {exc}"
+            ortho.save(update_fields=["status", "error_message", "updated_at"])
+            return JsonResponse({"error": f"Finalisation S3 échouée : {exc}"}, status=502)
 
-        received = tmp_path.stat().st_size
+        # ----- Vérification taille -----
+        try:
+            head = _s3.head_object(s3_key)
+            actual = int(head.get("ContentLength", 0))
+            expected = int(meta.get("total_size") or 0)
+            if expected and abs(actual - expected) > 1024:
+                _logger_orth.warning(
+                    "S3 finalize : taille divergente (attendu=%s, reçu=%s)", expected, actual,
+                )
+        except Exception:
+            pass
+
+        # ----- Le pipeline Celery télécharge depuis S3 (cf. tasks.py) -----
         ortho.metadata = ortho.metadata or {}
-        ortho.metadata.setdefault("chunked_upload", {})["received_size"] = received
-        ortho.progress_percent = min(
-            95,
-            int((received / max(1, ortho.metadata["chunked_upload"].get("total_size", 1))) * 90),
-        )
-        ortho.current_step = f"Upload {received / (1024 ** 2):.0f} Mo / {ortho.metadata['chunked_upload'].get('total_size', 0) / (1024 ** 2):.0f} Mo"
-        ortho.save(update_fields=["metadata", "progress_percent", "current_step"])
-
-        return JsonResponse({
-            "received_size": received,
-            "expected_size": ortho.metadata["chunked_upload"].get("total_size", 0),
-        })
-
-
-@method_decorator(require_POST, name="dispatch")
-class OrthophotoUploadFinalizeView(_OrthophotoBaseMixin, View):
-    """
-    POST /orthophotos/upload/finalize/<upload_id>/
-    Renomme le fichier tampon, l'attache à l'orthophoto, déclenche Celery.
-    """
-
-    def post(self, request, upload_id, *args, **kwargs):
-        ortho = ProgramOrthophoto.objects.filter(
-            metadata__chunked_upload__upload_id=upload_id,
-        ).first()
-        if not ortho:
-            return JsonResponse({"error": "Session upload introuvable."}, status=404)
-
-        tmp_path = _orthophoto_tmp_dir() / f"{upload_id}.part"
-        if not tmp_path.exists():
-            return JsonResponse({"error": "Fichier tampon manquant."}, status=410)
-
-        meta = (ortho.metadata or {}).get("chunked_upload") or {}
-        expected = int(meta.get("total_size") or 0)
-        actual = tmp_path.stat().st_size
-
-        if expected and actual != expected:
-            return JsonResponse(
-                {"error": f"Taille incohérente ({actual} reçu vs {expected} attendu). Recommencez."},
-                status=400,
-            )
-
-        # Renomme dans le dossier média définitif.
-        filename = meta.get("filename") or "upload.tif"
-        safe_name = _slugify(_Path(filename).stem)[:80] or "ortho"
-        ext = _Path(filename).suffix.lower() or ".tif"
-        final_rel = f"orthophotos/sources/{ortho.pk}_{safe_name}{ext}"
-        final_abs = _Path(dj_settings.MEDIA_ROOT) / final_rel
-        final_abs.parent.mkdir(parents=True, exist_ok=True)
-        # Move atomique (mv) si possible, fallback copy.
-        try:
-            _os.replace(str(tmp_path), str(final_abs))
-        except OSError:
-            shutil.copy(str(tmp_path), str(final_abs))
-            tmp_path.unlink(missing_ok=True)
-
-        ortho.source_file.name = final_rel
+        ortho.metadata["s3_upload"]["finalized_at"] = _datetime.utcnow().isoformat() + "Z"
+        ortho.metadata["s3_object"] = {"key": s3_key, "bucket": dj_settings.S3_BUCKET}
         ortho.current_step = "En attente du worker"
         ortho.progress_percent = 0
-        ortho.metadata = ortho.metadata or {}
-        ortho.metadata["chunked_upload"]["finalized_at"] = _datetime.utcnow().isoformat() + "Z"
         ortho.save()
 
-        # Lance le pipeline Celery.
         try:
             from parcelaire.tasks import process_orthophoto
             process_orthophoto.delay(ortho.pk)
         except Exception as exc:  # noqa: BLE001
             _logger_orth.warning("Celery indispo, pipeline non lancé pour ortho %s : %s", ortho.pk, exc)
 
+        _logger_orth.info("S3 complete ok | ortho=%s | key=%s", ortho.pk, s3_key)
         return JsonResponse({
             "redirect": reverse("orthophoto_detail", kwargs={"pk": ortho.pk}),
             "orthophoto_id": ortho.pk,
         })
+
+
+@method_decorator(require_POST, name="dispatch")
+class OrthophotoUploadAbortView(_OrthophotoBaseMixin, View):
+    """
+    POST /orthophotos/upload/abort/
+    Annule un multipart upload en cours (libère les parts MinIO).
+    """
+
+    def post(self, request, *args, **kwargs):
+        try:
+            payload = _json.loads(request.body.decode("utf-8") or "{}")
+        except _json.JSONDecodeError as exc:
+            return JsonResponse({"error": f"JSON invalide : {exc}"}, status=400)
+        ortho_id = payload.get("orthophoto_id")
+        ortho = ProgramOrthophoto.objects.filter(pk=ortho_id).first()
+        if not ortho:
+            return JsonResponse({"ok": True, "skipped": True})
+        meta = (ortho.metadata or {}).get("s3_upload") or {}
+        if meta.get("key") and meta.get("upload_id"):
+            _s3.abort_multipart_upload(meta["key"], meta["upload_id"])
+        ortho.status = "FAILED"
+        ortho.error_message = "Upload annulé par l'utilisateur."
+        ortho.save(update_fields=["status", "error_message", "updated_at"])
+        return JsonResponse({"ok": True})
