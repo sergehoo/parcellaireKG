@@ -254,18 +254,39 @@
         };
 
         xhr.onload = () => {
-          // Django (CreateView) redirige (302) en cas de succès. Avec XHR
-          // on récupère soit la redirection (xhr.responseURL pointera sur
-          // la page détail), soit le HTML du formulaire avec les erreurs.
-          if (xhr.status >= 200 && xhr.status < 400) {
-            const target = xhr.responseURL || form.dataset.successUrl || '{% url "orthophoto_list" %}';
+          // Django CreateView :
+          //   - succès → 302 vers success_url ; XMLHttpRequest suit la
+          //     redirection automatiquement, donc `xhr.responseURL`
+          //     pointera sur `/orthophotos/<id>/`.
+          //   - form invalide → 200 sur la même URL ; le body est le
+          //     HTML du formulaire ré-rendu avec ses erreurs.
+          //
+          // → On considère "succès" UNIQUEMENT si l'URL finale est
+          //   différente de l'URL du POST. Sinon, on ré-affiche le form
+          //   pour que l'utilisateur voie les messages d'erreur Django.
+          const submitUrl = form.action || window.location.href;
+          const finalUrl = xhr.responseURL || '';
+          const isRedirect =
+            xhr.status >= 200 && xhr.status < 400
+            && finalUrl
+            && new URL(finalUrl, window.location.origin).pathname
+                 !== new URL(submitUrl, window.location.origin).pathname;
+
+          if (isRedirect) {
             this.uploadStatusLabel = 'Redirection vers la page de suivi…';
-            window.location.assign(target);
+            window.location.assign(finalUrl);
             return;
           }
-          // Erreur 4xx : on injecte la réponse pour afficher les messages d'erreur Django.
+
+          // Cas form invalide (200 même URL) OU erreur 4xx/5xx :
+          // on remplace le document par la réponse complète pour
+          // afficher les messages d'erreur Django.
           this.uploading = false;
-          this.uploadStatusLabel = 'Le serveur a refusé le fichier.';
+          if (xhr.status >= 400) {
+            this.uploadStatusLabel = `Erreur ${xhr.status}.`;
+          } else {
+            this.uploadStatusLabel = 'Le formulaire contient des erreurs.';
+          }
           document.open();
           document.write(xhr.responseText || '<h1>Erreur ' + xhr.status + '</h1>');
           document.close();

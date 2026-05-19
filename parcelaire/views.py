@@ -1311,6 +1311,19 @@ class OrthophotoCreateView(_OrthophotoBaseMixin, SuccessMessageMixin, CreateView
     template_name = "parcelaire/orthophoto/form.html"
     success_message = "Orthophoto importée — traitement lancé."
 
+    def form_invalid(self, form):
+        # Journalise les erreurs de validation pour les voir dans
+        # `docker compose logs parcelaireweb` — sinon le 200 silencieux
+        # ne donne aucune indication sur ce qui a été rejeté.
+        import logging
+        logger = logging.getLogger("parcelaire")
+        logger.warning(
+            "OrthophotoCreateView form rejeté par %s : %s",
+            self.request.user,
+            form.errors.as_json(),
+        )
+        return super().form_invalid(form)
+
     def form_valid(self, form):
         existing = getattr(form, "_existing_to_replace", None)
         if existing:
