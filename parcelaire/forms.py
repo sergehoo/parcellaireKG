@@ -1148,7 +1148,10 @@ class OrthophotoForm(BaseModelForm):
                     option["attrs"]["data-project-id"] = str(project_id)
                 return option
 
-        self.fields["program"].widget = _ProgramSelect(programs=list(self.fields["program"].queryset))
+        programs = list(self.fields["program"].queryset)
+        widget = _ProgramSelect(programs=programs)
+        widget.choices = self.fields["program"].choices
+        self.fields["program"].widget = widget
         # `required` HTML : le navigateur affichera une infobulle native
         # si on tente de soumettre avec "— Sélectionner —" choisi.
         self.fields["program"].widget.attrs.setdefault("required", "required")

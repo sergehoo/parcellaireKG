@@ -122,31 +122,13 @@
         <p class="mt-1 text-[11px] text-slate-500">
           Choisissez le programme auquel cette orthophoto sera rattachée.
         </p>
-
-        {# Confirmation visuelle de la sélection : affiche le libellé
-           du programme actuellement choisi pour lever toute ambiguïté. #}
-        <p class="mt-2 flex items-center gap-2 text-xs"
-           x-data="{
-             label: '',
-             refresh() {
-               const sel = document.getElementById('{{ form.program.id_for_label }}');
-               const opt = sel && sel.selectedOptions[0];
-               this.label = (opt && opt.value) ? opt.textContent.trim() : '';
-             }
-           }"
-           x-init="refresh(); document.getElementById('{{ form.program.id_for_label }}').addEventListener('change', () => refresh())">
-          <template x-if="label">
-            <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 font-bold text-emerald-700">
-              <i class="fa-solid fa-circle-check"></i>
-              <span x-text="label"></span>
-            </span>
-          </template>
-          <template x-if="!label">
-            <span class="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-1 font-bold text-rose-700">
-              <i class="fa-solid fa-circle-exclamation"></i>
-              Aucun programme sélectionné
-            </span>
-          </template>
+      
+        <p class="mt-2 flex items-center gap-2 text-xs">
+          <span id="programChosenBadge"
+                class="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-1 font-bold text-rose-700">
+            <i id="programChosenIcon" class="fa-solid fa-circle-exclamation"></i>
+            <span id="programChosenLabel">Aucun programme sélectionné</span>
+          </span>
         </p>
 
         {% if form.program.errors %}
@@ -168,7 +150,26 @@
             this.programSelect = document.getElementById('{{ form.program.id_for_label }}');
             if (!this.projectSelect || !this.programSelect) return;
             this.projectSelect.addEventListener('change', () => this.apply());
+            this.programSelect.addEventListener('change', () => this.refreshBadge());
             this.apply();
+            this.refreshBadge();
+          },
+          // Badge "Aucun programme" / "✓ <nom>" en dehors du scope Alpine.
+          refreshBadge() {
+            const badge = document.getElementById('programChosenBadge');
+            const label = document.getElementById('programChosenLabel');
+            const icon  = document.getElementById('programChosenIcon');
+            if (!badge || !label || !icon) return;
+            const opt = this.programSelect && this.programSelect.selectedOptions[0];
+            if (opt && opt.value) {
+              label.textContent = opt.textContent.trim();
+              icon.className = 'fa-solid fa-circle-check';
+              badge.className = 'inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 font-bold text-emerald-700';
+            } else {
+              label.textContent = 'Aucun programme sélectionné';
+              icon.className = 'fa-solid fa-circle-exclamation';
+              badge.className = 'inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-1 font-bold text-rose-700';
+            }
           },
           apply() {
             const projectId = this.projectSelect.value || '';
@@ -197,6 +198,7 @@
             if (projectId && visibleCount === 1 && !this.programSelect.value) {
               this.programSelect.value = firstVisibleValue;
             }
+            this.refreshBadge();
           },
         };
       }
@@ -333,6 +335,9 @@
         }
 
         const data = new FormData(form);
+        if (programInput) {
+  data.set('program', programInput.value);
+}
         const file = data.get('{{ form.source_file.name }}');
 
         if (!file || !file.size) {
