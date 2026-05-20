@@ -129,7 +129,10 @@ services:
     command: celery -A parcelaire.celery:app worker -l info
     volumes:
       - .:/app
-      - media_volume:/app/media
+      # IMPORTANT : même bind-mount que parcelaireweb pour que les tuiles
+      # générées par Celery (/app/media/tiles_ortho/…) soient visibles
+      # par le serveur web qui les sert via WhiteNoise.
+      - ./media:/app/media
       - static_volume:/app/staticfiles
     environment:
       - DEBUG=${DEBUG:-False}
@@ -183,7 +186,8 @@ services:
     command: celery -A parcelaire.celery:app beat -l info
     volumes:
       - .:/app
-      - media_volume:/app/media
+      # Idem parcelairecelery : on partage le même bind-mount media.
+      - ./media:/app/media
       - static_volume:/app/staticfiles
 
     environment:
