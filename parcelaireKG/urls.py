@@ -156,8 +156,33 @@ urlpatterns = [
                   path("orthophotos/upload/init/", OrthophotoUploadInitView.as_view(), name="orthophoto_upload_init"),
                   path("orthophotos/upload/complete/", OrthophotoUploadCompleteView.as_view(), name="orthophoto_upload_complete"),
                   path("orthophotos/upload/abort/", OrthophotoUploadAbortView.as_view(), name="orthophoto_upload_abort"),
-              ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+              ]
+
+# -------------------------------------------------------------------
+# Serving des fichiers statiques et media.
+#
+# * STATIC : en prod, c'est WhiteNoise (middleware) qui sert depuis
+#   STATIC_ROOT — pas besoin d'ajouter de route Django. En DEBUG=True
+#   on ajoute la route Django (runserver).
+# * MEDIA  : WhiteNoise ne sert PAS /media/ par défaut. Or les tuiles
+#   d'orthophoto sont sous /media/tiles_ortho/... et le navigateur
+#   Leaflet doit pouvoir les charger en prod aussi. On ajoute donc une
+#   route permanente via `django.views.static.serve` (pas idéal pour
+#   un site très chargé, mais OK pour des tuiles cadastrales internes
+#   et tant qu'un CDN dédié n'est pas en place).
+# -------------------------------------------------------------------
+from django.urls import re_path as _re_path
+from django.views.static import serve as _serve
+
+urlpatterns += [
+    _re_path(
+        r"^media/(?P<path>.*)$",
+        _serve,
+        {"document_root": settings.MEDIA_ROOT},
+        name="media-serve",
+    ),
+]
+
 if settings.DEBUG:
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
