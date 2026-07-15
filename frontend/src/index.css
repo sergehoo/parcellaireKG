@@ -1,0 +1,8 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* NB : la hauteur de la carte Leaflet est donnée par la classe
+   Tailwind (h-96) posée sur le conteneur dans TileMapPreview — ne pas
+   redéfinir .leaflet-container ici (height:100% écraserait h-96 et la
+   carte s'effondrerait à quelques pixels). */

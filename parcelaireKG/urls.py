@@ -39,10 +39,24 @@ from parcelaire.views import HomeView, MapView, ParcellaireDashboardView, Projet
     OrthophotoRetryView, OrthophotoSetCurrentView, OrthophotoDeleteTilesView, OrthophotoDownloadLogsView, \
     OrthophotoUploadInitView, OrthophotoUploadCompleteView, OrthophotoUploadAbortView
 
+from django.contrib.auth.decorators import login_required
+from django.views.generic import TemplateView
+
 urlpatterns = [
                   path('admin/', admin.site.urls),
                   path("api/", include("parcelaire.api.urls")),
                   path("ai/", include("ai_construction.urls")),
+
+                  # SPA React de gestion des orthophotos (build Vite servi
+                  # par WhiteNoise depuis static/orthophotos-app/ — voir
+                  # frontend/README.md). HashRouter → une seule route suffit.
+                  path(
+                      "app/orthophotos/",
+                      login_required(TemplateView.as_view(
+                          template_name="parcelaire/orthophoto/react_app.html",
+                      )),
+                      name="orthophoto_react_app",
+                  ),
                   path('home', HomeView.as_view(), name='home'),
                   path('map/', MapView.as_view(), name='map'),
                   path('map_commercial', MapCommercialView.as_view(), name='map_commercial'),

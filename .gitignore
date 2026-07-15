@@ -26,6 +26,9 @@ staticfiles/
 media/
 *.log
 
+# Override compose local (ports/URLs propres à chaque poste de dev)
+docker-compose.override.yml
+
 # Le CSS compilé doit être committé (sinon le serveur ne sert rien
 # tant qu'on n'a pas lancé `npm run build:css` en prod).
 !static/css/tailwind.css

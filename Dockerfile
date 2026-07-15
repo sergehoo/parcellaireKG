@@ -86,6 +86,13 @@ COPY --from=frontend /app/static/css/tailwind.css /app/static/css/tailwind.css
 # `collectstatic` matérialise STATIC_ROOT (par défaut /app/staticfiles).
 # Sans cette étape, en DEBUG=False Django ne sert plus aucun fichier
 # statique → CSS Tailwind 404 → page sans style.
-RUN python manage.py collectstatic --noinput --clear
+#
+# Dummies DB : settings/dev.py exige DB_NAME/DB_USER/DB_PASSWORD via
+# decouple. Le `.env` est (volontairement) exclu de l'image par
+# .dockerignore — les vraies valeurs arrivent au runtime via compose.
+# collectstatic n'ouvre aucune connexion DB, les dummies suffisent.
+RUN DB_NAME=build-dummy DB_USER=build-dummy DB_PASSWORD=build-dummy \
+    DB_HOST=localhost DB_PORT=5432 \
+    python manage.py collectstatic --noinput --clear
 
 EXPOSE 8000
