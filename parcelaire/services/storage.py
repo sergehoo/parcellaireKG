@@ -21,6 +21,7 @@ au navigateur pour les PUT directs.
 from __future__ import annotations
 
 import logging
+import os
 from typing import List
 
 import boto3
@@ -116,6 +117,11 @@ def _allowed_origins_for_cors() -> List[str]:
     """
     Retourne la liste des origines acceptées pour la CORS du bucket.
     Combine ALLOWED_HOSTS + CSRF_TRUSTED_ORIGINS, en https/http si pertinent.
+
+    ATTENTION : une origine CORS inclut le PORT. `http://localhost` ne
+    couvre PAS `http://localhost:8010` — en dev local (gunicorn publié
+    sur un port non standard) il faut déclarer l'origine exacte via
+    S3_CORS_EXTRA_ORIGINS (liste séparée par des virgules).
     """
     origins = set()
     for host in getattr(settings, "ALLOWED_HOSTS", []):
@@ -125,6 +131,11 @@ def _allowed_origins_for_cors() -> List[str]:
     for url in getattr(settings, "CSRF_TRUSTED_ORIGINS", []):
         if url:
             origins.add(url)
+    extra = os.environ.get("S3_CORS_EXTRA_ORIGINS", "")
+    for origin in extra.split(","):
+        origin = origin.strip().rstrip("/")
+        if origin:
+            origins.add(origin)
     if not origins:
         origins.add("*")
     return sorted(origins)
