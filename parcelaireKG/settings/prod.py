@@ -8,8 +8,10 @@ import os
 
 from .base import *  # noqa: F401,F403
 
-# SECURITY: jamais True en production.
-DEBUG = True
+# SECURITY: jamais True en production. Piloté par l'env (même logique
+# que base.py) avec False par défaut — un `DEBUG = True` codé en dur
+# exposait les stack traces et la config au public en cas d'erreur.
+DEBUG = os.environ.get("DEBUG", "False").lower() in {"1", "true", "yes", "on"}
 
 # Les secrets viennent toujours de l'env (pas de fallback ici).
 SECRET_KEY = os.environ["SECRET_KEY"]
