@@ -1,8 +1,8 @@
+import { motion } from 'framer-motion'
+
 /**
- * Légende + synthèse, façon KAYDAN. En mode « noms » la coloration porte
- * sur la PRIORITÉ TRAVAUX (vert/ambre/rouge) ; sinon sur le STATUT
- * commercial des parcelles. Les cartouches de synthèse (Actifs,
- * Réservés/Vendus, CA potentiel) restent affichés au-dessus.
+ * Légende + synthèse (verre dépoli). Coloration priorité travaux en mode
+ * « Noms lots », statut commercial sinon.
  */
 const PRIORITY = [
   { label: 'Faible', color: '#22c55e' },
@@ -20,9 +20,12 @@ export default function MapLegend({ summaries = [], variant = 'status' }) {
   const priority = variant === 'priority'
   const items = priority ? PRIORITY : STATUS
   return (
-    <div className="pointer-events-auto w-64 rounded-2xl bg-white/95 p-3.5 shadow-xl backdrop-blur">
+    <motion.div
+      initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}
+      className="glass w-64 rounded-2xl p-3.5"
+    >
       {summaries.length > 0 && (
-        <div className="mb-3 grid grid-cols-3 gap-2 border-b border-slate-100 pb-3">
+        <div className="mb-3 grid grid-cols-3 gap-2 border-b border-slate-200/60 pb-3">
           {summaries.map((s) => (
             <div key={s.label} className="text-center">
               <div className="text-sm font-bold text-slate-900">{s.value}</div>
@@ -31,10 +34,7 @@ export default function MapLegend({ summaries = [], variant = 'status' }) {
           ))}
         </div>
       )}
-      <div
-        className="mb-2 text-[11px] font-bold uppercase tracking-wider"
-        style={{ color: 'var(--kaydan)' }}
-      >
+      <div className="mb-2 text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--kaydan)' }}>
         {priority ? 'Priorité travaux' : 'Statut commercial'}
       </div>
       <div className="flex flex-wrap gap-x-3 gap-y-1.5">
@@ -46,10 +46,10 @@ export default function MapLegend({ summaries = [], variant = 'status' }) {
         ))}
       </div>
       {priority && (
-        <div className="mt-2.5 border-t border-slate-100 pt-2 text-[10px] text-slate-400">
+        <div className="mt-2.5 border-t border-slate-200/60 pt-2 text-[10px] text-slate-400">
           T = Travaux · P = Paiement · V = Variation
         </div>
       )}
-    </div>
+    </motion.div>
   )
 }

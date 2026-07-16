@@ -210,6 +210,10 @@ if CSP_ENABLED:
                 "blob:",
                 "https://*.tile.openstreetmap.org",
                 "https://*.basemaps.cartocdn.com",
+                # Fonds de carte premium : satellite (Esri) et relief/topo
+                # (OpenTopoMap) proposés par le sélecteur de vues de la carte.
+                "https://server.arcgisonline.com",
+                "https://*.tile.opentopomap.org",
                 # Markers / sprites Leaflet servis depuis le CDN unpkg.
                 "https://unpkg.com",
             ],

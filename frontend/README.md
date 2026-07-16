@@ -6,22 +6,41 @@ les templates Django ; à ce stade elle couvre la **cartographie** et la
 **gestion des orthophotos**. Le CRUD (projets, ventes, paiements…) reste
 sur Django et est atteignable via « Ouvrir la fiche » / le tableau de bord.
 
-## Cartographie (`#/carte`, vue d'accueil)
+## Cartographie premium (`#/carte`, vue d'accueil)
 
-Carte Leaflet consommant `RealEstateMapAPIView` (`/api/map/assets/`) —
-fusionne carte générale et commerciale, le masquage financier/patient
-étant appliqué côté serveur selon les permissions (`user_rights`).
+Carte Leaflet **premium** (glassmorphism + Framer Motion) consommant
+`RealEstateMapAPIView` (`/api/map/assets/`) — fusionne carte générale et
+commerciale, masquage financier/patient appliqué côté serveur (`user_rights`).
 
-- **Parcelles / lots** en polygones GeoJSON colorés par statut (couleur et
-  opacité fournies par l'API) ; clic → panneau latéral de détail.
-- **Filtres** : projet, programme (dépendant du projet), statut
-  (Tous / Disponibles / Réservés / Vendus / En construction), tag,
-  recherche — synchronisés dans l'URL (hash query).
-- **Couche orthophoto** superposable par programme, avec choix de version
-  (timeline) et curseur d'opacité — réutilise les tuiles du pipeline GDAL.
-- **Synthèse** (Actifs, Réservés/Vendus, CA potentiel) + légende.
-- **Panneau détail** : chiffres clés, détails, métriques, unités (bâtiments
-  multi-lots), tags, et lien « Ouvrir la fiche complète » vers Django.
+Composants (`src/components/map/`) :
+- **MapToolbar** (verre dépoli) : marque KAYDAN, **recherche intelligente**
+  à suggestions instantanées (biens/programmes/projets + commandes de statut
+  qui pilotent les filtres), filtres projet/programme/statut.
+- **ControlRail** : rail flottant animé — zoom ±, vue initiale, ma position
+  (géoloc), plein écran, **mesure distance/surface** (Turf.js), mini-carte
+  (`leaflet-minimap`), impression/PDF.
+- **ViewSelector** : **fonds de carte** Standard (OSM) / Clair·Sombre (CARTO) /
+  Satellite (Esri) / Relief (OpenTopoMap) ; **calque parcelles** Polygones /
+  Noms lots / Repères (clustering `leaflet.markercluster`, pastilles animées) /
+  Aucun ; bascule **Orthophoto**.
+- **FeatureDetailPanel** : panneau animé (spring) — chiffres clés, détails,
+  métriques, unités, tags, lien « Ouvrir la fiche complète » vers Django.
+- **MapLegend** : synthèse (Actifs/Réservés-Vendus/CA) + légende adaptative
+  (priorité travaux en mode Noms lots, statut sinon).
+
+> **Fonds externes & CSP** : les hôtes Esri (`server.arcgisonline.com`) et
+> OpenTopoMap (`*.tile.opentopomap.org`) sont ajoutés à `img-src` dans la CSP
+> (`settings/base.py`). Le changement de fond ne retire l'ancien qu'une fois
+> le nouveau chargé : si un fournisseur ne répond pas, la carte garde le fond
+> courant (jamais de carte vide). *Note : le navigateur de prévisualisation
+> interne ne charge de façon fiable que les tuiles OSM ; satellite/relief/
+> sombre se valident dans un vrai navigateur.*
+>
+> **Différé** (nécessite données/services externes non présents, non simulés) :
+> vue 3D immersive (Cesium/MapLibre/deck.gl), météo temps réel, couche
+> chantier live (grues/ouvriers/VRD/stocks), assistant IA type LLM, timeline.
+> La recherche intelligente inclut déjà un interpréteur de **commandes** léger
+> (rule-based, pas un LLM) qui applique des filtres à partir de mots-clés.
 
 > Les routes Django `/map/` et `/map_commercial` **redirigent** vers
 > `#/carte`. Les templates Leaflet historiques restent en repli sous

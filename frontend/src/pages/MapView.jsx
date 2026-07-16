@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { AnimatePresence, motion } from 'framer-motion'
 import { getMapAssets } from '../api/map'
 import useReferenceData from '../hooks/useReferenceData'
 import MapCanvas from '../components/map/MapCanvas'
 import MapToolbar from '../components/map/MapToolbar'
 import MapLegend from '../components/map/MapLegend'
+import ControlRail from '../components/map/ControlRail'
+import ViewSelector from '../components/map/ViewSelector'
 import FeatureDetailPanel from '../components/map/FeatureDetailPanel'
 
 const FILTER_KEYS = ['project', 'program', 'status', 'tag', 'search']
 const DEFAULT_STATUS_FILTERS = ['Tous', 'Disponibles', 'Réservés', 'Vendus', 'En construction']
-const ORTHO_MODES = new Set(['orthophoto', 'mixte'])
+const STATUS_CMDS = { disponible: 'Disponibles', réservé: 'Réservés', reserve: 'Réservés', vendu: 'Vendus', construction: 'En construction' }
 
 export default function MapView() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -19,10 +22,15 @@ export default function MapView() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [selected, setSelected] = useState(null)
-  const [mode, setMode] = useState('parcelles')
 
-  const [orthoVersionId, setOrthoVersionId] = useState('')
-  const [orthoOpacity, setOrthoOpacity] = useState(0.9)
+  const [basemap, setBasemap] = useState('standard')
+  const [layerStyle, setLayerStyle] = useState('polygones')
+  const [orthoOn, setOrthoOn] = useState(false)
+  const [orthoOpacity] = useState(0.9)
+
+  const [api, setApi] = useState(null)
+  const [measure, setMeasure] = useState({ active: false })
+  const [minimapOn, setMinimapOn] = useState(false)
 
   const filters = useMemo(() => {
     const r = {}
@@ -32,10 +40,8 @@ export default function MapView() {
 
   const fitToken = useMemo(() => FILTER_KEYS.map((k) => filters[k]).join('|'), [filters])
 
-  // Chargement (zoom 15 : géométrie incluse, images/timeline exclues car
-  // ≥16 = une requête SQL par parcelle ; pas de bbox — cf. frontend/README).
-  const load = useCallback((silent = false) => {
-    if (!silent) setLoading(true)
+  const load = useCallback(() => {
+    setLoading(true)
     const controller = new AbortController()
     getMapAssets({ ...filters, zoom: 15, limit: 11200 }, { signal: controller.signal })
       .then((payload) => { setData(payload); setError(null) })
@@ -45,17 +51,16 @@ export default function MapView() {
   }, [filters])
 
   useEffect(() => load(), [load])
+  useEffect(() => { if (api) api.toggleMinimap(minimapOn) }, [api, minimapOn])
 
   function setFilters(next) {
     const params = new URLSearchParams()
     FILTER_KEYS.forEach((k) => { if (next[k]) params.set(k, next[k]) })
     setSearchParams(params)
     setSelected(null)
-    setOrthoVersionId('')
   }
 
-  // Programme dont on affiche l'orthophoto : celui filtré s'il en a une,
-  // sinon le premier programme disposant d'une orthophoto prête.
+  // Orthophoto : programme filtré prioritaire, sinon 1er programme équipé.
   const orthoEntry = useMemo(() => {
     const map = data?.orthophotos_by_program || {}
     const ready = (e) => e && (e.current?.is_ready || (e.versions || []).some((o) => o.is_ready))
@@ -63,102 +68,116 @@ export default function MapView() {
     return Object.values(map).find(ready) || null
   }, [data, filters.program])
 
-  const orthoVersions = useMemo(
-    () => (orthoEntry?.versions || []).filter((o) => o.is_ready),
-    [orthoEntry],
-  )
-
   const orthoLayer = useMemo(() => {
-    if (!ORTHO_MODES.has(mode) || !orthoEntry) return null
-    const chosen = orthoVersionId
-      ? orthoVersions.find((o) => String(o.id) === String(orthoVersionId))
-      : orthoEntry.current
-    return chosen && chosen.is_ready ? chosen : null
-  }, [mode, orthoEntry, orthoVersionId, orthoVersions])
+    if (!orthoOn || !orthoEntry?.current?.is_ready) return null
+    return orthoEntry.current
+  }, [orthoOn, orthoEntry])
+
+  // Suggestions de recherche : biens chargés + programmes + projets + commandes statut.
+  const buildSuggestions = useCallback((raw) => {
+    const term = raw.toLowerCase()
+    const out = []
+    // Commande de statut
+    Object.entries(STATUS_CMDS).forEach(([kw, val]) => {
+      if (term.includes(kw)) out.push({
+        badge: '⚑', color: '#e2571e', label: `Filtrer : ${val}`, sub: 'Commande carte',
+        action: () => setFilters({ ...filters, status: val }),
+      })
+    })
+    // Programmes / projets
+    ;(refData?.programs || []).filter((p) => p.name.toLowerCase().includes(term)).slice(0, 3).forEach((p) => out.push({
+      badge: '▣', color: '#0ea5e9', label: p.name, sub: 'Programme',
+      action: () => setFilters({ ...filters, program: String(p.id), project: '' }),
+    }))
+    ;(refData?.projects || []).filter((p) => p.name.toLowerCase().includes(term)).slice(0, 2).forEach((p) => out.push({
+      badge: '◆', color: '#8b5cf6', label: p.name, sub: 'Projet',
+      action: () => setFilters({ ...filters, project: String(p.id), program: '' }),
+    }))
+    // Biens chargés
+    ;(data?.assets || []).filter((a) => (a.name || '').toLowerCase().includes(term)).slice(0, 6).forEach((a) => out.push({
+      badge: '⌂', color: a.color, label: a.name, sub: `${a.program} · ${a.status}`,
+      action: () => { setSelected(a); if (a.center && api) { /* centrage géré par sélection */ } },
+    }))
+    return out.slice(0, 12)
+  }, [refData, data, filters, api])
 
   const statusFilters = data?.filters || DEFAULT_STATUS_FILTERS
+  const canOrtho = Boolean(orthoEntry?.current?.is_ready)
 
   return (
-    <div className="relative -mx-4 -my-6 h-[calc(100vh-57px)] overflow-hidden sm:-mx-6">
+    <div data-map-root className="relative -mx-4 -my-6 h-[calc(100vh-53px)] overflow-hidden bg-slate-200 sm:-mx-6">
       <MapCanvas
         assets={data?.assets || []}
         selectedUid={selected?.uid || null}
         onSelect={setSelected}
+        fitToken={fitToken}
+        basemap={basemap}
+        layerStyle={layerStyle}
         orthoLayer={orthoLayer}
         orthoOpacity={orthoOpacity}
-        fitToken={fitToken}
-        mode={mode}
+        onReady={setApi}
+        onMeasure={setMeasure}
       />
 
       <MapToolbar
-        refData={refData}
-        value={filters}
-        onChange={setFilters}
-        mode={mode}
-        onMode={setMode}
-        counts={data?.counts}
-        truncated={data?.truncated}
-        statusFilters={statusFilters}
+        refData={refData} value={filters} onChange={setFilters}
+        statusFilters={statusFilters} counts={data?.counts} truncated={data?.truncated}
+        buildSuggestions={buildSuggestions}
       />
 
-      {/* Légende + synthèse (bas-gauche) */}
-      <div className="absolute bottom-3 left-3 z-[600]">
-        <MapLegend summaries={data?.summaries || []} variant={mode === 'noms' ? 'priority' : 'status'} />
+      <ControlRail api={api} measure={measure} minimapOn={minimapOn} onMinimap={setMinimapOn} />
+
+      <ViewSelector
+        basemap={basemap} onBasemap={setBasemap}
+        layerStyle={layerStyle} onLayerStyle={setLayerStyle}
+        orthoActive={orthoOn} onOrthoToggle={() => setOrthoOn((o) => !o)} canOrtho={canOrtho}
+      />
+
+      {/* Légende (bas-gauche) */}
+      <div className="absolute bottom-3 left-3 z-[640]">
+        <MapLegend summaries={data?.summaries || []} variant={layerStyle === 'noms' ? 'priority' : 'status'} />
       </div>
 
-      {/* Contrôle orthophoto (bas-centre) — visible seulement si une couche
-          est active dans les modes Orthophoto / Mixte. */}
-      {orthoLayer && (
-        <div className="absolute bottom-3 left-1/2 z-[600] -translate-x-1/2 rounded-2xl bg-white/95 px-4 py-2.5 shadow-xl backdrop-blur">
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--kaydan)' }}>
-              {orthoEntry?.program_name || 'Orthophoto'}
-            </span>
-            {orthoVersions.length > 0 && (
-              <select
-                value={orthoVersionId}
-                onChange={(e) => setOrthoVersionId(e.target.value)}
-                className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700 focus:border-orange-400 focus:ring-orange-400"
-              >
-                <option value="">Version courante</option>
-                {orthoVersions.map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.period_label || `${o.reference_month || '?'}/${o.reference_year || '?'}`}
-                    {o.is_current ? ' (courante)' : ''}
-                  </option>
-                ))}
-              </select>
-            )}
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs text-slate-400">Opacité</span>
-              <input
-                type="range" min={0.2} max={1} step={0.05}
-                value={orthoOpacity}
-                onChange={(e) => setOrthoOpacity(Number(e.target.value))}
-              />
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Bandeau de mesure actif */}
+      <AnimatePresence>
+        {measure.active && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+            className="glass absolute left-1/2 top-20 z-[650] -translate-x-1/2 rounded-full px-4 py-2 text-sm font-medium text-slate-700">
+            📏 {measure.text || 'Mesure en cours'} <span className="ml-2 text-slate-400">— cliquez pour ajouter des points</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {/* État */}
-      {loading && (
-        <div className="absolute right-3 top-24 z-[600] rounded-full bg-white/95 px-3 py-1.5 text-sm text-slate-600 shadow-lg backdrop-blur">
-          Chargement…
-        </div>
-      )}
+      {/* États */}
+      <AnimatePresence>
+        {loading && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="glass absolute left-1/2 top-3 z-[650] -translate-x-1/2 rounded-full px-4 py-1.5 text-sm text-slate-600">
+            Chargement de la carte…
+          </motion.div>
+        )}
+      </AnimatePresence>
       {error && (
-        <div className="absolute right-3 top-24 z-[600] max-w-xs rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-sm text-rose-700 shadow-lg">
+        <div className="absolute left-1/2 top-3 z-[650] -translate-x-1/2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-1.5 text-sm text-rose-700 shadow">
           {error.message}
         </div>
       )}
 
-      {/* Panneau détail (droite, flottant) */}
-      {selected && (
-        <div className="absolute bottom-3 right-3 top-[8.5rem] z-[600] w-[22rem] max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-2xl shadow-2xl">
-          <FeatureDetailPanel feature={selected} onClose={() => setSelected(null)} />
-        </div>
-      )}
+      {/* Panneau détail premium (droite) */}
+      <AnimatePresence>
+        {selected && (
+          <motion.div
+            initial={{ opacity: 0, x: 40, scale: 0.98 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: 40, scale: 0.98 }}
+            transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+            className="glass absolute bottom-3 right-16 top-3 z-[655] w-[22rem] max-w-[calc(100vw-6rem)] overflow-hidden rounded-2xl"
+          >
+            <FeatureDetailPanel feature={selected} onClose={() => setSelected(null)} />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
