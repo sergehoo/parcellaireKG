@@ -392,3 +392,28 @@ class AlertActionAPIView(APIView):
             return Response({'detail': 'Action inconnue.'}, status=400)
         alert.save()
         return Response(serialize_alert(alert))
+
+
+class AlertSummaryAPIView(APIView):
+    """GET /api/alerts/summary/ — compteurs d'alertes ACTIVES (NEW+ACK) par
+    niveau, pour le badge de la barre de navigation.
+
+    Volontairement minimal : un seul COUNT groupé (adossé à l'index composite
+    (status, level)), aucune hydratation de ligne ni sérialisation — bien plus
+    léger que /api/alerts/ pour un endpoint sondé à intervalle régulier.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        by_level = dict(
+            Alert.objects.filter(status__in=['NEW', 'ACK'])
+            .values('level')
+            .annotate(n=Count('id'))
+            .values_list('level', 'n')
+        )
+        return Response({
+            'critique': by_level.get('CRITIQUE', 0),
+            'eleve': by_level.get('ELEVE', 0),
+            'active_total': sum(by_level.values()),
+            'by_level': by_level,
+        })

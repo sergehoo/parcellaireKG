@@ -21,3 +21,8 @@ export function getAlerts(params = {}, { signal } = {}) {
 export function alertAction(id, action) {
   return request(`/api/alerts/${id}/${action}/`, { method: 'POST' })
 }
+
+// Compteurs d'alertes actives par niveau — endpoint léger pour le badge nav.
+export function getAlertSummary({ signal } = {}) {
+  return request('/api/alerts/summary/', { signal })
+}

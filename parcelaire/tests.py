@@ -813,3 +813,50 @@ class AlertsEngineTests(TestCase):
         a.refresh_from_db()
         self.assertEqual(a.status, 'ACK')
         self.assertEqual(a.acknowledged_by, self.mgr)
+
+    def test_summary_requires_auth(self):
+        self.assertEqual(self.client.get('/api/alerts/summary/').status_code, 403)
+
+    def test_summary_counts_active_critical(self):
+        generate_alerts()
+        self.client.force_login(self.reader)
+        s = self.client.get('/api/alerts/summary/').json()
+        self.assertEqual(s['critique'], 1)  # l'IDCP +40 du dossier de test
+        self.assertEqual(s['active_total'], Alert.objects.filter(status__in=['NEW', 'ACK']).count())
+        # Cohérence badge/liste : même définition de « critique » que l'en-tête.
+        listed = self.client.get('/api/alerts/').json()
+        self.assertEqual(s['critique'], listed['counts']['critique'])
+
+    def test_summary_ignores_resolved(self):
+        generate_alerts()
+        Alert.objects.filter(rule='idcp').update(status='RESOLVED')
+        self.client.force_login(self.reader)
+        self.assertEqual(self.client.get('/api/alerts/summary/').json()['critique'], 0)
+
+    def test_summary_counts_eleve_level(self):
+        # 2e dossier : payé 55 % / construit 30 % ⇒ IDCP +25, dans la bande
+        # [20;40[ ⇒ niveau ÉLEVÉ (et non CRITIQUE). Vérifie que la ventilation
+        # par niveau du endpoint summary distingue bien 'eleve' de 'critique'.
+        parcel2 = Parcel.objects.create(
+            program=self.program, dataset=self.dataset, lot_number='L2',
+            official_area_m2=200, has_title_document=True)
+        ConstructionProject.objects.create(
+            parcel=parcel2, code='CP2', title='Chantier 2', progress_percent=30)
+        sale2 = SaleFile.objects.create(
+            sale_number='S-2', program=self.program, customer=self.customer, parcel=parcel2,
+            agreed_price=100_000_000, net_price=100_000_000, status='OPEN')
+        Payment.objects.create(
+            payment_number='P-2', sale_file=sale2, amount=55_000_000,
+            status='CONFIRMED', payment_method='BANK', payment_date=date(2026, 2, 1))
+        generate_alerts()
+        self.client.force_login(self.reader)
+        s = self.client.get('/api/alerts/summary/').json()
+        self.assertEqual(s['eleve'], 1)             # IDCP +25 du 2e dossier
+        self.assertEqual(s['critique'], 1)          # IDCP +40 du 1er (fixture)
+        self.assertEqual(s['by_level'].get('ELEVE'), 1)
+
+    def test_task_wrapper_runs_service(self):
+        from parcelaire.tasks import generate_alerts_task
+        res = generate_alerts_task.run()  # exécution synchrone en test
+        self.assertIn('active', res)
+        self.assertGreaterEqual(res['active'], 3)

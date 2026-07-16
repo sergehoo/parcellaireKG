@@ -8,6 +8,7 @@ from django.contrib.gis.geos import Polygon
 from django.db import transaction
 from django.utils import timezone
 
+from parcelaire.services.alerts import generate_alerts as _generate_alerts
 from parcelaire.services.crm_sync import (
     sync_all_parcels,
     sync_program_parcels,
@@ -35,6 +36,18 @@ def sync_kaydan_stale_parcels_task(self):
 @shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=3)
 def sync_kaydan_program_parcels_task(self, program_id):
     return sync_program_parcels(program_id)
+
+
+@shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=3)
+def generate_alerts_task(self):
+    """Recalcule et persiste les alertes métier (centre de notifications).
+
+    Idempotent : chaque passage réconcilie les alertes actives avec l'état
+    réel et auto-résout celles dont l'anomalie a disparu. Planifié via
+    CELERY_BEAT_SCHEDULE (settings) ; déclenchable à la demande avec
+    generate_alerts_task.delay().
+    """
+    return _generate_alerts()
 
 
 # =====================================================================

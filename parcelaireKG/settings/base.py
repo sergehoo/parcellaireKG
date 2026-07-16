@@ -323,6 +323,11 @@ CELERY_BEAT_SCHEDULE = {
         "task": "parcelaire.tasks.sync_kaydan_all_parcels_task",
         "schedule": crontab(hour=2, minute=0),
     },
+    # Alertes métier (centre de notifications) — recalcul horaire.
+    "generate-business-alerts-hourly": {
+        "task": "parcelaire.tasks.generate_alerts_task",
+        "schedule": crontab(minute=0),
+    },
 }
 
 CELERY_BROKER_URL = "redis://127.0.0.1:6379/0"
