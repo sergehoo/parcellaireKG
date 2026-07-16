@@ -1,13 +1,30 @@
-from django.urls import path
+from django.urls import include, path
+from rest_framework.routers import DefaultRouter
 
+from parcelaire.api import crud as crud_api
 from parcelaire.api import orthophotos as ortho_api
+from parcelaire.api.dashboard import DashboardStatsAPIView
 from parcelaire.api.views import RealEstateMapAPIView
 from parcelaire.views import RealEstateMap3DView
+
+router = DefaultRouter()
+router.register("projects", crud_api.ProjectViewSet, basename="api-project")
+router.register("programs", crud_api.ProgramViewSet, basename="api-program")
+router.register("customers", crud_api.CustomerViewSet, basename="api-customer")
+router.register("parcels", crud_api.ParcelViewSet, basename="api-parcel")
+router.register("reservations", crud_api.ReservationViewSet, basename="api-reservation")
+router.register("sales", crud_api.SaleViewSet, basename="api-sale")
+router.register("payments", crud_api.PaymentViewSet, basename="api-payment")
 
 urlpatterns = [
     path("map/assets/", RealEstateMapAPIView.as_view(), name="api-map-assets"),
     path("map/3d/", RealEstateMap3DView.as_view(), name="real-estate-map-3d"),
     # path("sap/health/", SAPHealthCheckView.as_view(), name="sap_health"),
+
+    # -------- Tableau de bord + CRUD (frontend React) --------
+    path("dashboard/", DashboardStatsAPIView.as_view(), name="api-dashboard"),
+    path("crud/options/", crud_api.CrudOptionsAPIView.as_view(), name="api-crud-options"),
+    path("crud/", include(router.urls)),
 
     # -------- ORTHOPHOTOS (frontend React) --------
     # NB : l'upload multipart S3 (init/complete/abort) et le polling de
