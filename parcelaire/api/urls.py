@@ -3,7 +3,12 @@ from rest_framework.routers import DefaultRouter
 
 from parcelaire.api import crud as crud_api
 from parcelaire.api import orthophotos as ortho_api
-from parcelaire.api.analytics import AnalyticsDashboardAPIView, AtRiskClientsAPIView
+from parcelaire.api.analytics import (
+    AlertActionAPIView,
+    AlertListAPIView,
+    AnalyticsDashboardAPIView,
+    AtRiskClientsAPIView,
+)
 from parcelaire.api.dashboard import DashboardStatsAPIView
 from parcelaire.api.views import RealEstateMapAPIView
 from parcelaire.views import RealEstateMap3DView
@@ -27,6 +32,9 @@ urlpatterns = [
     # -------- Moteur d'analyse décisionnel --------
     path("analytics/dashboard/", AnalyticsDashboardAPIView.as_view(), name="api-analytics-dashboard"),
     path("analytics/at-risk/", AtRiskClientsAPIView.as_view(), name="api-analytics-at-risk"),
+    # -------- Centre de notifications (alertes persistées) --------
+    path("alerts/", AlertListAPIView.as_view(), name="api-alerts"),
+    path("alerts/<int:pk>/<str:action>/", AlertActionAPIView.as_view(), name="api-alert-action"),
     path("crud/options/", crud_api.CrudOptionsAPIView.as_view(), name="api-crud-options"),
     path("crud/", include(router.urls)),
 

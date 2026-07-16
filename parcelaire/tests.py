@@ -734,3 +734,82 @@ class AnalyticsAPITests(TestCase):
         # niveau inexistant ici
         empty = self.client.get('/api/analytics/at-risk/?level=INFO').json()
         self.assertEqual(empty['count'], 0)
+
+
+# =====================================================================
+# Moteur d'alertes persistées + centre de notifications
+# =====================================================================
+from parcelaire.models import Alert  # noqa: E402
+from parcelaire.services.alerts import generate_alerts  # noqa: E402
+
+
+class AlertsEngineTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.reader = User.objects.create_user('al-reader', password='pwd')
+        cls.mgr = User.objects.create_user('al-mgr', password='pwd')
+        cls.mgr.user_permissions.add(Permission.objects.get(
+            content_type__app_label='parcelaire', codename='change_alert'))
+
+        cls.country = Country.objects.create(nom="Côte d'Ivoire", code='CI')
+        cls.project = ProjetImmobilier.objects.create(code='PA', nom='Projet A', country=cls.country)
+        cls.program = RealEstateProgram.objects.create(
+            code='PRG', name='Programme A', slug='programme-a', country=cls.country, project=cls.project)
+        cls.dataset = ParcelDataset.objects.create(program=cls.program, name='DS')
+        cls.parcel = Parcel.objects.create(
+            program=cls.program, dataset=cls.dataset, lot_number='L1',
+            official_area_m2=200, has_title_document=False)
+        cls.cp = ConstructionProject.objects.create(
+            parcel=cls.parcel, code='CP1', title='Chantier', progress_percent=30)
+        cls.customer = Customer.objects.create(customer_type='INDIVIDUAL', last_name='Kouassi')
+        cls.sale = SaleFile.objects.create(
+            sale_number='S-1', program=cls.program, customer=cls.customer, parcel=cls.parcel,
+            agreed_price=100_000_000, net_price=100_000_000, status='OPEN')
+        Payment.objects.create(
+            payment_number='P-1', sale_file=cls.sale, amount=70_000_000,
+            status='CONFIRMED', payment_method='BANK', payment_date=date(2026, 1, 15))
+
+    def test_generation_creates_alerts(self):
+        res = generate_alerts()
+        self.assertGreaterEqual(res['active'], 3)  # idcp + titre + contrat non signé
+        self.assertTrue(Alert.objects.filter(rule='idcp', level='CRITIQUE', sale_file=self.sale).exists())
+        self.assertTrue(Alert.objects.filter(rule='titre_manquant', parcel=self.parcel).exists())
+
+    def test_generation_idempotent(self):
+        generate_alerts()
+        n1 = Alert.objects.count()
+        r2 = generate_alerts()
+        self.assertEqual(Alert.objects.count(), n1)  # pas de doublon
+        self.assertEqual(r2['created'], 0)
+
+    def test_auto_resolution(self):
+        generate_alerts()
+        idcp = Alert.objects.get(rule='idcp', sale_file=self.sale)
+        self.assertEqual(idcp.status, 'NEW')
+        # La construction rattrape le paiement → l'anomalie IDCP disparaît.
+        self.cp.progress_percent = 100
+        self.cp.save(update_fields=['progress_percent'])
+        generate_alerts()
+        idcp.refresh_from_db()
+        self.assertEqual(idcp.status, 'RESOLVED')
+        self.assertIsNotNone(idcp.resolved_at)
+
+    def test_list_and_counts(self):
+        generate_alerts()
+        self.client.force_login(self.reader)
+        d = self.client.get('/api/alerts/?level=CRITIQUE').json()
+        self.assertEqual(d['counts']['critique'], 1)
+        self.assertTrue(all(a['level'] == 'CRITIQUE' for a in d['results']))
+        self.assertFalse(d['can_manage'])  # lecteur sans change_alert
+
+    def test_ack_requires_permission(self):
+        generate_alerts()
+        a = Alert.objects.filter(rule='idcp').first()
+        self.client.force_login(self.reader)
+        self.assertEqual(self.client.post(f'/api/alerts/{a.id}/ack/').status_code, 403)
+        self.client.force_login(self.mgr)
+        resp = self.client.post(f'/api/alerts/{a.id}/ack/')
+        self.assertEqual(resp.status_code, 200)
+        a.refresh_from_db()
+        self.assertEqual(a.status, 'ACK')
+        self.assertEqual(a.acknowledged_by, self.mgr)

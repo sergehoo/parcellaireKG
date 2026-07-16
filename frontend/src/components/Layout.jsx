@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet } from 'react-router-dom'
 const NAV = [
   { to: '/', label: 'Carte', end: true },
   { to: '/dashboard', label: 'Tableau de bord' },
+  { to: '/notifications', label: 'Notifications' },
   { to: '/r/projects', label: 'Projets' },
   { to: '/r/programs', label: 'Programmes' },
   { to: '/r/parcels', label: 'Parcelles' },

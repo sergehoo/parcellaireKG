@@ -10,3 +10,14 @@ export function getAtRisk(params = {}, { signal } = {}) {
   ).toString()
   return request(`/api/analytics/at-risk/${q ? `?${q}` : ''}`, { signal })
 }
+
+export function getAlerts(params = {}, { signal } = {}) {
+  const q = new URLSearchParams(
+    Object.entries(params).filter(([, v]) => v !== '' && v !== null && v !== undefined),
+  ).toString()
+  return request(`/api/alerts/${q ? `?${q}` : ''}`, { signal })
+}
+
+export function alertAction(id, action) {
+  return request(`/api/alerts/${id}/${action}/`, { method: 'POST' })
+}

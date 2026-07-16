@@ -73,7 +73,10 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* Alertes métier */}
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-1">
-          <h2 className="mb-3 font-semibold text-slate-900">Alertes métier</h2>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="font-semibold text-slate-900">Alertes métier</h2>
+            <Link to="/notifications" className="text-sm font-medium text-orange-600 hover:underline">Centre →</Link>
+          </div>
           <div className="space-y-2">
             {data.alerts.length === 0 && <p className="py-6 text-center text-sm text-slate-500">Aucune alerte.</p>}
             {data.alerts.map((a, i) => {

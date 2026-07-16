@@ -17,12 +17,15 @@ from decimal import Decimal
 
 from django.db.models import Count, Q, Sum
 from django.db.models.functions import Coalesce
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from parcelaire.models import (
+    Alert,
     ConstructionProject,
     Customer,
     Parcel,
@@ -291,3 +294,101 @@ class AtRiskClientsAPIView(APIView):
         paginator = AtRiskPagination()
         page = paginator.paginate_queryset(rows, request, view=self)
         return paginator.get_paginated_response(page)
+
+
+# =====================================================================
+# Centre de notifications — alertes persistées / auditables
+# =====================================================================
+
+def serialize_alert(a):
+    return {
+        'id': a.id,
+        'rule': a.rule,
+        'level': a.level,
+        'level_display': a.get_level_display(),
+        'status': a.status,
+        'status_display': a.get_status_display(),
+        'title': a.title,
+        'detail': a.detail or '',
+        'metric': a.metric or '',
+        'program': a.program.name if a.program_id else None,
+        'program_id': a.program_id,
+        'lot': (a.parcel.lot_number or a.parcel.parcel_code or f'#{a.parcel_id}') if a.parcel_id else None,
+        'customer': str(a.customer) if a.customer_id else None,
+        'sale_id': a.sale_file_id,
+        'first_detected_at': a.first_detected_at.isoformat() if a.first_detected_at else None,
+        'last_detected_at': a.last_detected_at.isoformat() if a.last_detected_at else None,
+        'acknowledged_by': a.acknowledged_by.get_username() if a.acknowledged_by_id else None,
+        'acknowledged_at': a.acknowledged_at.isoformat() if a.acknowledged_at else None,
+        'resolved_at': a.resolved_at.isoformat() if a.resolved_at else None,
+    }
+
+
+class AlertPagination(PageNumberPagination):
+    page_size = 30
+    page_size_query_param = 'page_size'
+    max_page_size = 200
+
+
+class AlertListAPIView(APIView):
+    """GET /api/alerts/ — centre de notifications : alertes persistées,
+    filtrables (level, status, rule, program). Renvoie aussi des compteurs."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        qs = Alert.objects.select_related('program', 'parcel', 'customer').all()
+        p = request.query_params
+        if p.get('level'):
+            qs = qs.filter(level=p['level'])
+        if p.get('status'):
+            qs = qs.filter(status=p['status'])
+        else:
+            # Par défaut on masque les alertes résolues.
+            qs = qs.exclude(status='RESOLVED')
+        if p.get('rule'):
+            qs = qs.filter(rule=p['rule'])
+        if p.get('program'):
+            qs = qs.filter(program_id=p['program'])
+
+        counts = {
+            'new': Alert.objects.filter(status='NEW').count(),
+            'ack': Alert.objects.filter(status='ACK').count(),
+            'resolved': Alert.objects.filter(status='RESOLVED').count(),
+            'critique': Alert.objects.filter(status__in=['NEW', 'ACK'], level='CRITIQUE').count(),
+        }
+
+        paginator = AlertPagination()
+        page = paginator.paginate_queryset(qs, request, view=self)
+        resp = paginator.get_paginated_response([serialize_alert(a) for a in page])
+        resp.data['counts'] = counts
+        resp.data['can_manage'] = bool(
+            request.user.is_superuser or request.user.has_perm('parcelaire.change_alert'))
+        return resp
+
+
+class AlertActionAPIView(APIView):
+    """POST /api/alerts/<pk>/<action>/ — action = ack | resolve | reopen.
+    Traçable (qui / quand). Exige la permission change_alert."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk, action):
+        if not (request.user.is_superuser or request.user.has_perm('parcelaire.change_alert')):
+            return Response({'detail': "Permission requise (change_alert)."}, status=403)
+        alert = get_object_or_404(Alert, pk=pk)
+        now = timezone.now()
+        if action == 'ack':
+            alert.status = 'ACK'
+            alert.acknowledged_by = request.user
+            alert.acknowledged_at = now
+        elif action == 'resolve':
+            alert.status = 'RESOLVED'
+            alert.resolved_at = now
+        elif action == 'reopen':
+            alert.status = 'NEW'
+            alert.resolved_at = None
+            alert.acknowledged_by = None
+            alert.acknowledged_at = None
+        else:
+            return Response({'detail': 'Action inconnue.'}, status=400)
+        alert.save()
+        return Response(serialize_alert(alert))

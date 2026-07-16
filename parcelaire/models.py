@@ -2046,3 +2046,62 @@ class IntegrationLog(models.Model):
 
     def __str__(self):
         return f"{self.system} - {self.operation} - {self.status}"
+
+# =========================================================
+# ALERTES MÉTIER (historisées, traçables, auditables)
+# =========================================================
+class Alert(TimeStampedModel):
+    """
+    Alerte métier détectée par le moteur d'analyse. Persistée pour
+    l'historisation, la traçabilité et l'audit (cf. centre de pilotage).
+
+    L'unicité par `dedup_key` permet une génération idempotente : une
+    même anomalie met à jour l'alerte existante (last_detected_at,
+    niveau, métrique) plutôt que d'en créer une nouvelle ; les alertes
+    qui ne sont plus détectées passent automatiquement en RESOLVED.
+    """
+    LEVEL_CHOICES = [
+        ("CRITIQUE", "Critique"),
+        ("ELEVE", "Élevé"),
+        ("MOYEN", "Moyen"),
+        ("FAIBLE", "Faible"),
+        ("INFO", "Information"),
+    ]
+    STATUS_CHOICES = [
+        ("NEW", "Nouvelle"),
+        ("ACK", "Accusée"),
+        ("RESOLVED", "Résolue"),
+    ]
+
+    dedup_key = models.CharField(max_length=255, unique=True, db_index=True, verbose_name="Clé de déduplication")
+    rule = models.CharField(max_length=60, db_index=True, verbose_name="Règle")
+    level = models.CharField(max_length=20, choices=LEVEL_CHOICES, default="MOYEN", db_index=True, verbose_name="Niveau")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="NEW", db_index=True, verbose_name="Statut")
+
+    title = models.CharField(max_length=255, verbose_name="Titre")
+    detail = models.TextField(blank=True, null=True, verbose_name="Détail")
+    metric = models.CharField(max_length=120, blank=True, null=True, verbose_name="Indicateur")
+    value = models.FloatField(blank=True, null=True, verbose_name="Valeur")
+
+    program = models.ForeignKey("RealEstateProgram", on_delete=models.CASCADE, null=True, blank=True, related_name="alerts")
+    parcel = models.ForeignKey("Parcel", on_delete=models.CASCADE, null=True, blank=True, related_name="alerts")
+    sale_file = models.ForeignKey("SaleFile", on_delete=models.CASCADE, null=True, blank=True, related_name="alerts")
+    customer = models.ForeignKey("Customer", on_delete=models.SET_NULL, null=True, blank=True, related_name="alerts")
+
+    first_detected_at = models.DateTimeField(auto_now_add=True, verbose_name="Première détection")
+    last_detected_at = models.DateTimeField(auto_now=True, verbose_name="Dernière détection")
+    acknowledged_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="acknowledged_alerts")
+    acknowledged_at = models.DateTimeField(blank=True, null=True)
+    resolved_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        verbose_name = "Alerte"
+        verbose_name_plural = "Alertes"
+        ordering = ["-last_detected_at"]
+        indexes = [
+            models.Index(fields=["status", "level"]),
+            models.Index(fields=["rule", "status"]),
+        ]
+
+    def __str__(self):
+        return f"[{self.level}] {self.title}"
