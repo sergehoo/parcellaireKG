@@ -1,16 +1,23 @@
+import { useNavigate } from 'react-router-dom'
+
 /**
  * Panneau latéral « ACTIF SÉLECTIONNÉ » façon KAYDAN. Affiche les données
- * renvoyées par l'API (déjà masquées par permission côté serveur). Le CRUD
- * reste sur Django : « Ouvrir la fiche complète » y pointe.
+ * renvoyées par l'API (déjà masquées par permission côté serveur).
+ *
+ * « Ouvrir la fiche complète » : les parcelles ouvrent la fiche interne du
+ * SPA (`#/r/parcels/:id`) — cohérent et fonctionnel en dev comme en prod
+ * (le lien Django absolu `/parcels/:id/` n'existe pas sous le serveur Vite).
+ * Les lots (PropertyAsset), non encore portés dans le SPA, pointent vers la
+ * page Django `/assets/:id/`.
  *
  * Rappels : on n'utilise PAS les classes Tailwind `statusBadge`/`priority_badge`
  * de l'API (purgées au build) ; on s'appuie sur les couleurs (`color`,
  * `priority_stats.priority_color`) en style inline.
  */
-function detailHref(feat) {
+function detailTarget(feat) {
   if (!feat?.id) return null
-  if (feat.entity_type === 'PARCEL') return `/parcels/${feat.id}/`
-  if (feat.entity_type === 'PROPERTY_ASSET') return `/assets/${feat.id}/`
+  if (feat.entity_type === 'PARCEL') return { spa: `/r/parcels/${feat.id}` }
+  if (feat.entity_type === 'PROPERTY_ASSET') return { href: `/assets/${feat.id}/` }
   return null
 }
 
@@ -26,9 +33,10 @@ function Chip({ children, color, bg }) {
 }
 
 export default function FeatureDetailPanel({ feature, onClose }) {
+  const navigate = useNavigate()
   if (!feature) return null
   const f = feature
-  const href = detailHref(f)
+  const target = detailTarget(f)
   const cs = f.construction_stats || {}
   const fs = f.financial_stats || {}
   const ps = f.priority_stats || {}
@@ -152,15 +160,26 @@ export default function FeatureDetailPanel({ feature, onClose }) {
         )}
       </div>
 
-      {href && (
+      {target && (
         <div className="border-t border-slate-100 p-4">
-          <a
-            href={href}
-            className="block w-full rounded-xl px-4 py-2.5 text-center text-sm font-semibold text-white"
-            style={{ background: 'var(--kaydan)' }}
-          >
-            Ouvrir la fiche complète
-          </a>
+          {target.spa ? (
+            <button
+              type="button"
+              onClick={() => navigate(target.spa)}
+              className="block w-full rounded-xl px-4 py-2.5 text-center text-sm font-semibold text-white"
+              style={{ background: 'var(--kaydan)' }}
+            >
+              Ouvrir la fiche complète
+            </button>
+          ) : (
+            <a
+              href={target.href}
+              className="block w-full rounded-xl px-4 py-2.5 text-center text-sm font-semibold text-white"
+              style={{ background: 'var(--kaydan)' }}
+            >
+              Ouvrir la fiche complète
+            </a>
+          )}
         </div>
       )}
     </div>

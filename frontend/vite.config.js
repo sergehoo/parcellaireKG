@@ -35,6 +35,11 @@ export default defineConfig({
       '/media': { target: DJANGO, changeOrigin: false },
       '/accounts': { target: DJANGO, changeOrigin: false },
       '/static/css': { target: DJANGO, changeOrigin: false },
+      // Pages Django encore consommées par le SPA (fiches lots/parcelles,
+      // liens « Ouvrir la fiche »). En prod Django sert ces routes ; en dev
+      // on les proxifie pour éviter l'erreur « base URL /static/... ».
+      '/parcels': { target: DJANGO, changeOrigin: false },
+      '/assets': { target: DJANGO, changeOrigin: false },
     },
   },
 })
