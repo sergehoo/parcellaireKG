@@ -7,6 +7,28 @@ export function monthName(month) {
   return MONTHS_FR[month - 1] || String(month)
 }
 
+/**
+ * Rend une valeur de synthèse compacte à partir d'une chaîne renvoyée par
+ * l'API : montants abrégés (« 62 819 098 749 FCFA » → « 62,8 Md FCFA »),
+ * comptes avec séparateur de milliers (« 1444 » → « 1 444 »). Les valeurs
+ * non numériques (« Masqué », « — ») sont renvoyées telles quelles.
+ */
+export function compactStat(value) {
+  if (value === null || value === undefined) return '—'
+  const str = String(value)
+  const digits = (str.match(/\d/g) || []).join('')
+  if (!digits) return str
+  const n = Number(digits)
+  const isMoney = /fcfa|€|\$/i.test(str)
+  if (isMoney) {
+    if (n >= 1e9) return `${(n / 1e9).toFixed(1).replace('.', ',')} Md FCFA`
+    if (n >= 1e6) return `${(n / 1e6).toFixed(1).replace('.', ',')} M FCFA`
+    if (n >= 1e3) return `${Math.round(n / 1e3)} k FCFA`
+    return `${n.toLocaleString('fr-FR')} FCFA`
+  }
+  return n.toLocaleString('fr-FR')
+}
+
 export function periodLabel(ortho) {
   if (ortho.period_label) return ortho.period_label
   if (ortho.reference_year && ortho.reference_month) {

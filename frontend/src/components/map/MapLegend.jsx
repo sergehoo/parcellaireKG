@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion'
+import { compactStat } from '../../lib/format'
 
 /**
  * Légende + synthèse (verre dépoli). Coloration priorité travaux en mode
@@ -25,11 +26,13 @@ export default function MapLegend({ summaries = [], variant = 'status' }) {
       className="glass w-64 rounded-2xl p-3.5"
     >
       {summaries.length > 0 && (
-        <div className="mb-3 grid grid-cols-3 gap-2 border-b border-slate-200/60 pb-3">
+        <div className="mb-3 space-y-1.5 border-b border-slate-200/60 pb-3">
           {summaries.map((s) => (
-            <div key={s.label} className="text-center">
-              <div className="text-sm font-bold text-slate-900">{s.value}</div>
-              <div className="text-[9px] uppercase leading-tight tracking-wide text-slate-500">{s.label}</div>
+            <div key={s.label} className="flex items-baseline justify-between gap-3">
+              <span className="text-[10px] font-medium uppercase tracking-wide text-slate-500">{s.label}</span>
+              <span title={s.value} className="whitespace-nowrap text-sm font-bold tabular-nums text-slate-900">
+                {compactStat(s.value)}
+              </span>
             </div>
           ))}
         </div>
