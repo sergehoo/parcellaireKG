@@ -43,8 +43,8 @@ export default function ControlRail({ api, measure, minimapOn, onMinimap }) {
   const Sep = () => <div className="my-1 h-px w-6 self-center bg-slate-300/60" />
   return (
     <motion.div
-      initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.35 }}
-      className="glass absolute right-3 top-1/2 z-[650] flex -translate-y-1/2 flex-col gap-0.5 rounded-2xl p-1.5"
+      initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.35 }}
+      className="glass absolute left-3 top-1/2 z-[650] flex -translate-y-1/2 flex-col gap-0.5 rounded-2xl p-1.5"
     >
       <RailButton title="Zoom avant" icon="plus" onClick={api.zoomIn} />
       <RailButton title="Zoom arrière" icon="minus" onClick={api.zoomOut} />

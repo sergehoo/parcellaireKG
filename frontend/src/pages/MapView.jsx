@@ -26,6 +26,7 @@ export default function MapView() {
   const [basemap, setBasemap] = useState('standard')
   const [layerStyle, setLayerStyle] = useState('polygones')
   const [orthoOn, setOrthoOn] = useState(false)
+  const [orthoProgramId, setOrthoProgramId] = useState('')
   const [orthoOpacity] = useState(0.9)
 
   const [api, setApi] = useState(null)
@@ -60,18 +61,39 @@ export default function MapView() {
     setSelected(null)
   }
 
-  // Orthophoto : programme filtré prioritaire, sinon 1er programme équipé.
-  const orthoEntry = useMemo(() => {
+  // Programmes du jeu courant disposant d'une orthophoto prête.
+  const orthoPrograms = useMemo(() => {
     const map = data?.orthophotos_by_program || {}
-    const ready = (e) => e && (e.current?.is_ready || (e.versions || []).some((o) => o.is_ready))
-    if (filters.program && ready(map[filters.program])) return map[filters.program]
-    return Object.values(map).find(ready) || null
-  }, [data, filters.program])
+    return Object.values(map)
+      .filter((e) => e.current?.is_ready)
+      .map((e) => ({ id: String(e.program_id), name: e.program_name }))
+  }, [data])
+
+  // Programme dont on affiche l'orthophoto : choix explicite, sinon
+  // programme filtré, sinon 1er équipé. Réinitialisé au changement de filtre.
+  const effectiveOrthoProgram = useMemo(() => {
+    if (orthoProgramId && orthoPrograms.some((p) => p.id === orthoProgramId)) return orthoProgramId
+    if (filters.program && orthoPrograms.some((p) => p.id === String(filters.program))) return String(filters.program)
+    return orthoPrograms[0]?.id || ''
+  }, [orthoProgramId, orthoPrograms, filters.program])
 
   const orthoLayer = useMemo(() => {
-    if (!orthoOn || !orthoEntry?.current?.is_ready) return null
-    return orthoEntry.current
-  }, [orthoOn, orthoEntry])
+    if (!orthoOn || !effectiveOrthoProgram) return null
+    const entry = data?.orthophotos_by_program?.[effectiveOrthoProgram]
+    return entry?.current?.is_ready ? entry.current : null
+  }, [orthoOn, effectiveOrthoProgram, data])
+
+  // Recentrer la carte sur l'orthophoto affichée (sinon elle peut être hors
+  // champ quand un projet multi-programmes est sélectionné). Le centroïde
+  // n'est pas toujours renseigné → repli sur l'emprise (bounds).
+  useEffect(() => {
+    if (!orthoOn || !orthoLayer || !api) return
+    if (Array.isArray(orthoLayer.centroid)) api.flyTo(orthoLayer.centroid, 16)
+    else if (orthoLayer.bounds) api.fitGeoJson(orthoLayer.bounds)
+  }, [orthoOn, orthoLayer, api])
+
+  // Réinitialise le choix manuel quand les filtres changent.
+  useEffect(() => { setOrthoProgramId('') }, [filters.project, filters.program])
 
   // Suggestions de recherche : biens chargés + programmes + projets + commandes statut.
   const buildSuggestions = useCallback((raw) => {
@@ -102,7 +124,7 @@ export default function MapView() {
   }, [refData, data, filters, api])
 
   const statusFilters = data?.filters || DEFAULT_STATUS_FILTERS
-  const canOrtho = Boolean(orthoEntry?.current?.is_ready)
+  const canOrtho = orthoPrograms.length > 0
 
   return (
     <div data-map-root className="relative -mx-4 -my-6 h-[calc(100vh-53px)] overflow-hidden bg-slate-200 sm:-mx-6">
@@ -131,12 +153,16 @@ export default function MapView() {
         basemap={basemap} onBasemap={setBasemap}
         layerStyle={layerStyle} onLayerStyle={setLayerStyle}
         orthoActive={orthoOn} onOrthoToggle={() => setOrthoOn((o) => !o)} canOrtho={canOrtho}
+        orthoPrograms={orthoPrograms} orthoProgramId={effectiveOrthoProgram} onOrthoProgram={setOrthoProgramId}
       />
 
-      {/* Légende (bas-gauche) */}
-      <div className="absolute bottom-3 left-3 z-[640]">
-        <MapLegend summaries={data?.summaries || []} variant={layerStyle === 'noms' ? 'priority' : 'status'} />
-      </div>
+      {/* Légende (bas-gauche) — masquée quand le panneau détail est ouvert
+          pour éviter tout chevauchement. */}
+      {!selected && (
+        <div className="absolute bottom-3 left-3 z-[640]">
+          <MapLegend summaries={data?.summaries || []} variant={layerStyle === 'noms' ? 'priority' : 'status'} />
+        </div>
+      )}
 
       {/* Bandeau de mesure actif */}
       <AnimatePresence>
@@ -172,9 +198,9 @@ export default function MapView() {
             animate={{ opacity: 1, y: 0, x: 0, scale: 1 }}
             exit={{ opacity: 0, y: 40, scale: 0.98 }}
             transition={{ type: 'spring', stiffness: 320, damping: 30 }}
-            className="glass absolute z-[655] overflow-hidden rounded-2xl
-                       inset-x-2 bottom-2 h-[60vh]
-                       sm:inset-x-auto sm:bottom-3 sm:right-16 sm:top-3 sm:h-auto sm:w-[22rem]"
+            className="glass absolute z-[680] overflow-hidden rounded-2xl
+                       inset-x-2 bottom-2 h-[58vh]
+                       sm:inset-x-auto sm:bottom-3 sm:right-3 sm:top-[4.75rem] sm:h-auto sm:w-[22rem]"
           >
             <FeatureDetailPanel feature={selected} onClose={() => setSelected(null)} />
           </motion.div>

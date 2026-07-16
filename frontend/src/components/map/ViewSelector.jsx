@@ -24,10 +24,11 @@ const BASE_SWATCH = {
 export default function ViewSelector({
   basemap, onBasemap, layerStyle, onLayerStyle,
   orthoActive, onOrthoToggle, canOrtho,
+  orthoPrograms = [], orthoProgramId, onOrthoProgram,
 }) {
   const [open, setOpen] = useState(false)
   return (
-    <div className="absolute bottom-3 right-3 z-[650] flex flex-col items-end gap-2">
+    <div className="absolute bottom-3 left-1/2 z-[650] flex -translate-x-1/2 flex-col items-center gap-2">
       <AnimatePresence>
         {open && (
           <motion.div
@@ -71,6 +72,14 @@ export default function ViewSelector({
                 <span className={`block h-3 w-3 rounded-full bg-white transition-transform ${orthoActive ? 'translate-x-3' : ''}`} />
               </span>
             </button>
+            {/* Choix du programme quand plusieurs orthophotos sont disponibles
+                (ex. projet multi-programmes) — recentre la carte dessus. */}
+            {orthoActive && orthoPrograms.length > 1 && (
+              <select value={orthoProgramId || ''} onChange={(e) => onOrthoProgram(e.target.value)}
+                className="mt-2 w-full rounded-lg border border-slate-200 bg-white/80 px-2.5 py-1.5 text-xs font-medium text-slate-700 focus:border-orange-400 focus:ring-orange-400">
+                {orthoPrograms.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

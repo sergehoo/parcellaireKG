@@ -150,6 +150,13 @@ export default function MapCanvas({
       print: () => window.print(),
       invalidate: () => map.invalidateSize(),
       toggleMinimap: (on) => toggleMinimap(on),
+      flyTo: (latlng, zoom) => { if (Array.isArray(latlng)) map.flyTo(latlng, zoom || 16, { duration: 0.9 }) },
+      fitGeoJson: (geojson) => {
+        try {
+          const b = L.geoJSON(geojson).getBounds()
+          if (b.isValid()) map.flyToBounds(b, { maxZoom: 18, padding: [20, 20], duration: 0.9 })
+        } catch { /* géométrie invalide : on ignore */ }
+      },
     }
     onReady?.(api)
 
