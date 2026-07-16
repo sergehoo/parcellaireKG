@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 
 from parcelaire.api import crud as crud_api
 from parcelaire.api import orthophotos as ortho_api
+from parcelaire.api.analytics import AnalyticsDashboardAPIView, AtRiskClientsAPIView
 from parcelaire.api.dashboard import DashboardStatsAPIView
 from parcelaire.api.views import RealEstateMapAPIView
 from parcelaire.views import RealEstateMap3DView
@@ -23,6 +24,9 @@ urlpatterns = [
 
     # -------- Tableau de bord + CRUD (frontend React) --------
     path("dashboard/", DashboardStatsAPIView.as_view(), name="api-dashboard"),
+    # -------- Moteur d'analyse décisionnel --------
+    path("analytics/dashboard/", AnalyticsDashboardAPIView.as_view(), name="api-analytics-dashboard"),
+    path("analytics/at-risk/", AtRiskClientsAPIView.as_view(), name="api-analytics-at-risk"),
     path("crud/options/", crud_api.CrudOptionsAPIView.as_view(), name="api-crud-options"),
     path("crud/", include(router.urls)),
 

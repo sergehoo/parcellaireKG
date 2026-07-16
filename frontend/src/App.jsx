@@ -3,6 +3,7 @@ import Layout from './components/Layout'
 import { ToastProvider } from './components/Toasts'
 import MapView from './pages/MapView'
 import Dashboard from './pages/Dashboard'
+import AtRiskPage from './pages/AtRiskPage'
 import ResourceListPage from './pages/ResourceListPage'
 import ResourceDetailPage from './pages/ResourceDetailPage'
 import ResourceFormPage from './pages/ResourceFormPage'
@@ -25,6 +26,7 @@ export default function App() {
             <Route path="/" element={<MapView />} />
             <Route path="/carte" element={<MapView />} />
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/pilotage/risques" element={<AtRiskPage />} />
 
             {/* CRUD générique piloté par le registre config/resources.js */}
             <Route path="/r/:resource" element={<ResourceListPage />} />

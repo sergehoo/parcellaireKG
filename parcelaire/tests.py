@@ -654,3 +654,83 @@ class CrudAPITests(TestCase):
         self.assertTrue(data["permissions"]["customer"]["add"])
         self.assertFalse(data["permissions"]["program"]["delete"])
         self.assertTrue(any(o["value"] == "INDIVIDUAL" for o in data["customer_types"]))
+
+
+# =====================================================================
+# Moteur d'analyse décisionnel (parcelaire/api/analytics.py)
+# =====================================================================
+from datetime import date  # noqa: E402
+
+from parcelaire.models import (  # noqa: E402
+    ConstructionProject, Parcel, ParcelDataset, Payment, SaleFile,
+)
+
+
+class AnalyticsAPITests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.reader = User.objects.create_user('an-reader', password='pwd')
+        cls.fin = User.objects.create_user('an-fin', password='pwd')
+        cls.fin.user_permissions.add(Permission.objects.get(
+            content_type__app_label='parcelaire', codename='view_financial_data'))
+
+        cls.country = Country.objects.create(nom="Côte d'Ivoire", code='CI')
+        cls.project = ProjetImmobilier.objects.create(code='PA', nom='Projet A', country=cls.country)
+        cls.program = RealEstateProgram.objects.create(
+            code='PRG', name='Programme A', slug='programme-a', country=cls.country, project=cls.project)
+        cls.dataset = ParcelDataset.objects.create(program=cls.program, name='DS import')
+        cls.parcel = Parcel.objects.create(
+            program=cls.program, dataset=cls.dataset, lot_number='L1',
+            official_area_m2=200, valeur_hypothecaire=50_000_000)
+        # Avancement construction = 30 %.
+        ConstructionProject.objects.create(parcel=cls.parcel, code='CP1', title='Chantier L1', progress_percent=30)
+        cls.customer = Customer.objects.create(customer_type='INDIVIDUAL', last_name='Kouassi')
+        # Vente 100 M, payé 70 M ⇒ paiement 70 %, IDCP = 70 − 30 = +40 ⇒ CRITIQUE.
+        cls.sale = SaleFile.objects.create(
+            sale_number='S-1', program=cls.program, customer=cls.customer, parcel=cls.parcel,
+            agreed_price=100_000_000, net_price=100_000_000, status='OPEN')
+        Payment.objects.create(
+            payment_number='P-1', sale_file=cls.sale, amount=70_000_000,
+            status='CONFIRMED', payment_method='BANK', payment_date=date(2026, 1, 15))
+
+    def test_auth_required(self):
+        self.assertEqual(self.client.get('/api/analytics/dashboard/').status_code, 403)
+        self.assertEqual(self.client.get('/api/analytics/at-risk/').status_code, 403)
+
+    def test_dashboard_idcp_and_alerts(self):
+        self.client.force_login(self.fin)
+        d = self.client.get('/api/analytics/dashboard/').json()
+        self.assertTrue(d['can_view_financial'])
+        self.assertEqual(d['kpis']['clients_critiques'], 1)
+        self.assertEqual(d['kpis']['taux_encaissement'], 70.0)
+        self.assertEqual(d['kpis']['idcp_moyen'], 40.0)
+        # une alerte IDCP critique existe
+        self.assertTrue(any(a['key'] == 'idcp_critique' and a['count'] == 1 for a in d['alerts']))
+        # santé du programme calculée
+        prog = next(p for p in d['programs_health'] if p['id'] == self.program.id)
+        self.assertEqual(prog['construction'], 30.0)
+        self.assertEqual(prog['payment'], 70.0)
+        # top client à risque
+        top = d['clients_at_risk'][0]
+        self.assertEqual(top['idcp'], 40.0)
+        self.assertEqual(top['level'], 'CRITIQUE')
+        self.assertEqual(top['payment_pct'], 70.0)
+        self.assertEqual(top['construction_pct'], 30.0)
+
+    def test_dashboard_masks_finance(self):
+        self.client.force_login(self.reader)
+        d = self.client.get('/api/analytics/dashboard/').json()
+        self.assertFalse(d['can_view_financial'])
+        self.assertEqual(d['kpis']['ca_potentiel'], 'Masqué')
+        # les pourcentages restent visibles (non financiers)
+        self.assertEqual(d['kpis']['idcp_moyen'], 40.0)
+        self.assertEqual(d['clients_at_risk'][0]['paid'], 'Masqué')
+
+    def test_at_risk_filter_by_level(self):
+        self.client.force_login(self.fin)
+        d = self.client.get('/api/analytics/at-risk/?level=CRITIQUE').json()
+        self.assertEqual(d['count'], 1)
+        self.assertEqual(d['results'][0]['customer'], 'Kouassi')
+        # niveau inexistant ici
+        empty = self.client.get('/api/analytics/at-risk/?level=INFO').json()
+        self.assertEqual(empty['count'], 0)

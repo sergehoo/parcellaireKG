@@ -1,0 +1,293 @@
+"""
+Moteur d'analyse décisionnel du tableau de bord (« centre de commandement »).
+
+Toutes les analyses sont calculées à partir des DONNÉES RÉELLES du système
+(ventes, paiements confirmés, avancement des chantiers, valeur hypothécaire).
+Aucune donnée n'est simulée ; les dimensions sans source (VRD, stocks,
+ouvriers, fournisseurs…) sont volontairement absentes.
+
+Concepts clés :
+- IDCP (Indice de Déséquilibre Construction / Paiement) = % payé − % construit
+  par dossier de vente. Positif ⇒ le client finance plus vite que l'avancement
+  des travaux (risque de sur-financement / contentieux).
+- Score de santé programme = composite (avancement, encaissement,
+  commercialisation) sur 100, sur les dimensions disponibles.
+"""
+from decimal import Decimal
+
+from django.db.models import Count, Q, Sum
+from django.db.models.functions import Coalesce
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from parcelaire.models import (
+    ConstructionProject,
+    Customer,
+    Parcel,
+    Payment,
+    ProjetImmobilier,
+    RealEstateProgram,
+    Reservation,
+    SaleFile,
+)
+
+
+def fmt_money(v):
+    try:
+        return f"{int(Decimal(v or 0)):,}".replace(",", " ") + " FCFA"
+    except Exception:
+        return "—"
+
+
+def pct(num, den):
+    try:
+        num = float(num or 0); den = float(den or 0)
+        return round(num / den * 100, 1) if den else 0.0
+    except Exception:
+        return 0.0
+
+
+def criticality(idcp):
+    """Niveau de criticité d'après l'IDCP (% payé − % construit)."""
+    if idcp >= 40:
+        return ('CRITIQUE', 'Paiement très en avance sur la construction')
+    if idcp >= 20:
+        return ('ELEVE', 'Paiement en avance sur la construction')
+    if idcp >= 8:
+        return ('MOYEN', 'Paiement légèrement en avance')
+    if idcp > -8:
+        return ('FAIBLE', 'Paiement conforme à la construction')
+    return ('INFO', 'Construction en avance sur les paiements')
+
+
+def _construction_by_parcel():
+    """parcel_id → avancement construction (%) le plus élevé."""
+    out = {}
+    for pid, prog in ConstructionProject.objects.filter(parcel_id__isnull=False).values_list('parcel_id', 'progress_percent'):
+        p = float(prog or 0)
+        if pid not in out or p > out[pid]:
+            out[pid] = p
+    return out
+
+
+def _sale_rows(can_fin):
+    """Une ligne d'analyse IDCP par dossier de vente actif rattaché à une parcelle."""
+    con = _construction_by_parcel()
+    sales = (
+        SaleFile.objects.filter(is_active=True, parcel_id__isnull=False)
+        .select_related('customer', 'program', 'parcel')
+        .annotate(paid=Coalesce(Sum('payments__amount', filter=Q(payments__status='CONFIRMED')), Decimal('0')))
+    )
+    rows = []
+    for s in sales:
+        net = float(s.net_price or 0)
+        paid = float(s.paid or 0)
+        pay_pct = pct(paid, net)
+        con_pct = round(con.get(s.parcel_id, 0.0), 1)
+        idcp = round(pay_pct - con_pct, 1)
+        level, reason = criticality(idcp)
+        rows.append({
+            'sale_id': s.id,
+            'customer': str(s.customer) if s.customer_id else '—',
+            'program': s.program.name if s.program_id else '—',
+            'program_id': s.program_id,
+            'lot': (s.parcel.lot_number or s.parcel.parcel_code or f'#{s.parcel_id}') if s.parcel_id else '—',
+            'parcel_id': s.parcel_id,
+            'paid': fmt_money(paid) if can_fin else 'Masqué',
+            'paid_value': paid if can_fin else None,
+            'payment_pct': pay_pct,
+            'construction_pct': con_pct,
+            'idcp': idcp,
+            'level': level,
+            'reason': reason,
+            'site_manager': (getattr(s.parcel, 'metadata', {}) or {}).get('site_manager') or '—',
+            'sales_agent': s.sales_agent or '—',
+            'sale_date': s.sale_date.isoformat() if s.sale_date else None,
+        })
+    return rows
+
+
+LEVEL_ORDER = {'CRITIQUE': 0, 'ELEVE': 1, 'MOYEN': 2, 'FAIBLE': 3, 'INFO': 4}
+
+
+def health_band(score):
+    if score >= 80:
+        return 'Excellent'
+    if score >= 65:
+        return 'Bon'
+    if score >= 50:
+        return 'Sous surveillance'
+    if score >= 35:
+        return 'Critique'
+    return 'Urgence'
+
+
+class AnalyticsDashboardAPIView(APIView):
+    """GET /api/analytics/dashboard/ — synthèse exécutive : KPIs, santé des
+    programmes, alertes métier, top clients à risque."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        u = request.user
+        can_fin = u.is_superuser or u.has_perm('parcelaire.view_financial_data')
+
+        parcels = Parcel.objects.filter(is_active=True)
+        sales = SaleFile.objects.filter(is_active=True)
+        ca = sales.aggregate(s=Coalesce(Sum('net_price'), Decimal('0')))['s']
+        paid = Payment.objects.filter(status='CONFIRMED').aggregate(s=Coalesce(Sum('amount'), Decimal('0')))['s']
+        hypo = parcels.aggregate(s=Coalesce(Sum('valeur_hypothecaire'), Decimal('0')))['s']
+        con_avg = ConstructionProject.objects.aggregate(a=Coalesce(Sum('progress_percent'), Decimal('0')), n=Count('id'))
+        construction_avg = round(float(con_avg['a']) / con_avg['n'], 1) if con_avg['n'] else 0.0
+
+        by_status = dict(parcels.values_list('commercial_status').annotate(n=Count('id')).values_list('commercial_status', 'n'))
+        total_parcels = parcels.count()
+        # Commercialisation calculée d'après les VENTES réelles : le champ
+        # commercial_status des parcelles n'est pas fiable ici (resté
+        # « AVAILABLE » malgré des ventes existantes).
+        sold = SaleFile.objects.filter(is_active=True, parcel_id__isnull=False).values('parcel_id').distinct().count()
+        reserved = Reservation.objects.filter(is_active=True, parcel_id__isnull=False).values('parcel_id').distinct().count()
+
+        rows = _sale_rows(can_fin)
+        idcp_vals = [r['idcp'] for r in rows]
+        idcp_avg = round(sum(idcp_vals) / len(idcp_vals), 1) if idcp_vals else 0.0
+        crit_count = sum(1 for r in rows if r['level'] == 'CRITIQUE')
+        high_count = sum(1 for r in rows if r['level'] == 'ELEVE')
+
+        # KPIs stratégiques (dimensions disponibles).
+        kpis = {
+            'ca_potentiel': fmt_money(ca) if can_fin else 'Masqué',
+            'encaisse': fmt_money(paid) if can_fin else 'Masqué',
+            'reste_a_encaisser': fmt_money(ca - paid) if can_fin else 'Masqué',
+            'taux_encaissement': pct(paid, ca),
+            'valeur_hypothecaire': fmt_money(hypo) if can_fin else 'Masqué',
+            'couverture_hypothecaire': pct(paid, hypo),
+            'avancement_construction_moyen': construction_avg,
+            'taux_commercialisation': pct(sold, total_parcels),
+            'taux_reservation': pct(reserved, total_parcels),
+            'idcp_moyen': idcp_avg,
+            'clients_critiques': crit_count,
+            'clients_eleves': high_count,
+        }
+
+        counts = {
+            'projects': ProjetImmobilier.objects.filter(is_active=True).count(),
+            'programs': RealEstateProgram.objects.filter(is_active=True).count(),
+            'parcels': total_parcels,
+            'customers': Customer.objects.filter(is_active=True).count(),
+            'sales': sales.count(),
+            'reservations': Reservation.objects.filter(is_active=True).count(),
+        }
+
+        # Santé des programmes.
+        programs = self._programs_health(can_fin)
+
+        # Alertes métier (règles sur données réelles).
+        alerts = self._alerts(rows, parcels, sales)
+
+        # Top clients à risque.
+        top_risk = sorted(rows, key=lambda r: (-r['idcp']))[:8]
+
+        return Response({
+            'can_view_financial': can_fin,
+            'counts': counts,
+            'kpis': kpis,
+            'parcels_by_status': [{'status': k or '—', 'count': v} for k, v in sorted(by_status.items(), key=lambda x: -x[1])],
+            'programs_health': programs,
+            'alerts': alerts,
+            'clients_at_risk': top_risk,
+            'at_risk_total': sum(1 for r in rows if r['level'] in ('CRITIQUE', 'ELEVE')),
+        })
+
+    def _programs_health(self, can_fin):
+        out = []
+        for prog in RealEstateProgram.objects.filter(is_active=True).select_related('project'):
+            p_parcels = Parcel.objects.filter(program=prog, is_active=True)
+            total = p_parcels.count()
+            if not total:
+                continue
+            sold = SaleFile.objects.filter(program=prog, is_active=True, parcel_id__isnull=False).values('parcel_id').distinct().count()
+            con = ConstructionProject.objects.filter(parcel__program=prog).aggregate(
+                a=Coalesce(Sum('progress_percent'), Decimal('0')), n=Count('id'))
+            construction = round(float(con['a']) / con['n'], 1) if con['n'] else 0.0
+            p_sales = SaleFile.objects.filter(program=prog, is_active=True)
+            net = p_sales.aggregate(s=Coalesce(Sum('net_price'), Decimal('0')))['s']
+            paid = Payment.objects.filter(status='CONFIRMED', sale_file__program=prog).aggregate(
+                s=Coalesce(Sum('amount'), Decimal('0')))['s']
+            payment = pct(paid, net)
+            commercialisation = pct(sold, total)
+            score = round(0.35 * construction + 0.35 * min(payment, 100) + 0.30 * commercialisation, 0)
+            out.append({
+                'id': prog.id, 'name': prog.name,
+                'project': prog.project.nom if prog.project_id else '—',
+                'parcels': total, 'sold': sold,
+                'construction': construction, 'payment': payment,
+                'commercialisation': commercialisation,
+                'score': int(score), 'band': health_band(score),
+                'ca': fmt_money(net) if can_fin else 'Masqué',
+                'encaisse': fmt_money(paid) if can_fin else 'Masqué',
+            })
+        return sorted(out, key=lambda x: x['score'])
+
+    def _alerts(self, rows, parcels, sales):
+        alerts = []
+
+        def add(key, label, level, count, detail):
+            if count:
+                alerts.append({'key': key, 'label': label, 'level': level, 'count': count, 'detail': detail})
+
+        add('idcp_critique', 'Paiement très en avance sur la construction', 'CRITIQUE',
+            sum(1 for r in rows if r['level'] == 'CRITIQUE'), 'IDCP ≥ 40 % — risque de sur-financement / contentieux')
+        add('idcp_eleve', 'Paiement en avance sur la construction', 'ELEVE',
+            sum(1 for r in rows if r['level'] == 'ELEVE'), 'IDCP 20–40 %')
+        add('construction_retard', 'Construction très en retard', 'ELEVE',
+            sum(1 for r in rows if r['construction_pct'] < 20 and r['payment_pct'] > 40),
+            'Avancement < 20 % alors que le paiement dépasse 40 %')
+        add('titre_manquant', 'Titre foncier manquant (lot vendu)', 'MOYEN',
+            parcels.filter(commercial_status='SOLD', has_title_document=False).count(),
+            'Parcelle vendue sans document de titre foncier')
+        add('contrat_non_signe', 'Dossier de vente non signé avec paiements', 'MOYEN',
+            sales.filter(status__in=['OPEN', 'PENDING_DOCS', 'PENDING_PAYMENT'], payments__status='CONFIRMED')
+                 .distinct().count(),
+            'Paiements confirmés mais dossier non signé')
+        add('hypo_insuffisante', 'Valeur hypothécaire non renseignée (lot vendu)', 'MOYEN',
+            parcels.filter(commercial_status='SOLD').filter(Q(valeur_hypothecaire__isnull=True) | Q(valeur_hypothecaire=0)).count(),
+            'Lot vendu sans valeur hypothécaire — couverture non garantie')
+        return sorted(alerts, key=lambda a: LEVEL_ORDER.get(a['level'], 9))
+
+
+class AtRiskPagination(PageNumberPagination):
+    page_size = 25
+    page_size_query_param = 'page_size'
+    max_page_size = 200
+
+
+class AtRiskClientsAPIView(APIView):
+    """GET /api/analytics/at-risk/ — liste complète, filtrable, des clients
+    classés par IDCP décroissant. Filtres : level, program, min_idcp."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        u = request.user
+        can_fin = u.is_superuser or u.has_perm('parcelaire.view_financial_data')
+        rows = _sale_rows(can_fin)
+
+        level = request.query_params.get('level')
+        program = request.query_params.get('program')
+        try:
+            min_idcp = float(request.query_params.get('min_idcp')) if request.query_params.get('min_idcp') else None
+        except ValueError:
+            min_idcp = None
+        if level:
+            rows = [r for r in rows if r['level'] == level]
+        if program:
+            rows = [r for r in rows if str(r['program_id']) == str(program)]
+        if min_idcp is not None:
+            rows = [r for r in rows if r['idcp'] >= min_idcp]
+
+        rows.sort(key=lambda r: -r['idcp'])
+
+        paginator = AtRiskPagination()
+        page = paginator.paginate_queryset(rows, request, view=self)
+        return paginator.get_paginated_response(page)
