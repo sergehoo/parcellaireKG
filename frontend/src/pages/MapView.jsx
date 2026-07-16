@@ -168,11 +168,13 @@ export default function MapView() {
       <AnimatePresence>
         {selected && (
           <motion.div
-            initial={{ opacity: 0, x: 40, scale: 0.98 }}
-            animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, x: 40, scale: 0.98 }}
+            initial={{ opacity: 0, y: 40, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, x: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 40, scale: 0.98 }}
             transition={{ type: 'spring', stiffness: 320, damping: 30 }}
-            className="glass absolute bottom-3 right-16 top-3 z-[655] w-[22rem] max-w-[calc(100vw-6rem)] overflow-hidden rounded-2xl"
+            className="glass absolute z-[655] overflow-hidden rounded-2xl
+                       inset-x-2 bottom-2 h-[60vh]
+                       sm:inset-x-auto sm:bottom-3 sm:right-16 sm:top-3 sm:h-auto sm:w-[22rem]"
           >
             <FeatureDetailPanel feature={selected} onClose={() => setSelected(null)} />
           </motion.div>
