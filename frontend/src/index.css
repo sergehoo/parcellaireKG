@@ -2,7 +2,51 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Identité KAYDAN : orange brûlé de la marque. */
+:root {
+  --kaydan: #e2571e;
+  --kaydan-dark: #c2410c;
+}
+
 /* NB : la hauteur de la carte Leaflet est donnée par la classe
    Tailwind (h-96) posée sur le conteneur dans TileMapPreview — ne pas
    redéfinir .leaflet-container ici (height:100% écraserait h-96 et la
    carte s'effondrerait à quelques pixels). */
+
+/* -------------------------------------------------------------------
+   Étiquettes de lot (mode « Noms lots ») : tooltips Leaflet permanents
+   restylés en « chips » sombres façon KAYDAN. On neutralise le style et
+   la flèche par défaut ; la couleur de fond (teinte de priorité) est
+   posée en inline via le HTML du chip.
+   ------------------------------------------------------------------- */
+.leaflet-tooltip.lot-chip {
+  background: #1e293b;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  box-shadow: 0 4px 10px rgba(2, 6, 23, 0.35);
+  padding: 4px 8px;
+  font-weight: 600;
+  white-space: nowrap;
+  opacity: 0.97;
+}
+.leaflet-tooltip.lot-chip::before { display: none; } /* pas de flèche */
+.lot-chip .lot-name { font-size: 12px; line-height: 1.1; }
+.lot-chip .lot-stats { font-size: 10px; font-weight: 500; opacity: 0.9; margin-top: 1px; }
+.lot-chip .lot-stats .v-pos { color: #4ade80; }
+.lot-chip .lot-stats .v-neg { color: #f87171; }
+
+/* Badge circulaire orange d'agrégat de programme (mode vue d'ensemble). */
+.leaflet-marker-icon.program-badge { background: transparent; border: none; }
+.program-badge .pg-dot {
+  display: flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; border-radius: 9999px;
+  background: var(--kaydan); color: #fff; font-weight: 700; font-size: 13px;
+  border: 3px solid #fff; box-shadow: 0 4px 12px rgba(226, 87, 30, 0.45);
+}
+
+/* Contrôles Leaflet un peu plus doux. */
+.leaflet-bar a {
+  border-radius: 8px !important;
+  color: #334155;
+}
