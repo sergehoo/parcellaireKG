@@ -58,9 +58,14 @@ export async function request(url, { method = 'GET', json, signal } = {}) {
     redirectToLogin()
     throw new ApiError('Session expirée', { status: 401 })
   }
-  if (response.status === 401 || response.status === 403) {
+  // 401 = pas authentifié → login. On NE redirige PAS sur 403 : DRF
+  // renvoie 403 aussi bien pour une permission métier manquante que
+  // pour une session expirée, et rediriger sur un refus de permission
+  // créerait une boucle login → 403 → login. On remonte donc le 403
+  // comme une erreur normale (message affiché en toast par l'appelant).
+  if (response.status === 401) {
     redirectToLogin()
-    throw new ApiError('Session expirée ou accès refusé', { status: response.status })
+    throw new ApiError('Session expirée', { status: 401 })
   }
 
   let data = null

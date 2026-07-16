@@ -14,7 +14,7 @@ Couverture :
 """
 from unittest import mock
 
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Permission, User
 from django.test import TestCase
 from django.urls import reverse
 
@@ -32,10 +32,23 @@ class OrthophotoAPITestCase(TestCase):
 
     @classmethod
     def setUpTestData(cls):
+        # `user` : authentifié SANS aucune permission métier (lecteur).
         cls.user = User.objects.create_user("testeur", password="pwd-test-2026")
         cls.superuser = User.objects.create_superuser(
             "admin-test", "admin@test.local", "pwd-admin-2026",
         )
+        # `manager` : permissions add/change/delete_programorthophoto
+        # explicites (et non superuser) pour prouver que ce sont bien
+        # ces permissions précises qui débloquent les actions.
+        cls.manager = User.objects.create_user("gestionnaire", password="pwd-mgr-2026")
+        cls.manager.user_permissions.add(*Permission.objects.filter(
+            content_type__app_label="parcelaire",
+            codename__in=[
+                "add_programorthophoto",
+                "change_programorthophoto",
+                "delete_programorthophoto",
+            ],
+        ))
 
         cls.country = Country.objects.create(nom="Côte d'Ivoire", code="CI")
         cls.project = ProjetImmobilier.objects.create(
@@ -179,10 +192,76 @@ class OrthophotoDetailAPITests(OrthophotoAPITestCase):
         response = self.client.get(reverse("api-orthophoto-detail", args=[999999]))
         self.assertEqual(response.status_code, 404)
 
+    def test_command_masque_pour_lecteur(self):
+        # Le champ `command` (commandes shell + chemins serveur) ne doit
+        # pas fuiter vers un simple lecteur sans permission change_*.
+        response = self.client.get(
+            reverse("api-orthophoto-detail", args=[self.ortho_done.pk]),
+        )
+        log = response.json()["logs"][0]
+        self.assertEqual(log["message"], "Reprojection OK")
+        self.assertEqual(log["command"], "")
+
+    def test_command_visible_pour_gestionnaire(self):
+        self.client.force_login(self.manager)
+        response = self.client.get(
+            reverse("api-orthophoto-detail", args=[self.ortho_done.pk]),
+        )
+        self.assertEqual(response.json()["logs"][0]["command"], "gdalwarp ...")
+
+
+class OrthophotoActionsPermissionTests(OrthophotoAPITestCase):
+    """Un utilisateur authentifié SANS permission métier est refusé (403)
+    sur toutes les actions mutantes/destructives, et rien n'est modifié."""
+
+    def setUp(self):
+        self.login()  # `testeur`, aucune permission
+
+    @mock.patch("parcelaire.tasks.process_orthophoto.delay")
+    def test_retry_refuse_sans_permission(self, delay):
+        response = self.client.post(
+            reverse("api-orthophoto-retry", args=[self.ortho_done.pk]),
+        )
+        self.assertEqual(response.status_code, 403)
+        delay.assert_not_called()
+        self.ortho_done.refresh_from_db()
+        self.assertEqual(self.ortho_done.status, "DONE")
+
+    def test_set_current_refuse_sans_permission(self):
+        response = self.client.post(
+            reverse("api-orthophoto-set-current", args=[self.ortho_pending.pk]),
+        )
+        self.assertEqual(response.status_code, 403)
+        self.ortho_pending.refresh_from_db()
+        self.assertFalse(self.ortho_pending.is_current)
+
+    def test_delete_tiles_refuse_sans_permission(self):
+        response = self.client.post(
+            reverse("api-orthophoto-delete-tiles", args=[self.ortho_done.pk]),
+        )
+        self.assertEqual(response.status_code, 403)
+        self.ortho_done.refresh_from_db()
+        self.assertEqual(self.ortho_done.status, "DONE")
+        self.assertTrue(self.ortho_done.tiles_url)
+
+    def test_change_ne_suffit_pas_pour_delete_tiles(self):
+        # delete-tiles exige delete_programorthophoto : un utilisateur
+        # n'ayant QUE change_* est refusé.
+        only_change = User.objects.create_user("changeur", password="x")
+        only_change.user_permissions.add(Permission.objects.get(
+            content_type__app_label="parcelaire",
+            codename="change_programorthophoto",
+        ))
+        self.client.force_login(only_change)
+        response = self.client.post(
+            reverse("api-orthophoto-delete-tiles", args=[self.ortho_done.pk]),
+        )
+        self.assertEqual(response.status_code, 403)
+
 
 class OrthophotoActionsAPITests(OrthophotoAPITestCase):
     def setUp(self):
-        self.login()
+        self.client.force_login(self.manager)
 
     @mock.patch("parcelaire.tasks.process_orthophoto.delay")
     def test_retry_reinitialise_et_relance(self, delay):
@@ -260,10 +339,11 @@ class ReferenceDataAPITests(OrthophotoAPITestCase):
 
 class UploadInitValidationTests(OrthophotoAPITestCase):
     """Validations de POST /orthophotos/upload/init/ exécutées AVANT
-    tout appel S3 — testables sans MinIO."""
+    tout appel S3 — testables sans MinIO. Connecté en gestionnaire :
+    la permission add_* est vérifiée en amont (couverte ailleurs)."""
 
     def setUp(self):
-        self.login()
+        self.client.force_login(self.manager)
         self.url = reverse("orthophoto_upload_init")
 
     def post_json(self, payload):
@@ -308,6 +388,139 @@ class UploadInitValidationTests(OrthophotoAPITestCase):
         data = response.json()
         self.assertTrue(data["conflict"])
         self.assertEqual(data["existing_id"], self.ortho_done.pk)
+
+
+@mock.patch("parcelaire.services.storage.presign_part_url",
+            return_value="http://minio.local/signed-part")
+@mock.patch("parcelaire.services.storage.ensure_bucket_and_cors")
+class UploadInitFlowTests(OrthophotoAPITestCase):
+    """Chemin de succès et d'échec S3 de /orthophotos/upload/init/
+    (stockage mocké — pas de MinIO requis)."""
+
+    def setUp(self):
+        self.url = reverse("orthophoto_upload_init")
+        self.client.force_login(self.manager)
+
+    def payload(self, **over):
+        base = {
+            "program": self.program.pk, "filename": "survol.tif",
+            "total_size": 120 * 1024 * 1024,  # 120 Mo → 3 parts de 50 Mo
+            "reference_year": 2026, "reference_month": 6,
+        }
+        base.update(over)
+        return base
+
+    @mock.patch("parcelaire.services.storage.initiate_multipart_upload",
+                return_value="UPLOAD-ID-123")
+    def test_init_succes_cree_session(self, initiate, *_):
+        response = self.client.post(
+            self.url, self.payload(), content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["upload_id"], "UPLOAD-ID-123")
+        self.assertEqual(len(data["parts"]), 3)  # ceil(120/50)
+        ortho = ProgramOrthophoto.objects.get(pk=data["orthophoto_id"])
+        self.assertEqual(ortho.status, "PENDING")
+        self.assertEqual(ortho.metadata["s3_upload"]["upload_id"], "UPLOAD-ID-123")
+        self.assertEqual(ortho.metadata["s3_upload"]["nb_parts"], 3)
+
+    @mock.patch("parcelaire.services.storage.initiate_multipart_upload",
+                side_effect=RuntimeError("MinIO down"))
+    def test_init_echec_s3_renvoie_502_et_marque_failed(self, initiate, *_):
+        response = self.client.post(
+            self.url, self.payload(reference_month=7), content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 502)
+        ortho = ProgramOrthophoto.objects.filter(
+            program=self.program, reference_year=2026, reference_month=7,
+        ).first()
+        self.assertIsNotNone(ortho)
+        self.assertEqual(ortho.status, "FAILED")
+
+    @mock.patch("parcelaire.services.storage.initiate_multipart_upload")
+    def test_init_refuse_sans_permission_add(self, initiate, *_):
+        self.client.force_login(self.user)  # `testeur`, pas de permission
+        response = self.client.post(
+            self.url, self.payload(), content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 403)
+        initiate.assert_not_called()
+
+
+class UploadCompleteAbortTests(OrthophotoAPITestCase):
+    """/upload/complete/ et /upload/abort/ (stockage mocké)."""
+
+    def setUp(self):
+        self.client.force_login(self.manager)
+        # Orthophoto avec une session d'upload S3 « en cours ».
+        self.uploading = ProgramOrthophoto.objects.create(
+            program=self.program, name="En cours",
+            reference_year=2026, reference_month=9,
+            status="PENDING",
+            metadata={"s3_upload": {
+                "key": "orthophotos/sources/50/survol.tif",
+                "upload_id": "UP-9", "total_size": 100, "nb_parts": 1,
+            }},
+        )
+
+    @mock.patch("parcelaire.tasks.process_orthophoto.delay")
+    @mock.patch("parcelaire.services.storage.head_object",
+                return_value={"ContentLength": 100})
+    @mock.patch("parcelaire.services.storage.complete_multipart_upload")
+    def test_complete_finalise_et_lance_celery(self, complete, head, delay):
+        response = self.client.post(
+            reverse("orthophoto_upload_complete"),
+            {"orthophoto_id": self.uploading.pk,
+             "parts": [{"PartNumber": 1, "ETag": "abc"}]},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        complete.assert_called_once()
+        delay.assert_called_once_with(self.uploading.pk)
+
+    def test_complete_sans_session_renvoie_400(self):
+        response = self.client.post(
+            reverse("orthophoto_upload_complete"),
+            {"orthophoto_id": self.ortho_pending.pk, "parts": [{"x": 1}]},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    @mock.patch("parcelaire.services.storage.abort_multipart_upload")
+    def test_abort_upload_en_cours_marque_failed(self, abort):
+        response = self.client.post(
+            reverse("orthophoto_upload_abort"),
+            {"orthophoto_id": self.uploading.pk},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        abort.assert_called_once()
+        self.uploading.refresh_from_db()
+        self.assertEqual(self.uploading.status, "FAILED")
+
+    @mock.patch("parcelaire.services.storage.abort_multipart_upload")
+    def test_abort_nepasse_pas_une_ortho_done_en_failed(self, abort):
+        # Régression : abort sur une orthophoto DONE ne doit RIEN casser.
+        response = self.client.post(
+            reverse("orthophoto_upload_abort"),
+            {"orthophoto_id": self.ortho_done.pk},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json().get("skipped"))
+        abort.assert_not_called()
+        self.ortho_done.refresh_from_db()
+        self.assertEqual(self.ortho_done.status, "DONE")
+
+    def test_abort_refuse_sans_permission_add(self):
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse("orthophoto_upload_abort"),
+            {"orthophoto_id": self.uploading.pk},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 403)
 
 
 class OrthophotoModelTests(OrthophotoAPITestCase):

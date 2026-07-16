@@ -1247,10 +1247,29 @@ from parcelaire.models import ProgramOrthophoto, OrthophotoProcessingLog
 
 
 class _OrthophotoBaseMixin(LoginRequiredMixin):
-    """Permission métier : seul `parcelaire.add_programorthophoto`
-    autorise la création / relance ; lecture libre pour les
-    utilisateurs authentifiés ayant `view_programorthophoto`."""
+    """Authentification requise (lecture). Les vues destructives/mutantes
+    ajoutent en plus `_OrthophotoAddPermMixin` ci-dessous."""
     raise_exception = False
+
+
+class _OrthophotoAddPermMixin:
+    """Exige `parcelaire.add_programorthophoto` et répond en JSON 403.
+
+    Utilisé par les endpoints d'upload (init/complete/abort) consommés
+    par le SPA React : sans ce garde, tout compte authentifié pouvait
+    créer/écraser des orthophotos. On renvoie du JSON (pas la redirection
+    login HTML) car l'appelant est du fetch, pas une navigation.
+    """
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return JsonResponse({"error": "Authentification requise."}, status=401)
+        if not request.user.has_perm("parcelaire.add_programorthophoto"):
+            return JsonResponse(
+                {"error": "Vous n'avez pas la permission d'importer des orthophotos."},
+                status=403,
+            )
+        return super().dispatch(request, *args, **kwargs)
 
 
 class OrthophotoListView(_OrthophotoBaseMixin, SearchFilterMixin, ListView):
@@ -1566,7 +1585,7 @@ def _build_s3_key(ortho, filename):
 
 
 @method_decorator(require_POST, name="dispatch")
-class OrthophotoUploadInitView(_OrthophotoBaseMixin, View):
+class OrthophotoUploadInitView(_OrthophotoAddPermMixin, _OrthophotoBaseMixin, View):
     """
     POST /orthophotos/upload/init/
     Crée une orthophoto PENDING et démarre un multipart upload S3.
@@ -1713,7 +1732,7 @@ class OrthophotoUploadInitView(_OrthophotoBaseMixin, View):
 
 
 @method_decorator(require_POST, name="dispatch")
-class OrthophotoUploadCompleteView(_OrthophotoBaseMixin, View):
+class OrthophotoUploadCompleteView(_OrthophotoAddPermMixin, _OrthophotoBaseMixin, View):
     """
     POST /orthophotos/upload/complete/
     Body JSON :
@@ -1788,7 +1807,7 @@ class OrthophotoUploadCompleteView(_OrthophotoBaseMixin, View):
 
 
 @method_decorator(require_POST, name="dispatch")
-class OrthophotoUploadAbortView(_OrthophotoBaseMixin, View):
+class OrthophotoUploadAbortView(_OrthophotoAddPermMixin, _OrthophotoBaseMixin, View):
     """
     POST /orthophotos/upload/abort/
     Annule un multipart upload en cours (libère les parts MinIO).
@@ -1803,7 +1822,21 @@ class OrthophotoUploadAbortView(_OrthophotoBaseMixin, View):
         ortho = ProgramOrthophoto.objects.filter(pk=ortho_id).first()
         if not ortho:
             return JsonResponse({"ok": True, "skipped": True})
+
+        # Garde-fou : n'annuler QUE si un upload est réellement en cours.
+        # Sans ce test, un abort avec l'id d'une orthophoto déjà DONE la
+        # faisait basculer en FAILED (perte de la couche affichée). Un
+        # upload actif est caractérisé par un statut in-progress ET une
+        # session s3_upload non finalisée dans metadata.
         meta = (ortho.metadata or {}).get("s3_upload") or {}
+        upload_active = (
+            ortho.status in {"PENDING", "PROCESSING"}
+            and meta.get("upload_id")
+            and not meta.get("finalized_at")
+        )
+        if not upload_active:
+            return JsonResponse({"ok": True, "skipped": True})
+
         if meta.get("key") and meta.get("upload_id"):
             _s3.abort_multipart_upload(meta["key"], meta["upload_id"])
         ortho.status = "FAILED"

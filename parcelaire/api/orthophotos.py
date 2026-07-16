@@ -21,7 +21,7 @@ from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import ensure_csrf_cookie
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -30,6 +30,39 @@ from parcelaire.models import (
     ProjetImmobilier,
     RealEstateProgram,
 )
+
+
+# =====================================================================
+# Permissions
+# =====================================================================
+# Les actions mutantes/destructives exigent une permission Django
+# précise, en plus de l'authentification. Ces permissions sont EXACTEMENT
+# celles renvoyées par reference-data (can_change / can_delete) et
+# respectées par le SPA : le backend est l'autorité, le front n'est que
+# cosmétique. Sans ça, tout compte authentifié (même « lecture seule »)
+# pouvait purger les tuiles de la prod ou basculer l'orthophoto courante.
+
+
+class _HasModelPermission(BasePermission):
+    """Exige `required_perm` (les superusers l'ont implicitement)."""
+
+    required_perm = None
+    message = "Vous n'avez pas la permission d'effectuer cette action."
+
+    def has_permission(self, request, view):
+        return bool(
+            request.user
+            and request.user.is_authenticated
+            and request.user.has_perm(self.required_perm)
+        )
+
+
+class CanChangeOrthophoto(_HasModelPermission):
+    required_perm = "parcelaire.change_programorthophoto"
+
+
+class CanDeleteOrthophoto(_HasModelPermission):
+    required_perm = "parcelaire.delete_programorthophoto"
 
 
 @ensure_csrf_cookie
@@ -50,7 +83,7 @@ def _bounds_latlng(ortho):
     return [[ymin, xmin], [ymax, xmax]]
 
 
-def serialize_orthophoto(ortho, *, with_logs=False):
+def serialize_orthophoto(ortho, *, with_logs=False, can_manage=False):
     data = {
         "id": ortho.pk,
         "name": ortho.name or "",
@@ -86,12 +119,15 @@ def serialize_orthophoto(ortho, *, with_logs=False):
         "processed_at": ortho.processed_at.isoformat() if ortho.processed_at else None,
     }
     if with_logs:
+        # Le champ `command` contient les commandes shell GDAL avec les
+        # chemins absolus du serveur (sous MEDIA_ROOT) : on ne l'expose
+        # qu'aux gestionnaires (can_change), pas à un simple lecteur.
         data["logs"] = [
             {
                 "id": log.pk,
                 "level": log.level,
                 "message": log.message,
-                "command": log.command or "",
+                "command": (log.command or "") if can_manage else "",
                 "created_at": log.created_at.isoformat() if log.created_at else None,
             }
             for log in ortho.processing_logs.all()[:200]
@@ -165,12 +201,13 @@ class OrthophotoDetailAPIView(APIView):
             .prefetch_related("processing_logs"),
             pk=pk,
         )
-        return Response(serialize_orthophoto(ortho, with_logs=True))
+        can_manage = request.user.has_perm("parcelaire.change_programorthophoto")
+        return Response(serialize_orthophoto(ortho, with_logs=True, can_manage=can_manage))
 
 
 class OrthophotoRetryAPIView(APIView):
     """POST /api/orthophotos/<pk>/retry/ — relance le pipeline GDAL."""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanChangeOrthophoto]
 
     def post(self, request, pk):
         ortho = get_object_or_404(ProgramOrthophoto, pk=pk)
@@ -198,7 +235,7 @@ class OrthophotoRetryAPIView(APIView):
 
 class OrthophotoSetCurrentAPIView(APIView):
     """POST /api/orthophotos/<pk>/set-current/ — définit la courante."""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanChangeOrthophoto]
 
     def post(self, request, pk):
         ortho = get_object_or_404(ProgramOrthophoto, pk=pk)
@@ -214,7 +251,7 @@ class OrthophotoSetCurrentAPIView(APIView):
 class OrthophotoDeleteTilesAPIView(APIView):
     """POST /api/orthophotos/<pk>/delete-tiles/ — purge les tuiles
     et repasse le statut à PENDING (même logique que la vue template)."""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanDeleteOrthophoto]
 
     def post(self, request, pk):
         ortho = get_object_or_404(ProgramOrthophoto, pk=pk)

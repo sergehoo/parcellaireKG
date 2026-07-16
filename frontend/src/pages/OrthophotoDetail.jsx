@@ -14,6 +14,7 @@ import LogTimeline from '../components/LogTimeline'
 import TileMapPreview from '../components/TileMapPreview'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { useToast } from '../components/Toasts'
+import useReferenceData from '../hooks/useReferenceData'
 import { formatDateTime, periodLabel } from '../lib/format'
 
 const POLL_INTERVAL_MS = 3000
@@ -21,6 +22,8 @@ const POLL_INTERVAL_MS = 3000
 export default function OrthophotoDetail() {
   const { id } = useParams()
   const toast = useToast()
+  const { refData } = useReferenceData()
+  const perms = refData?.user || {}
   const [ortho, setOrtho] = useState(null)
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -167,35 +170,46 @@ export default function OrthophotoDetail() {
 
         {/* Colonne latérale */}
         <div className="space-y-6">
-          <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="mb-3 font-semibold text-slate-900">Actions</h2>
-            <div className="flex flex-col gap-2">
-              <button
-                type="button"
-                disabled={busy || inProgress}
-                onClick={() => setConfirmAction('retry')}
-                className={`${actionButton} border-sky-300 text-sky-700 hover:bg-sky-50`}
-              >
-                Relancer le traitement
-              </button>
-              <button
-                type="button"
-                disabled={busy || ortho.is_current || ortho.status !== 'DONE'}
-                onClick={() => runAction('set-current', setCurrentOrthophoto, 'Orthophoto définie comme courante.')}
-                className={`${actionButton} border-slate-300 text-slate-700 hover:bg-slate-50`}
-              >
-                Définir comme courante
-              </button>
-              <button
-                type="button"
-                disabled={busy || inProgress || !ortho.tiles_url}
-                onClick={() => setConfirmAction('delete-tiles')}
-                className={`${actionButton} border-rose-300 text-rose-700 hover:bg-rose-50`}
-              >
-                Supprimer les tuiles
-              </button>
-            </div>
-          </section>
+          {/* Les boutons ne sont montrés qu'aux utilisateurs habilités —
+              le backend applique de toute façon les mêmes permissions
+              (can_change / can_delete), ce masquage est purement UX. */}
+          {(perms.can_change || perms.can_delete) && (
+            <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+              <h2 className="mb-3 font-semibold text-slate-900">Actions</h2>
+              <div className="flex flex-col gap-2">
+                {perms.can_change && (
+                  <button
+                    type="button"
+                    disabled={busy || inProgress}
+                    onClick={() => setConfirmAction('retry')}
+                    className={`${actionButton} border-sky-300 text-sky-700 hover:bg-sky-50`}
+                  >
+                    Relancer le traitement
+                  </button>
+                )}
+                {perms.can_change && (
+                  <button
+                    type="button"
+                    disabled={busy || ortho.is_current || ortho.status !== 'DONE'}
+                    onClick={() => runAction('set-current', setCurrentOrthophoto, 'Orthophoto définie comme courante.')}
+                    className={`${actionButton} border-slate-300 text-slate-700 hover:bg-slate-50`}
+                  >
+                    Définir comme courante
+                  </button>
+                )}
+                {perms.can_delete && (
+                  <button
+                    type="button"
+                    disabled={busy || inProgress || !ortho.tiles_url}
+                    onClick={() => setConfirmAction('delete-tiles')}
+                    className={`${actionButton} border-rose-300 text-rose-700 hover:bg-rose-50`}
+                  >
+                    Supprimer les tuiles
+                  </button>
+                )}
+              </div>
+            </section>
+          )}
 
           <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="mb-3 font-semibold text-slate-900">Informations</h2>

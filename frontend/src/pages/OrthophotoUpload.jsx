@@ -115,6 +115,26 @@ export default function OrthophotoUpload() {
   const uploading = phase !== 'idle'
   const percent = file ? Math.round((sentBytes / file.size) * 100) : 0
 
+  // Garde d'accès : sans droit d'ajout, on ne montre pas le formulaire
+  // (le backend refuse de toute façon l'upload init). On attend que
+  // refData soit chargé pour ne pas flasher le message à tort.
+  if (refData && !refData.user?.can_add) {
+    return (
+      <div className="mx-auto max-w-2xl rounded-xl border border-amber-200 bg-amber-50 px-6 py-10 text-center">
+        <p className="font-medium text-amber-800">
+          Vous n'avez pas l'autorisation d'importer des orthophotos.
+        </p>
+        <button
+          type="button"
+          onClick={() => navigate('/')}
+          className="mt-3 text-sm font-medium text-sky-700 hover:underline"
+        >
+          ← Retour à la liste
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div className="mx-auto max-w-3xl">
       <h1 className="mb-1 text-2xl font-bold text-slate-900">Nouvelle orthophoto</h1>

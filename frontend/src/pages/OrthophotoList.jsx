@@ -83,12 +83,14 @@ export default function OrthophotoList() {
             {payload ? `${payload.count} orthophoto${payload.count > 1 ? 's' : ''}` : '…'}
           </p>
         </div>
-        <Link
-          to="/upload"
-          className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-sky-700"
-        >
-          + Nouvelle orthophoto
-        </Link>
+        {refData?.user?.can_add && (
+          <Link
+            to="/upload"
+            className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-sky-700"
+          >
+            + Nouvelle orthophoto
+          </Link>
+        )}
       </div>
 
       {/* Filtres */}
@@ -142,9 +144,11 @@ export default function OrthophotoList() {
       ) : payload?.results?.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-300 bg-white py-20 text-center">
           <p className="text-slate-600">Aucune orthophoto ne correspond aux filtres.</p>
-          <Link to="/upload" className="mt-2 inline-block text-sm font-medium text-sky-600 hover:underline">
-            Importer une orthophoto
-          </Link>
+          {refData?.user?.can_add && (
+            <Link to="/upload" className="mt-2 inline-block text-sm font-medium text-sky-600 hover:underline">
+              Importer une orthophoto
+            </Link>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
