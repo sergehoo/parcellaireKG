@@ -126,7 +126,7 @@ export default function OrthophotoUpload() {
         </p>
         <button
           type="button"
-          onClick={() => navigate('/')}
+          onClick={() => navigate('/orthophotos')}
           className="mt-3 text-sm font-medium text-sky-700 hover:underline"
         >
           ← Retour à la liste

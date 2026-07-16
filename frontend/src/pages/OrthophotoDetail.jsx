@@ -80,7 +80,7 @@ export default function OrthophotoDetail() {
       <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-6 text-center text-rose-700">
         {error.message}
         <div className="mt-2">
-          <Link to="/" className="text-sm font-medium text-sky-600 hover:underline">← Retour à la liste</Link>
+          <Link to="/orthophotos" className="text-sm font-medium text-sky-600 hover:underline">← Retour à la liste</Link>
         </div>
       </div>
     )
@@ -94,7 +94,7 @@ export default function OrthophotoDetail() {
   return (
     <div>
       <div className="mb-6">
-        <Link to="/" className="text-sm text-slate-500 hover:text-slate-700">← Orthophotos</Link>
+        <Link to="/orthophotos" className="text-sm text-slate-500 hover:text-slate-700">← Orthophotos</Link>
         <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">
