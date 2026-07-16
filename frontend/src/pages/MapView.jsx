@@ -9,6 +9,7 @@ import MapLegend from '../components/map/MapLegend'
 import ControlRail from '../components/map/ControlRail'
 import ViewSelector from '../components/map/ViewSelector'
 import FeatureDetailPanel from '../components/map/FeatureDetailPanel'
+import { useToast } from '../components/Toasts'
 
 const FILTER_KEYS = ['project', 'program', 'status', 'tag', 'search']
 const DEFAULT_STATUS_FILTERS = ['Tous', 'Disponibles', 'Réservés', 'Vendus', 'En construction']
@@ -17,6 +18,7 @@ const STATUS_CMDS = { disponible: 'Disponibles', réservé: 'Réservés', reserv
 export default function MapView() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { refData } = useReferenceData()
+  const toast = useToast()
 
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -32,6 +34,9 @@ export default function MapView() {
   const [api, setApi] = useState(null)
   const [measure, setMeasure] = useState({ active: false })
   const [minimapOn, setMinimapOn] = useState(false)
+  const [railCollapsed, setRailCollapsed] = useState(false)
+  const [cursorOn, setCursorOn] = useState(false)
+  const [cursor, setCursor] = useState(null)
 
   const filters = useMemo(() => {
     const r = {}
@@ -139,6 +144,7 @@ export default function MapView() {
         orthoOpacity={orthoOpacity}
         onReady={setApi}
         onMeasure={setMeasure}
+        onCursor={setCursor}
       />
 
       <MapToolbar
@@ -147,7 +153,18 @@ export default function MapView() {
         buildSuggestions={buildSuggestions}
       />
 
-      <ControlRail api={api} measure={measure} minimapOn={minimapOn} onMinimap={setMinimapOn} />
+      <ControlRail
+        api={api} measure={measure} minimapOn={minimapOn} onMinimap={setMinimapOn}
+        collapsed={railCollapsed} onToggle={setRailCollapsed}
+        hasSelection={!!selected}
+        onRecenterSelection={() => { if (selected?.center && api) api.flyTo(selected.center, 18) }}
+        cursorOn={cursorOn}
+        onCursorToggle={() => { const v = !cursorOn; setCursorOn(v); api?.setCursor(v); if (!v) setCursor(null) }}
+        onShare={async () => {
+          try { await navigator.clipboard.writeText(window.location.href); toast('Lien de la vue copié.', 'success') }
+          catch { toast('Copie impossible — copiez l’URL manuellement.', 'error') }
+        }}
+      />
 
       <ViewSelector
         basemap={basemap} onBasemap={setBasemap}
@@ -163,6 +180,17 @@ export default function MapView() {
           <MapLegend summaries={data?.summaries || []} variant={layerStyle === 'noms' ? 'priority' : 'status'} />
         </div>
       )}
+
+      {/* Relevé de coordonnées du curseur */}
+      <AnimatePresence>
+        {cursorOn && cursor && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="glass absolute bottom-3 right-3 z-[650] rounded-full px-3 py-1.5 font-mono text-xs text-slate-700">
+            {cursor.lat.toFixed(5)}, {cursor.lng.toFixed(5)}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Bandeau de mesure actif */}
       <AnimatePresence>

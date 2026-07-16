@@ -81,7 +81,7 @@ export default function MapCanvas({
   assets = [], selectedUid = null, onSelect, fitToken = '',
   basemap = 'standard', layerStyle = 'polygones',
   orthoLayer = null, orthoOpacity = 1,
-  onReady, onMeasure,
+  onReady, onMeasure, onCursor,
 }) {
   const containerRef = useRef(null)
   const mapRef = useRef(null)
@@ -95,8 +95,11 @@ export default function MapCanvas({
   const miniRef = useRef(null)
   const onSelectRef = useRef(onSelect)
   const onMeasureRef = useRef(onMeasure)
+  const onCursorRef = useRef(onCursor)
+  const cursorOnRef = useRef(false)
   onSelectRef.current = onSelect
   onMeasureRef.current = onMeasure
+  onCursorRef.current = onCursor
 
   // --- Création (une fois) ---
   useEffect(() => {
@@ -120,6 +123,12 @@ export default function MapCanvas({
       m.points.push(e.latlng)
       redrawMeasure()
     })
+
+    // Relevé des coordonnées du curseur (activable via le rail).
+    map.on('mousemove', (e) => {
+      if (cursorOnRef.current) onCursorRef.current?.({ lat: e.latlng.lat, lng: e.latlng.lng })
+    })
+    map.on('mouseout', () => { if (cursorOnRef.current) onCursorRef.current?.(null) })
 
     // API impérative pour le rail de contrôle.
     const api = {
@@ -157,6 +166,7 @@ export default function MapCanvas({
           if (b.isValid()) map.flyToBounds(b, { maxZoom: 18, padding: [20, 20], duration: 0.9 })
         } catch { /* géométrie invalide : on ignore */ }
       },
+      setCursor: (on) => { cursorOnRef.current = on; if (!on) onCursorRef.current?.(null) },
     }
     onReady?.(api)
 
