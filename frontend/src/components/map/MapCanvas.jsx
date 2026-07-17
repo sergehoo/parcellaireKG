@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import L from 'leaflet'
 import 'leaflet.markercluster'
 import 'leaflet-minimap'
@@ -138,6 +138,9 @@ export default function MapCanvas({
       if (cursorOnRef.current) onCursorRef.current?.({ lat: e.latlng.lat, lng: e.latlng.lng })
     })
     map.on('mouseout', () => { if (cursorOnRef.current) onCursorRef.current?.(null) })
+
+    // Étiquettes « Noms lots » : réévaluées au déplacement/zoom (viewport).
+    map.on('moveend zoomend', () => applyLabelsRef.current())
 
     // API impérative pour le rail de contrôle.
     const api = {
@@ -312,7 +315,6 @@ export default function MapCanvas({
     layerByUidRef.current = new Map()
     if (layerStyle === 'none') return
 
-    const withLabels = layerStyle === 'noms' && assets.length <= 700
     const useCluster = layerStyle === 'reperes'
 
     let cluster = null
@@ -343,18 +345,58 @@ export default function MapCanvas({
       }
       if (!layer) return
       layer.on('click', () => onSelectRef.current?.(feat))
-      if (withLabels) {
-        layer.bindTooltip(chipHtml(feat), { permanent: true, direction: 'center', className: 'lot-chip', opacity: 1 })
-        layer.on('add', () => { const el = layer.getTooltip()?.getElement(); if (el) el.style.background = priorityBg(feat) })
-      } else {
-        layer.bindTooltip(`${feat.name || '—'} · ${feat.status || ''}`, { sticky: true, direction: 'top' })
-      }
+      // Info-bulle au survol par défaut ; les étiquettes permanentes du mode
+      // « Noms lots » sont gérées à part, selon le champ de vue (applyNomsLabels).
+      layer.bindTooltip(`${feat.name || '—'} · ${feat.status || ''}`, { sticky: true, direction: 'top' })
+      layer._feat = feat
       layer._featUid = feat.uid
       layerByUidRef.current.set(feat.uid, layer)
       if (cluster) cluster.addLayer(layer); else group.addLayer(layer)
     })
     if (cluster) group.addLayer(cluster)
   }, [assets, layerStyle])
+
+  // --- Étiquettes « Noms lots » (permanentes, limitées au champ de vue) ---
+  // Afficher 1444 étiquettes permanentes serait illisible et lourd : on ne
+  // matérialise que les lots présents dans le viewport (plafonnés), et on
+  // rafraîchit à chaque déplacement/zoom. Le mode revient à l'info-bulle au
+  // survol pour les lots hors champ ou au-delà du plafond.
+  const applyNomsLabels = useCallback(() => {
+    const map = mapRef.current
+    if (!map) return
+    const noms = layerStyle === 'noms'
+    const bounds = map.getBounds()
+    const CAP = 450
+    let shown = 0
+    layerByUidRef.current.forEach((layer) => {
+      if (!layer.bindTooltip) return
+      const feat = layer._feat
+      let inView = false
+      if (noms && feat && shown < CAP && Array.isArray(feat.center)) {
+        inView = bounds.contains(L.latLng(feat.center[0], feat.center[1]))
+      }
+      const tip = layer.getTooltip && layer.getTooltip()
+      const isPermanent = !!(tip && tip.options.permanent)
+      if (inView) {
+        if (!isPermanent) {
+          layer.unbindTooltip()
+          layer.bindTooltip(chipHtml(feat), { permanent: true, direction: 'center', className: 'lot-chip', opacity: 1 })
+          const el = layer.getTooltip()?.getElement()
+          if (el) el.style.background = priorityBg(feat)
+        }
+        shown += 1
+      } else if (isPermanent) {
+        layer.unbindTooltip()
+        layer.bindTooltip(`${feat?.name || '—'} · ${feat?.status || ''}`, { sticky: true, direction: 'top' })
+      }
+    })
+  }, [assets, layerStyle])
+
+  const applyLabelsRef = useRef(applyNomsLabels)
+  applyLabelsRef.current = applyNomsLabels
+
+  // Réapplique après (re)construction des features ou changement de style.
+  useEffect(() => { applyNomsLabels() }, [applyNomsLabels])
 
   // --- Halos d'alerte (calque dédié, indépendant de layerStyle/sélection) ---
   useEffect(() => {
