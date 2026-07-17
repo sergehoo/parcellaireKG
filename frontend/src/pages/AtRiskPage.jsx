@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { getAtRisk } from '../api/analytics'
+import { exportAtRisk, getAtRisk } from '../api/analytics'
+import { useToast } from '../components/Toasts'
 import useReferenceData from '../hooks/useReferenceData'
 import { levelStyle } from '../lib/criticality'
 import { formatDate } from '../lib/format'
@@ -17,9 +18,11 @@ const LEVEL_OPTS = [
 export default function AtRiskPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { refData } = useReferenceData()
+  const toast = useToast()
   const [payload, setPayload] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [exporting, setExporting] = useState(false)
 
   const params = useMemo(() => {
     const p = {}
@@ -44,6 +47,18 @@ export default function AtRiskPage() {
     if (value) next.set(key, value); else next.delete(key)
     if (key !== 'page') next.delete('page')
     setSearchParams(next)
+  }
+
+  async function doExport() {
+    setExporting(true)
+    try {
+      const { page, ...filters } = params  // export = tous les dossiers filtrés
+      await exportAtRisk(filters)
+    } catch (err) {
+      toast(err.message, 'error')
+    } finally {
+      setExporting(false)
+    }
   }
 
   const sel = 'rounded-lg border-slate-300 bg-white px-2.5 py-2 text-sm text-slate-700 shadow-sm focus:border-orange-400 focus:ring-orange-400'
@@ -75,6 +90,13 @@ export default function AtRiskPage() {
         {(searchParams.get('level') || searchParams.get('program') || searchParams.get('min_idcp')) && (
           <button type="button" onClick={() => setSearchParams({})} className="text-sm text-orange-600 hover:underline">Réinitialiser</button>
         )}
+        <button type="button" onClick={doExport} disabled={exporting}
+          className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50">
+          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+          {exporting ? 'Export…' : 'Exporter CSV'}
+        </button>
       </div>
 
       {error && <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error.message}</div>}

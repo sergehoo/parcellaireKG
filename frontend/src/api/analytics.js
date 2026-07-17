@@ -1,4 +1,12 @@
-import { request } from './client'
+import { downloadFile, request } from './client'
+
+// Construit une querystring en ignorant les valeurs vides/nulles.
+function toQuery(params) {
+  const q = new URLSearchParams(
+    Object.entries(params).filter(([, v]) => v !== '' && v !== null && v !== undefined),
+  ).toString()
+  return q ? `?${q}` : ''
+}
 
 export function getAnalyticsDashboard({ signal } = {}) {
   return request('/api/analytics/dashboard/', { signal })
@@ -30,4 +38,13 @@ export function getAlertSummary({ signal } = {}) {
 // Recalcul à la demande (async via Celery, ou synchrone si broker injoignable).
 export function regenerateAlerts() {
   return request('/api/alerts/regenerate/', { method: 'POST' })
+}
+
+// Exports CSV (téléchargement navigateur). Respectent les filtres passés.
+export function exportAtRisk(params = {}) {
+  return downloadFile(`/api/analytics/at-risk/export/${toQuery(params)}`, 'clients-a-risque.csv')
+}
+
+export function exportAlerts(params = {}) {
+  return downloadFile(`/api/alerts/export/${toQuery(params)}`, 'alertes.csv')
 }

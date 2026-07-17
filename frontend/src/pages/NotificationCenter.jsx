@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { alertAction, getAlerts, regenerateAlerts } from '../api/analytics'
+import { alertAction, exportAlerts, getAlerts, regenerateAlerts } from '../api/analytics'
 import { useToast } from '../components/Toasts'
 import { levelStyle } from '../lib/criticality'
 import { formatDateTime } from '../lib/format'
@@ -25,6 +25,7 @@ export default function NotificationCenter() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const reloadTimerRef = useRef(null)
 
   const params = useMemo(() => {
@@ -67,6 +68,17 @@ export default function NotificationCenter() {
       toast(action === 'ack' ? 'Alerte accusée.' : action === 'resolve' ? 'Alerte résolue.' : 'Alerte rouverte.', 'success')
       load()
     } catch (err) { toast(err.message, 'error') }
+  }
+
+  async function doExport() {
+    setExporting(true)
+    try {
+      await exportAlerts(params)
+    } catch (err) {
+      toast(err.message, 'error')
+    } finally {
+      setExporting(false)
+    }
   }
 
   async function regenerate() {
@@ -122,9 +134,16 @@ export default function NotificationCenter() {
         {(searchParams.get('level') || searchParams.get('status')) && (
           <button type="button" onClick={() => setSearchParams({})} className="text-sm text-orange-600 hover:underline">Réinitialiser</button>
         )}
+        <button type="button" onClick={doExport} disabled={exporting}
+          className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50">
+          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+          {exporting ? 'Export…' : 'Exporter CSV'}
+        </button>
         {canManage && (
           <button type="button" onClick={regenerate} disabled={refreshing}
-            className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50">
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50">
             <svg className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 12a9 9 0 1 1-2.64-6.36" /><polyline points="21 3 21 9 15 9" />
             </svg>

@@ -13,10 +13,12 @@ Concepts clés :
 - Score de santé programme = composite (avancement, encaissement,
   commercialisation) sur 100, sur les dimensions disponibles.
 """
+import csv
 import logging
 from decimal import Decimal
 
 from django.db import connection, transaction
+from django.http import StreamingHttpResponse
 from django.db.models import Count, Q, Sum
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
@@ -152,6 +154,60 @@ def health_band(score):
     if score >= 35:
         return 'Critique'
     return 'Urgence'
+
+
+class _Echo:
+    """Buffer factice : write() renvoie la valeur, pour csv.writer + streaming."""
+    def write(self, value):
+        return value
+
+
+# Préfixes qui, en tête de cellule, sont interprétés comme des formules par
+# Excel/Sheets (injection CSV). On neutralise en préfixant d'une apostrophe.
+_CSV_FORMULA_PREFIXES = ('=', '+', '-', '@', '\t', '\r')
+
+
+def _csv_safe(value):
+    if isinstance(value, str) and value and value[0] in _CSV_FORMULA_PREFIXES:
+        return "'" + value
+    return value
+
+
+def csv_streaming_response(filename, header, rows_iter):
+    """StreamingHttpResponse CSV (UTF-8 + BOM pour Excel), en flux — ne
+    matérialise pas tout l'export en mémoire. Les cellules sont neutralisées
+    contre l'injection de formules."""
+    writer = csv.writer(_Echo())
+
+    def generate():
+        yield '﻿'  # BOM : Excel interprète correctement les accents.
+        yield writer.writerow(header)
+        for row in rows_iter:
+            yield writer.writerow([_csv_safe(c) for c in row])
+
+    resp = StreamingHttpResponse(generate(), content_type='text/csv; charset=utf-8')
+    resp['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return resp
+
+
+def _at_risk_rows(request, can_fin):
+    """Lignes IDCP filtrées (level / program / min_idcp) et triées par IDCP
+    décroissant. Partagé par la liste paginée et l'export CSV."""
+    rows = _sale_rows(can_fin)
+    level = request.query_params.get('level')
+    program = request.query_params.get('program')
+    try:
+        min_idcp = float(request.query_params.get('min_idcp')) if request.query_params.get('min_idcp') else None
+    except ValueError:
+        min_idcp = None
+    if level:
+        rows = [r for r in rows if r['level'] == level]
+    if program:
+        rows = [r for r in rows if str(r['program_id']) == str(program)]
+    if min_idcp is not None:
+        rows = [r for r in rows if r['idcp'] >= min_idcp]
+    rows.sort(key=lambda r: -r['idcp'])
+    return rows
 
 
 class AnalyticsDashboardAPIView(APIView):
@@ -301,26 +357,35 @@ class AtRiskClientsAPIView(APIView):
     def get(self, request):
         u = request.user
         can_fin = u.is_superuser or u.has_perm('parcelaire.view_financial_data')
-        rows = _sale_rows(can_fin)
-
-        level = request.query_params.get('level')
-        program = request.query_params.get('program')
-        try:
-            min_idcp = float(request.query_params.get('min_idcp')) if request.query_params.get('min_idcp') else None
-        except ValueError:
-            min_idcp = None
-        if level:
-            rows = [r for r in rows if r['level'] == level]
-        if program:
-            rows = [r for r in rows if str(r['program_id']) == str(program)]
-        if min_idcp is not None:
-            rows = [r for r in rows if r['idcp'] >= min_idcp]
-
-        rows.sort(key=lambda r: -r['idcp'])
-
+        rows = _at_risk_rows(request, can_fin)
         paginator = AtRiskPagination()
         page = paginator.paginate_queryset(rows, request, view=self)
         return paginator.get_paginated_response(page)
+
+
+class AtRiskExportAPIView(APIView):
+    """GET /api/analytics/at-risk/export/ — export CSV des clients à risque
+    (mêmes filtres que la liste). Les montants financiers restent masqués
+    pour les utilisateurs sans view_financial_data."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        u = request.user
+        can_fin = u.is_superuser or u.has_perm('parcelaire.view_financial_data')
+        rows = _at_risk_rows(request, can_fin)
+        header = [
+            'Client', 'Programme', 'Lot', 'Payé', 'Paiement %', 'Construction %',
+            'IDCP %', 'Niveau', 'Motif', 'Chef de chantier', 'Commercial', 'Date de vente',
+        ]
+
+        def lines():
+            for r in rows:
+                yield [
+                    r['customer'], r['program'], r['lot'], r['paid'], r['payment_pct'],
+                    r['construction_pct'], r['idcp'], r['level'], r['reason'],
+                    r['site_manager'], r['sales_agent'], r['sale_date'] or '',
+                ]
+        return csv_streaming_response('clients-a-risque.csv', header, lines())
 
 
 # =====================================================================
@@ -359,25 +424,32 @@ class AlertPagination(PageNumberPagination):
     max_page_size = 200
 
 
+def _filter_alerts_qs(request):
+    """Queryset d'alertes filtré (level / status / rule / program). Par
+    défaut les alertes résolues sont masquées. Partagé par la liste et
+    l'export CSV."""
+    qs = Alert.objects.select_related('program', 'parcel', 'customer').all()
+    p = request.query_params
+    if p.get('level'):
+        qs = qs.filter(level=p['level'])
+    if p.get('status'):
+        qs = qs.filter(status=p['status'])
+    else:
+        qs = qs.exclude(status='RESOLVED')
+    if p.get('rule'):
+        qs = qs.filter(rule=p['rule'])
+    if p.get('program'):
+        qs = qs.filter(program_id=p['program'])
+    return qs
+
+
 class AlertListAPIView(APIView):
     """GET /api/alerts/ — centre de notifications : alertes persistées,
     filtrables (level, status, rule, program). Renvoie aussi des compteurs."""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        qs = Alert.objects.select_related('program', 'parcel', 'customer').all()
-        p = request.query_params
-        if p.get('level'):
-            qs = qs.filter(level=p['level'])
-        if p.get('status'):
-            qs = qs.filter(status=p['status'])
-        else:
-            # Par défaut on masque les alertes résolues.
-            qs = qs.exclude(status='RESOLVED')
-        if p.get('rule'):
-            qs = qs.filter(rule=p['rule'])
-        if p.get('program'):
-            qs = qs.filter(program_id=p['program'])
+        qs = _filter_alerts_qs(request)
 
         counts = {
             'new': Alert.objects.filter(status='NEW').count(),
@@ -393,6 +465,32 @@ class AlertListAPIView(APIView):
         resp.data['can_manage'] = bool(
             request.user.is_superuser or request.user.has_perm('parcelaire.change_alert'))
         return resp
+
+
+class AlertExportAPIView(APIView):
+    """GET /api/alerts/export/ — export CSV des alertes (mêmes filtres que la
+    liste). Ordre stable : plus récemment détectées d'abord."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        qs = _filter_alerts_qs(request).order_by('-last_detected_at')
+        header = [
+            'Niveau', 'Statut', 'Règle', 'Titre', 'Détail', 'Indicateur',
+            'Programme', 'Lot', 'Client', 'Détectée le', 'Dernière détection',
+            'Accusée par', 'Résolue le',
+        ]
+
+        def lines():
+            for a in qs.iterator():
+                d = serialize_alert(a)
+                yield [
+                    d['level_display'], d['status_display'], d['rule'], d['title'],
+                    d['detail'], d['metric'], d['program'] or '', d['lot'] or '',
+                    d['customer'] or '', d['first_detected_at'] or '',
+                    d['last_detected_at'] or '', d['acknowledged_by'] or '',
+                    d['resolved_at'] or '',
+                ]
+        return csv_streaming_response('alertes.csv', header, lines())
 
 
 class AlertActionAPIView(APIView):

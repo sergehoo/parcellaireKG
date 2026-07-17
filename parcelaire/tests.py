@@ -735,6 +735,46 @@ class AnalyticsAPITests(TestCase):
         empty = self.client.get('/api/analytics/at-risk/?level=INFO').json()
         self.assertEqual(empty['count'], 0)
 
+    def _csv_text(self, resp):
+        return b''.join(resp.streaming_content).decode('utf-8')
+
+    def test_at_risk_export_requires_auth(self):
+        self.assertEqual(self.client.get('/api/analytics/at-risk/export/').status_code, 403)
+
+    def test_at_risk_export_csv(self):
+        self.client.force_login(self.fin)
+        resp = self.client.get('/api/analytics/at-risk/export/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('text/csv', resp['Content-Type'])
+        self.assertIn('attachment', resp['Content-Disposition'])
+        text = self._csv_text(resp)
+        self.assertTrue(text.startswith('﻿'))         # BOM Excel
+        self.assertIn('Client', text.splitlines()[0])      # en-tête
+        self.assertIn('Kouassi', text)
+        self.assertIn('CRITIQUE', text)
+
+    def test_at_risk_export_masks_finance(self):
+        self.client.force_login(self.reader)  # sans view_financial_data
+        text = self._csv_text(self.client.get('/api/analytics/at-risk/export/'))
+        self.assertIn('Masqué', text)
+        # les pourcentages (non financiers) restent visibles
+        self.assertIn('70.0', text)
+
+    def test_at_risk_export_respects_level_filter(self):
+        self.client.force_login(self.fin)
+        text = self._csv_text(self.client.get('/api/analytics/at-risk/export/?level=INFO'))
+        # aucun dossier INFO → seule la ligne d'en-tête
+        self.assertEqual(len([l for l in text.splitlines() if l.strip()]), 1)
+
+    def test_export_neutralises_formula_injection(self):
+        # Un nom de client commençant par '=' ne doit pas être une formule.
+        self.customer.last_name = '=cmd|calc'
+        self.customer.save(update_fields=['last_name'])
+        self.client.force_login(self.fin)
+        text = self._csv_text(self.client.get('/api/analytics/at-risk/export/'))
+        self.assertIn("'=cmd|calc", text)   # préfixé d'une apostrophe
+        self.assertNotIn(',=cmd|calc', text)  # jamais une cellule formule brute
+
 
 # =====================================================================
 # Moteur d'alertes persistées + centre de notifications
@@ -919,3 +959,29 @@ class AlertsEngineTests(TestCase):
             with self.assertRaises(ImportError):
                 self.client.post('/api/alerts/regenerate/')
         self.assertEqual(Alert.objects.count(), 0)
+
+    def _csv_text(self, resp):
+        return b''.join(resp.streaming_content).decode('utf-8')
+
+    def test_alerts_export_requires_auth(self):
+        self.assertEqual(self.client.get('/api/alerts/export/').status_code, 403)
+
+    def test_alerts_export_csv(self):
+        generate_alerts()
+        self.client.force_login(self.reader)
+        resp = self.client.get('/api/alerts/export/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('text/csv', resp['Content-Type'])
+        text = self._csv_text(resp)
+        self.assertTrue(text.startswith('﻿'))          # BOM Excel
+        self.assertIn('Niveau', text.splitlines()[0])       # en-tête
+        self.assertIn('Kouassi', text)                      # dossier IDCP
+
+    def test_alerts_export_respects_filters(self):
+        generate_alerts()
+        self.client.force_login(self.reader)
+        text = self._csv_text(self.client.get('/api/alerts/export/?level=CRITIQUE'))
+        rows = [l for l in text.splitlines() if l.strip()]
+        # en-tête + une seule alerte CRITIQUE (l'IDCP +40)
+        self.assertEqual(len(rows), 2)
+        self.assertIn('Critique', rows[1])

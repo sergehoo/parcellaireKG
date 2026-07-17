@@ -80,3 +80,31 @@ export async function request(url, { method = 'GET', json, signal } = {}) {
   }
   return data
 }
+
+/**
+ * Télécharge un fichier (ex. export CSV) via fetch authentifié puis déclenche
+ * l'enregistrement navigateur. Le nom vient de l'en-tête Content-Disposition
+ * si présent, sinon de `fallbackName`.
+ */
+export async function downloadFile(url, fallbackName = 'export.csv') {
+  const response = await fetch(url, { credentials: 'same-origin' })
+  if (response.status === 401) {
+    redirectToLogin()
+    throw new ApiError('Session expirée', { status: 401 })
+  }
+  if (!response.ok) {
+    throw new ApiError(`Erreur HTTP ${response.status}`, { status: response.status })
+  }
+  const blob = await response.blob()
+  const cd = response.headers.get('content-disposition') || ''
+  const match = cd.match(/filename="?([^"]+)"?/)
+  const name = match ? match[1] : fallbackName
+  const objectUrl = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = objectUrl
+  a.download = name
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(objectUrl)
+}

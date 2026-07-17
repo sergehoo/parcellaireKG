@@ -5,11 +5,13 @@ from parcelaire.api import crud as crud_api
 from parcelaire.api import orthophotos as ortho_api
 from parcelaire.api.analytics import (
     AlertActionAPIView,
+    AlertExportAPIView,
     AlertListAPIView,
     AlertRegenerateAPIView,
     AlertSummaryAPIView,
     AnalyticsDashboardAPIView,
     AtRiskClientsAPIView,
+    AtRiskExportAPIView,
 )
 from parcelaire.api.dashboard import DashboardStatsAPIView
 from parcelaire.api.views import RealEstateMapAPIView
@@ -34,10 +36,12 @@ urlpatterns = [
     # -------- Moteur d'analyse décisionnel --------
     path("analytics/dashboard/", AnalyticsDashboardAPIView.as_view(), name="api-analytics-dashboard"),
     path("analytics/at-risk/", AtRiskClientsAPIView.as_view(), name="api-analytics-at-risk"),
+    path("analytics/at-risk/export/", AtRiskExportAPIView.as_view(), name="api-analytics-at-risk-export"),
     # -------- Centre de notifications (alertes persistées) --------
     path("alerts/", AlertListAPIView.as_view(), name="api-alerts"),
     path("alerts/summary/", AlertSummaryAPIView.as_view(), name="api-alert-summary"),
     path("alerts/regenerate/", AlertRegenerateAPIView.as_view(), name="api-alert-regenerate"),
+    path("alerts/export/", AlertExportAPIView.as_view(), name="api-alert-export"),
     path("alerts/<int:pk>/<str:action>/", AlertActionAPIView.as_view(), name="api-alert-action"),
     path("crud/options/", crud_api.CrudOptionsAPIView.as_view(), name="api-crud-options"),
     path("crud/", include(router.urls)),
