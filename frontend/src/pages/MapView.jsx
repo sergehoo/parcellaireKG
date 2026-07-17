@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { getMapAssets } from '../api/map'
+import { getAlertMap } from '../api/analytics'
 import useReferenceData from '../hooks/useReferenceData'
 import MapCanvas from '../components/map/MapCanvas'
 import MapToolbar from '../components/map/MapToolbar'
@@ -27,6 +28,8 @@ export default function MapView() {
 
   const [basemap, setBasemap] = useState('standard')
   const [layerStyle, setLayerStyle] = useState('polygones')
+  const [alertMap, setAlertMap] = useState(null)
+  const [showAlerts, setShowAlerts] = useState(true)
   const [orthoOn, setOrthoOn] = useState(false)
   const [orthoProgramId, setOrthoProgramId] = useState('')
   const [orthoOpacity] = useState(0.9)
@@ -58,6 +61,18 @@ export default function MapView() {
 
   useEffect(() => load(), [load])
   useEffect(() => { if (api) api.toggleMinimap(minimapOn) }, [api, minimapOn])
+
+  // Sévérité d'alerte active par parcelle (chargée une fois pour le surlignage).
+  useEffect(() => {
+    const controller = new AbortController()
+    getAlertMap({ signal: controller.signal }).then(setAlertMap).catch(() => {})
+    return () => controller.abort()
+  }, [])
+  const alertLevels = useMemo(() => alertMap?.by_parcel || {}, [alertMap])
+  const selectedAlert = useMemo(
+    () => (selected?.parcel_id != null ? alertLevels[String(selected.parcel_id)] : null),
+    [selected, alertLevels],
+  )
 
   function setFilters(next) {
     const params = new URLSearchParams()
@@ -142,6 +157,8 @@ export default function MapView() {
         layerStyle={layerStyle}
         orthoLayer={orthoLayer}
         orthoOpacity={orthoOpacity}
+        alertLevels={alertLevels}
+        showAlerts={showAlerts}
         onReady={setApi}
         onMeasure={setMeasure}
         onCursor={setCursor}
@@ -169,6 +186,7 @@ export default function MapView() {
       <ViewSelector
         basemap={basemap} onBasemap={setBasemap}
         layerStyle={layerStyle} onLayerStyle={setLayerStyle}
+        alertsActive={showAlerts} onAlertsToggle={() => setShowAlerts((a) => !a)}
         orthoActive={orthoOn} onOrthoToggle={() => setOrthoOn((o) => !o)} canOrtho={canOrtho}
         orthoPrograms={orthoPrograms} orthoProgramId={effectiveOrthoProgram} onOrthoProgram={setOrthoProgramId}
       />
@@ -230,7 +248,7 @@ export default function MapView() {
                        inset-x-2 bottom-2 h-[58vh]
                        sm:inset-x-auto sm:bottom-3 sm:right-3 sm:top-[4.75rem] sm:h-auto sm:w-[22rem]"
           >
-            <FeatureDetailPanel feature={selected} onClose={() => setSelected(null)} />
+            <FeatureDetailPanel feature={selected} alert={selectedAlert} onClose={() => setSelected(null)} />
           </motion.div>
         )}
       </AnimatePresence>

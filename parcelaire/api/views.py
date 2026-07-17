@@ -2263,6 +2263,7 @@ class RealEstateMapAPIView(APIView):
             assets_payload.append({
                 "uid": f"asset-{asset.id}",
                 "id": asset.id,
+                "parcel_id": asset.parcel_id,
                 "entity_type": "PROPERTY_ASSET",
                 "sidebar_mode": sidebar_mode,
                 "project": asset.program.project.nom if asset.program and getattr(asset.program, "project", None) else "—",
@@ -2476,6 +2477,7 @@ class RealEstateMapAPIView(APIView):
                 assets_payload.append({
                     "uid": f"parcel-crm-{parcel.id}",
                     "id": parcel.id,
+                    "parcel_id": parcel.id,
                     "entity_type": "PARCEL",
                     "sidebar_mode": sidebar_mode,
                     "project": parcel.program.project.nom if parcel.program and getattr(parcel.program, "project", None) else "—",
@@ -2633,6 +2635,7 @@ class RealEstateMapAPIView(APIView):
             assets_payload.append({
                 "uid": f"parcel-{parcel.id}",
                 "id": parcel.id,
+                "parcel_id": parcel.id,
                 "entity_type": "PARCEL",
                 "sidebar_mode": self.SIDEBAR_MODE_SINGLE,
                 "project": parcel.program.project.nom if parcel.program and getattr(parcel.program, "project", None) else "—",

@@ -23,6 +23,7 @@ const BASE_SWATCH = {
 
 export default function ViewSelector({
   basemap, onBasemap, layerStyle, onLayerStyle,
+  alertsActive, onAlertsToggle,
   orthoActive, onOrthoToggle, canOrtho,
   orthoPrograms = [], orthoProgramId, onOrthoProgram,
 }) {
@@ -63,8 +64,18 @@ export default function ViewSelector({
               ))}
             </div>
 
-            <button type="button" disabled={!canOrtho} onClick={onOrthoToggle}
+            <button type="button" onClick={onAlertsToggle}
               className={`mt-3 flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition ${
+                alertsActive ? 'bg-rose-600 text-white' : 'bg-white/60 text-slate-700 hover:bg-white'
+              }`}>
+              Alertes critiques
+              <span className={`h-4 w-7 rounded-full p-0.5 transition ${alertsActive ? 'bg-white/40' : 'bg-slate-300'}`}>
+                <span className={`block h-3 w-3 rounded-full bg-white transition-transform ${alertsActive ? 'translate-x-3' : ''}`} />
+              </span>
+            </button>
+
+            <button type="button" disabled={!canOrtho} onClick={onOrthoToggle}
+              className={`mt-2 flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition ${
                 orthoActive ? 'bg-[var(--kaydan)] text-white' : 'bg-white/60 text-slate-700 hover:bg-white disabled:opacity-40'
               }`}>
               Orthophoto

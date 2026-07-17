@@ -7,6 +7,7 @@ from parcelaire.api.analytics import (
     AlertActionAPIView,
     AlertExportAPIView,
     AlertListAPIView,
+    AlertMapAPIView,
     AlertRegenerateAPIView,
     AlertSummaryAPIView,
     AnalyticsDashboardAPIView,
@@ -40,6 +41,7 @@ urlpatterns = [
     # -------- Centre de notifications (alertes persistées) --------
     path("alerts/", AlertListAPIView.as_view(), name="api-alerts"),
     path("alerts/summary/", AlertSummaryAPIView.as_view(), name="api-alert-summary"),
+    path("alerts/map/", AlertMapAPIView.as_view(), name="api-alert-map"),
     path("alerts/regenerate/", AlertRegenerateAPIView.as_view(), name="api-alert-regenerate"),
     path("alerts/export/", AlertExportAPIView.as_view(), name="api-alert-export"),
     path("alerts/<int:pk>/<str:action>/", AlertActionAPIView.as_view(), name="api-alert-action"),

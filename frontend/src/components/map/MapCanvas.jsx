@@ -3,6 +3,7 @@ import L from 'leaflet'
 import 'leaflet.markercluster'
 import 'leaflet-minimap'
 import * as turf from '@turf/turf'
+import { LEVELS } from '../../lib/criticality'
 
 /**
  * Canvas Leaflet premium. Piloté par props + une API impérative exposée
@@ -81,12 +82,14 @@ export default function MapCanvas({
   assets = [], selectedUid = null, onSelect, fitToken = '',
   basemap = 'standard', layerStyle = 'polygones',
   orthoLayer = null, orthoOpacity = 1,
+  alertLevels = null, showAlerts = false,
   onReady, onMeasure, onCursor,
 }) {
   const containerRef = useRef(null)
   const mapRef = useRef(null)
   const baseRef = useRef(null)
   const featureLayerRef = useRef(null)
+  const alertLayerRef = useRef(null)
   const orthoRef = useRef(null)
   const layerByUidRef = useRef(new Map())
   const lastFitRef = useRef(null)
@@ -111,6 +114,12 @@ export default function MapCanvas({
 
     baseRef.current = L.tileLayer(BASEMAPS.standard.url, BASEMAPS.standard.options).addTo(map)
     featureLayerRef.current = L.layerGroup().addTo(map)
+    // Pane dédié (zIndex élevé) : les halos d'alerte se dessinent AU-DESSUS
+    // des polygones, quel que soit le style de calque courant.
+    map.createPane('alerts')
+    map.getPane('alerts').style.zIndex = 650
+    map.getPane('alerts').style.pointerEvents = 'auto'
+    alertLayerRef.current = L.layerGroup().addTo(map)
     lastFitRef.current = null
 
     const observer = new ResizeObserver(() => map.invalidateSize())
@@ -346,6 +355,32 @@ export default function MapCanvas({
     })
     if (cluster) group.addLayer(cluster)
   }, [assets, layerStyle])
+
+  // --- Halos d'alerte (calque dédié, indépendant de layerStyle/sélection) ---
+  useEffect(() => {
+    const map = mapRef.current
+    const layer = alertLayerRef.current
+    if (!map || !layer) return
+    layer.clearLayers()
+    if (!showAlerts || !alertLevels) return
+    assets.forEach((feat) => {
+      const key = feat.parcel_id != null ? String(feat.parcel_id) : null
+      const info = key && alertLevels[key]
+      if (!info) return
+      const center = Array.isArray(feat.center) ? feat.center
+        : (feat.geometry ? centroidOf(feat.geometry) : null)
+      if (!center) return
+      const color = (LEVELS[info.level] || LEVELS.CRITIQUE).dot
+      const halo = L.circleMarker(center, {
+        pane: 'alerts', radius: 11, weight: 2,
+        color, fillColor: color, fillOpacity: 0.25,
+      })
+      const label = (LEVELS[info.level] || LEVELS.CRITIQUE).label
+      halo.bindTooltip(`${info.count} alerte(s) · ${label}`, { direction: 'top' })
+      halo.on('click', () => onSelectRef.current?.(feat))
+      layer.addLayer(halo)
+    })
+  }, [assets, alertLevels, showAlerts])
 
   // --- Sélection ---
   useEffect(() => {

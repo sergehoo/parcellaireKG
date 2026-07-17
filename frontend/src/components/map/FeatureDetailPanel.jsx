@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import { LEVELS } from '../../lib/criticality'
 
 /**
  * Panneau latéral « ACTIF SÉLECTIONNÉ » façon KAYDAN. Affiche les données
@@ -32,11 +33,12 @@ function Chip({ children, color, bg }) {
   )
 }
 
-export default function FeatureDetailPanel({ feature, onClose }) {
+export default function FeatureDetailPanel({ feature, alert = null, onClose }) {
   const navigate = useNavigate()
   if (!feature) return null
   const f = feature
   const target = detailTarget(f)
+  const alertStyle = alert ? (LEVELS[alert.level] || LEVELS.CRITIQUE) : null
   const cs = f.construction_stats || {}
   const fs = f.financial_stats || {}
   const ps = f.priority_stats || {}
@@ -83,6 +85,22 @@ export default function FeatureDetailPanel({ feature, onClose }) {
       </div>
 
       <div className="flex-1 space-y-5 overflow-y-auto p-4">
+        {alert && alertStyle && f.parcel_id != null && (
+          <button
+            type="button"
+            onClick={() => navigate(`/notifications?parcel=${f.parcel_id}`)}
+            className={`flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left ${alertStyle.bg}`}
+          >
+            <span className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: alertStyle.dot }} />
+              <span className={`text-sm font-semibold ${alertStyle.text}`}>
+                {alert.count} alerte(s) — {alertStyle.label}
+              </span>
+            </span>
+            <span className={`text-xs font-medium ${alertStyle.text}`}>Voir →</span>
+          </button>
+        )}
+
         {showUnits && (
           <div className="grid grid-cols-2 gap-2 text-sm">
             {[['Total', units.total_units], ['Disponibles', units.available_units],

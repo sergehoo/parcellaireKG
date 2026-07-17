@@ -152,6 +152,13 @@ export default function NotificationCenter() {
         )}
       </div>
 
+      {(searchParams.get('parcel') || searchParams.get('program')) && (
+        <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-sm text-orange-800">
+          <span>Filtré sur {searchParams.get('parcel') ? 'un lot précis' : 'un programme précis'} (depuis la carte).</span>
+          <button type="button" onClick={() => setSearchParams({})} className="shrink-0 font-medium hover:underline">Tout afficher</button>
+        </div>
+      )}
+
       {error && <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error.message}</div>}
 
       <div className="space-y-2">

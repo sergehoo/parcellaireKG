@@ -35,6 +35,11 @@ export function getAlertSummary({ signal } = {}) {
   return request('/api/alerts/summary/', { signal })
 }
 
+// Sévérité d'alerte active par parcelle/programme, pour surligner la carte.
+export function getAlertMap({ signal } = {}) {
+  return request('/api/alerts/map/?levels=CRITIQUE,ELEVE', { signal })
+}
+
 // Recalcul à la demande (async via Celery, ou synchrone si broker injoignable).
 export function regenerateAlerts() {
   return request('/api/alerts/regenerate/', { method: 'POST' })

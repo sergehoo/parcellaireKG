@@ -440,6 +440,8 @@ def _filter_alerts_qs(request):
         qs = qs.filter(rule=p['rule'])
     if p.get('program'):
         qs = qs.filter(program_id=p['program'])
+    if p.get('parcel'):
+        qs = qs.filter(parcel_id=p['parcel'])
     return qs
 
 
@@ -543,6 +545,44 @@ class AlertSummaryAPIView(APIView):
             'eleve': by_level.get('ELEVE', 0),
             'active_total': sum(by_level.values()),
             'by_level': by_level,
+        })
+
+
+class AlertMapAPIView(APIView):
+    """GET /api/alerts/map/ — sévérité d'alerte ACTIVE (NEW+ACK) par entité
+    géographique, pour surligner la carte. Renvoie {by_parcel, by_program}
+    où chaque entrée = {level: pire niveau, count: total}. Filtre optionnel
+    ?levels=CRITIQUE,ELEVE. Uniquement des compteurs (aucune ligne hydratée)."""
+    permission_classes = [IsAuthenticated]
+    ACTIVE = ['NEW', 'ACK']
+
+    @staticmethod
+    def _worst_map(rows):
+        out = {}
+        for eid, level, n in rows:
+            e = out.get(eid)
+            if e is None:
+                out[eid] = {'level': level, 'count': n}
+            else:
+                e['count'] += n
+                if LEVEL_ORDER.get(level, 9) < LEVEL_ORDER.get(e['level'], 9):
+                    e['level'] = level
+        return out
+
+    def get(self, request):
+        levels = [x for x in (request.query_params.get('levels') or '').split(',') if x]
+        base = Alert.objects.filter(status__in=self.ACTIVE)
+        if levels:
+            base = base.filter(level__in=levels)
+        # .order_by() vide : neutralise tout Meta.ordering pour garantir un
+        # GROUP BY (entité, niveau) net — un seul agrégat par couple.
+        parcel_rows = (base.filter(parcel_id__isnull=False)
+                       .values_list('parcel_id', 'level').annotate(n=Count('id')).order_by())
+        program_rows = (base.filter(program_id__isnull=False)
+                        .values_list('program_id', 'level').annotate(n=Count('id')).order_by())
+        return Response({
+            'by_parcel': self._worst_map(parcel_rows),
+            'by_program': self._worst_map(program_rows),
         })
 
 

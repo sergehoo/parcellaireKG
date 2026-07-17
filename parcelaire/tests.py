@@ -985,3 +985,37 @@ class AlertsEngineTests(TestCase):
         # en-tête + une seule alerte CRITIQUE (l'IDCP +40)
         self.assertEqual(len(rows), 2)
         self.assertIn('Critique', rows[1])
+
+    def test_alert_map_requires_auth(self):
+        self.assertEqual(self.client.get('/api/alerts/map/').status_code, 403)
+
+    def test_alert_map_worst_level_and_counts(self):
+        generate_alerts()
+        self.client.force_login(self.reader)
+        d = self.client.get('/api/alerts/map/').json()
+        # Alertes RATTACHÉES À LA PARCELLE : idcp (CRITIQUE) + titre_manquant
+        # (MOYEN). contrat_non_signe ne porte pas de parcel_id (programme/vente
+        # seulement). Pire niveau = CRITIQUE, count = 2.
+        p = d['by_parcel'][str(self.parcel.id)]
+        self.assertEqual(p['level'], 'CRITIQUE')
+        self.assertEqual(p['count'], 2)
+        self.assertIn(str(self.program.id), d['by_program'])
+
+    def test_alert_map_excludes_resolved_and_filters_levels(self):
+        generate_alerts()
+        self.client.force_login(self.reader)
+        # Filtre ?levels=CRITIQUE → ne garde que l'alerte idcp critique.
+        d = self.client.get('/api/alerts/map/?levels=CRITIQUE').json()
+        self.assertEqual(d['by_parcel'][str(self.parcel.id)], {'level': 'CRITIQUE', 'count': 1})
+        # Après résolution de tout, la carte est vide.
+        Alert.objects.update(status='RESOLVED')
+        empty = self.client.get('/api/alerts/map/').json()
+        self.assertEqual(empty['by_parcel'], {})
+        self.assertEqual(empty['by_program'], {})
+
+    def test_alerts_list_filter_by_parcel(self):
+        generate_alerts()
+        self.client.force_login(self.reader)
+        d = self.client.get(f'/api/alerts/?parcel={self.parcel.id}').json()
+        self.assertTrue(d['count'] >= 1)
+        self.assertTrue(all(a['parcel_id'] == self.parcel.id for a in d['results']))
