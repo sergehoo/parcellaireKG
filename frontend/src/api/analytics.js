@@ -26,3 +26,8 @@ export function alertAction(id, action) {
 export function getAlertSummary({ signal } = {}) {
   return request('/api/alerts/summary/', { signal })
 }
+
+// Recalcul à la demande (async via Celery, ou synchrone si broker injoignable).
+export function regenerateAlerts() {
+  return request('/api/alerts/regenerate/', { method: 'POST' })
+}

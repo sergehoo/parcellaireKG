@@ -860,3 +860,62 @@ class AlertsEngineTests(TestCase):
         res = generate_alerts_task.run()  # exécution synchrone en test
         self.assertIn('active', res)
         self.assertGreaterEqual(res['active'], 3)
+
+    def test_serialize_exposes_drilldown_ids(self):
+        generate_alerts()
+        self.client.force_login(self.reader)
+        results = self.client.get('/api/alerts/?rule=idcp').json()['results']
+        a = next(x for x in results if x['sale_id'] == self.sale.id)
+        # Les identifiants de « drill-down » sont exposés pour les liens SPA.
+        self.assertEqual(a['parcel_id'], self.parcel.id)
+        self.assertEqual(a['customer_id'], self.customer.id)
+        self.assertEqual(a['program_id'], self.program.id)
+
+    def test_regenerate_requires_permission(self):
+        self.client.force_login(self.reader)
+        self.assertEqual(self.client.post('/api/alerts/regenerate/').status_code, 403)
+
+    def test_regenerate_async_when_broker_ok(self):
+        self.client.force_login(self.mgr)
+        fake = mock.Mock(id='task-xyz')
+        with mock.patch('parcelaire.tasks.generate_alerts_task.delay', return_value=fake) as delay:
+            resp = self.client.post('/api/alerts/regenerate/')
+        self.assertEqual(resp.status_code, 202)
+        self.assertEqual(resp.json()['mode'], 'async')
+        self.assertEqual(resp.json()['task_id'], 'task-xyz')
+        delay.assert_called_once()
+
+    def test_regenerate_sync_fallback_when_broker_down(self):
+        self.client.force_login(self.mgr)
+        self.assertEqual(Alert.objects.count(), 0)
+        with mock.patch('parcelaire.tasks.generate_alerts_task.delay',
+                        side_effect=OSError('broker injoignable')):
+            resp = self.client.post('/api/alerts/regenerate/')
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual(body['mode'], 'sync')
+        self.assertGreaterEqual(body['active'], 3)
+        # le repli synchrone a bien persisté les alertes
+        self.assertEqual(Alert.objects.filter(status__in=['NEW', 'ACK']).count(), body['active'])
+
+    def test_regenerate_sync_conflict_when_locked(self):
+        # Broker injoignable + verrou déjà détenu → 409 sans double recalcul.
+        self.client.force_login(self.mgr)
+        with mock.patch('parcelaire.tasks.generate_alerts_task.delay',
+                        side_effect=OSError('broker injoignable')), \
+                mock.patch('parcelaire.api.analytics._try_regen_lock', return_value=False):
+            resp = self.client.post('/api/alerts/regenerate/')
+        self.assertEqual(resp.status_code, 409)
+        self.assertIn('déjà en cours', resp.json()['detail'])
+        self.assertEqual(Alert.objects.count(), 0)  # aucun recalcul n'a eu lieu
+
+    def test_regenerate_non_broker_error_propagates(self):
+        # Une erreur non liée au broker (vrai bug) ne doit PAS être confondue
+        # avec une panne de broker : elle remonte, elle n'est pas repliée en
+        # sync ni masquée en « succès ».
+        self.client.force_login(self.mgr)
+        with mock.patch('parcelaire.tasks.generate_alerts_task.delay',
+                        side_effect=ImportError('module cassé')):
+            with self.assertRaises(ImportError):
+                self.client.post('/api/alerts/regenerate/')
+        self.assertEqual(Alert.objects.count(), 0)

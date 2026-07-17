@@ -13,8 +13,10 @@ Concepts clés :
 - Score de santé programme = composite (avancement, encaissement,
   commercialisation) sur 100, sur les dimensions disponibles.
 """
+import logging
 from decimal import Decimal
 
+from django.db import connection, transaction
 from django.db.models import Count, Q, Sum
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
@@ -23,6 +25,31 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+logger = logging.getLogger(__name__)
+
+# Erreurs qui signalent un broker Celery injoignable (à distinguer d'un bug
+# applicatif, qui lui doit remonter). kombu.OperationalError est levée par
+# .delay() quand la connexion au broker échoue ; OSError couvre le refus de
+# connexion brut (ConnectionRefusedError).
+try:  # pragma: no cover - dépend de la présence de kombu (fourni par celery)
+    from kombu.exceptions import OperationalError as _KombuOperationalError
+    _BROKER_ERRORS = (_KombuOperationalError, OSError)
+except Exception:  # pragma: no cover
+    _BROKER_ERRORS = (OSError,)
+
+# Clé stable d'un verrou consultatif PostgreSQL : sérialise les recalculs
+# synchrones concurrents (un seul à la fois) sans dépendre de Redis.
+_REGEN_LOCK_KEY = 4726351
+
+
+def _try_regen_lock():
+    """Tente de prendre le verrou consultatif (portée transaction). Renvoie
+    False si un autre recalcul le détient déjà. À appeler dans une
+    transaction : le verrou est libéré automatiquement à sa clôture."""
+    with connection.cursor() as cur:
+        cur.execute("SELECT pg_try_advisory_xact_lock(%s)", [_REGEN_LOCK_KEY])
+        return bool(cur.fetchone()[0])
 
 from parcelaire.models import (
     Alert,
@@ -314,7 +341,9 @@ def serialize_alert(a):
         'program': a.program.name if a.program_id else None,
         'program_id': a.program_id,
         'lot': (a.parcel.lot_number or a.parcel.parcel_code or f'#{a.parcel_id}') if a.parcel_id else None,
+        'parcel_id': a.parcel_id,
         'customer': str(a.customer) if a.customer_id else None,
+        'customer_id': a.customer_id,
         'sale_id': a.sale_file_id,
         'first_detected_at': a.first_detected_at.isoformat() if a.first_detected_at else None,
         'last_detected_at': a.last_detected_at.isoformat() if a.last_detected_at else None,
@@ -417,3 +446,48 @@ class AlertSummaryAPIView(APIView):
             'active_total': sum(by_level.values()),
             'by_level': by_level,
         })
+
+
+class AlertRegenerateAPIView(APIView):
+    """POST /api/alerts/regenerate/ — recalcul à la demande des alertes.
+
+    Chemin normal : délègue la tâche idempotente à Celery (202, asynchrone).
+    Si — et seulement si — le broker est injoignable, repli sur un recalcul
+    SYNCHRONE, protégé par un verrou consultatif PostgreSQL qui empêche les
+    recalculs concurrents (un seul à la fois, sinon 409). Exige change_alert.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if not (request.user.is_superuser or request.user.has_perm('parcelaire.change_alert')):
+            return Response({'detail': "Permission requise (change_alert)."}, status=403)
+
+        # Import tardif (parcelaire.tasks importe ce module → cycle). Hors du
+        # try : une erreur d'import est un vrai bug et doit remonter en 500,
+        # non être confondue avec une panne de broker et masquée.
+        from parcelaire.tasks import generate_alerts_task
+        try:
+            result = generate_alerts_task.delay()
+        except _BROKER_ERRORS as exc:
+            logger.warning("Broker Celery injoignable, repli sur recalcul synchrone : %s", exc)
+            return self._regenerate_sync(str(exc))
+        return Response(
+            {'mode': 'async', 'task_id': str(result.id),
+             'detail': "Recalcul lancé en arrière-plan."},
+            status=202,
+        )
+
+    @staticmethod
+    def _regenerate_sync(broker_error):
+        """Recalcul synchrone verrouillé : un seul recalcul à la fois."""
+        from parcelaire.services.alerts import generate_alerts
+        with transaction.atomic():
+            if not _try_regen_lock():
+                return Response(
+                    {'mode': 'sync', 'detail': "Un recalcul est déjà en cours.",
+                     'broker_error': broker_error},
+                    status=409,
+                )
+            summary = generate_alerts()
+        return Response({'mode': 'sync', 'detail': "Recalcul effectué.",
+                         'broker_error': broker_error, **summary})

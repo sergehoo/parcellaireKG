@@ -6,6 +6,7 @@ from parcelaire.api import orthophotos as ortho_api
 from parcelaire.api.analytics import (
     AlertActionAPIView,
     AlertListAPIView,
+    AlertRegenerateAPIView,
     AlertSummaryAPIView,
     AnalyticsDashboardAPIView,
     AtRiskClientsAPIView,
@@ -36,6 +37,7 @@ urlpatterns = [
     # -------- Centre de notifications (alertes persistées) --------
     path("alerts/", AlertListAPIView.as_view(), name="api-alerts"),
     path("alerts/summary/", AlertSummaryAPIView.as_view(), name="api-alert-summary"),
+    path("alerts/regenerate/", AlertRegenerateAPIView.as_view(), name="api-alert-regenerate"),
     path("alerts/<int:pk>/<str:action>/", AlertActionAPIView.as_view(), name="api-alert-action"),
     path("crud/options/", crud_api.CrudOptionsAPIView.as_view(), name="api-crud-options"),
     path("crud/", include(router.urls)),
