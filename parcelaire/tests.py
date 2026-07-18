@@ -775,6 +775,25 @@ class AnalyticsAPITests(TestCase):
         self.assertIn("'=cmd|calc", text)   # préfixé d'une apostrophe
         self.assertNotIn(',=cmd|calc', text)  # jamais une cellule formule brute
 
+    def test_dashboard_report_requires_auth(self):
+        self.assertEqual(self.client.get('/api/analytics/dashboard/report/').status_code, 403)
+
+    def test_dashboard_report_pdf(self):
+        self.client.force_login(self.fin)
+        resp = self.client.get('/api/analytics/dashboard/report/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp['Content-Type'], 'application/pdf')
+        self.assertIn('attachment', resp['Content-Disposition'])
+        self.assertTrue(resp.content.startswith(b'%PDF-'))
+
+    def test_dashboard_report_generates_for_reader(self):
+        # Le rapport se génère aussi pour un utilisateur sans droits financiers
+        # (les montants sont masqués en amont par build_dashboard).
+        self.client.force_login(self.reader)
+        resp = self.client.get('/api/analytics/dashboard/report/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.content.startswith(b'%PDF-'))
+
 
 # =====================================================================
 # Moteur d'alertes persistées + centre de notifications

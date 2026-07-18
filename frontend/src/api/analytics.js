@@ -53,3 +53,8 @@ export function exportAtRisk(params = {}) {
 export function exportAlerts(params = {}) {
   return downloadFile(`/api/alerts/export/${toQuery(params)}`, 'alertes.csv')
 }
+
+// Rapport PDF exécutif du Centre de pilotage (WeasyPrint côté serveur).
+export function exportDashboardReport() {
+  return downloadFile('/api/analytics/dashboard/report/', 'tableau-de-bord.pdf')
+}

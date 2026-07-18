@@ -18,7 +18,8 @@ import logging
 from decimal import Decimal
 
 from django.db import connection, transaction
-from django.http import StreamingHttpResponse
+from django.http import HttpResponse, StreamingHttpResponse
+from django.template.loader import render_to_string
 from django.db.models import Count, Q, Sum
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
@@ -216,8 +217,13 @@ class AnalyticsDashboardAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        u = request.user
-        can_fin = u.is_superuser or u.has_perm('parcelaire.view_financial_data')
+        return Response(self.build_dashboard(request.user))
+
+    def build_dashboard(self, user):
+        """Synthèse exécutive (KPIs, santé programmes, alertes, clients à
+        risque). Partagée par l'API JSON et le rapport PDF. Respecte le
+        masquage financier (view_financial_data)."""
+        can_fin = user.is_superuser or user.has_perm('parcelaire.view_financial_data')
 
         parcels = Parcel.objects.filter(is_active=True)
         sales = SaleFile.objects.filter(is_active=True)
@@ -275,7 +281,7 @@ class AnalyticsDashboardAPIView(APIView):
         # Top clients à risque.
         top_risk = sorted(rows, key=lambda r: (-r['idcp']))[:8]
 
-        return Response({
+        return {
             'can_view_financial': can_fin,
             'counts': counts,
             'kpis': kpis,
@@ -284,7 +290,7 @@ class AnalyticsDashboardAPIView(APIView):
             'alerts': alerts,
             'clients_at_risk': top_risk,
             'at_risk_total': sum(1 for r in rows if r['level'] in ('CRITIQUE', 'ELEVE')),
-        })
+        }
 
     def _programs_health(self, can_fin):
         out = []
@@ -341,6 +347,28 @@ class AnalyticsDashboardAPIView(APIView):
             parcels.filter(commercial_status='SOLD').filter(Q(valeur_hypothecaire__isnull=True) | Q(valeur_hypothecaire=0)).count(),
             'Lot vendu sans valeur hypothécaire — couverture non garantie')
         return sorted(alerts, key=lambda a: LEVEL_ORDER.get(a['level'], 9))
+
+
+class DashboardReportPDFView(APIView):
+    """GET /api/analytics/dashboard/report/ — rapport PDF exécutif du Centre
+    de commandement (mêmes données réelles que le dashboard, masquage
+    financier respecté). Rendu HTML → PDF via WeasyPrint."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        data = AnalyticsDashboardAPIView().build_dashboard(request.user)
+        html = render_to_string('parcelaire/reports/dashboard_report.html', {
+            'd': data,
+            'generated_at': timezone.now(),
+            'username': request.user.get_full_name() or request.user.get_username(),
+        })
+        # Import tardif : WeasyPrint charge des libs natives (libgobject via
+        # cffi) ; on évite tout coût/échec d'import au chargement du module.
+        from weasyprint import HTML
+        pdf = HTML(string=html, base_url=request.build_absolute_uri('/')).write_pdf()
+        resp = HttpResponse(pdf, content_type='application/pdf')
+        resp['Content-Disposition'] = 'attachment; filename="tableau-de-bord.pdf"'
+        return resp
 
 
 class AtRiskPagination(PageNumberPagination):

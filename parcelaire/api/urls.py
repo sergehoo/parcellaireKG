@@ -13,6 +13,7 @@ from parcelaire.api.analytics import (
     AnalyticsDashboardAPIView,
     AtRiskClientsAPIView,
     AtRiskExportAPIView,
+    DashboardReportPDFView,
 )
 from parcelaire.api.dashboard import DashboardStatsAPIView
 from parcelaire.api.views import RealEstateMapAPIView
@@ -36,6 +37,7 @@ urlpatterns = [
     path("dashboard/", DashboardStatsAPIView.as_view(), name="api-dashboard"),
     # -------- Moteur d'analyse décisionnel --------
     path("analytics/dashboard/", AnalyticsDashboardAPIView.as_view(), name="api-analytics-dashboard"),
+    path("analytics/dashboard/report/", DashboardReportPDFView.as_view(), name="api-analytics-dashboard-report"),
     path("analytics/at-risk/", AtRiskClientsAPIView.as_view(), name="api-analytics-at-risk"),
     path("analytics/at-risk/export/", AtRiskExportAPIView.as_view(), name="api-analytics-at-risk-export"),
     # -------- Centre de notifications (alertes persistées) --------

@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <title>Tableau de bord — parcelaireKG</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 16mm 14mm 18mm 14mm;
+      @bottom-center {
+        content: "parcelaireKG — Centre de pilotage · page " counter(page) " / " counter(pages);
+        font-size: 8pt; color: #94a3b8;
+      }
+    }
+    * { box-sizing: border-box; }
+    body { font-family: "Helvetica Neue", Arial, sans-serif; color: #0f172a; font-size: 10pt; line-height: 1.4; margin: 0; }
+    h1 { font-size: 20pt; margin: 0; color: #0f172a; }
+    h2 { font-size: 12pt; margin: 18px 0 8px; color: #0f172a; border-bottom: 2px solid #e2571e; padding-bottom: 3px; }
+    .muted { color: #64748b; font-size: 9pt; }
+
+    header { border-bottom: 3px solid #e2571e; padding-bottom: 10px; margin-bottom: 6px; }
+    .brand { display: inline-block; width: 30px; height: 30px; border-radius: 7px; background: #e2571e;
+             color: #fff; text-align: center; line-height: 30px; font-weight: 800; font-size: 15pt; vertical-align: middle; }
+    .brand-txt { display: inline-block; vertical-align: middle; margin-left: 8px; }
+
+    /* KPI tiles */
+    .kpis { margin: 6px 0; }
+    .kpi { display: inline-block; width: 32%; vertical-align: top; border: 1px solid #e2e8f0; border-radius: 8px;
+           padding: 8px 10px; margin: 0 1% 8px 0; }
+    .kpi .label { font-size: 7.5pt; text-transform: uppercase; letter-spacing: .04em; color: #64748b; }
+    .kpi .value { font-size: 14pt; font-weight: 800; margin-top: 2px; }
+    .kpi .sub { font-size: 7.5pt; color: #94a3b8; }
+    .val-em { color: #047857; }
+    .val-warn { color: #b45309; }
+    .val-risk { color: #be123c; }
+
+    table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+    th { background: #f1f5f9; text-align: left; font-size: 8pt; text-transform: uppercase; letter-spacing: .03em;
+         color: #475569; padding: 5px 6px; }
+    td { padding: 5px 6px; border-top: 1px solid #eef2f7; font-size: 9pt; }
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+    .chip { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 7.5pt; font-weight: 700; }
+    .lvl-CRITIQUE { background: #ffe4e6; color: #be123c; }
+    .lvl-ELEVE    { background: #ffedd5; color: #c2410c; }
+    .lvl-MOYEN    { background: #fef3c7; color: #b45309; }
+    .lvl-FAIBLE   { background: #d1fae5; color: #047857; }
+    .lvl-INFO     { background: #e0f2fe; color: #0369a1; }
+
+    .bar { height: 6px; background: #eef2f7; border-radius: 999px; overflow: hidden; width: 90px; display: inline-block; vertical-align: middle; }
+    .bar > span { display: block; height: 100%; background: #e2571e; }
+    .counts span { display: inline-block; margin-right: 14px; font-size: 9pt; }
+    .counts b { font-size: 12pt; }
+    .empty { color: #94a3b8; font-style: italic; padding: 8px 0; }
+  </style>
+</head>
+<body>
+  <header>
+    <span class="brand">K</span>
+    <span class="brand-txt">
+      <h1>Tableau de bord — Centre de pilotage</h1>
+      <div class="muted">
+        Généré le {{ generated_at|date:"d/m/Y à H:i" }} par {{ username }}
+        {% if not d.can_view_financial %} · données financières masquées (droits limités){% endif %}
+      </div>
+    </span>
+  </header>
+
+  <div class="counts" style="margin:10px 0 4px;">
+    <span><b>{{ d.counts.projects }}</b> projets</span>
+    <span><b>{{ d.counts.programs }}</b> programmes</span>
+    <span><b>{{ d.counts.parcels }}</b> parcelles</span>
+    <span><b>{{ d.counts.customers }}</b> clients</span>
+    <span><b>{{ d.counts.sales }}</b> ventes</span>
+    <span><b>{{ d.counts.reservations }}</b> réservations</span>
+  </div>
+
+  <h2>Indicateurs stratégiques</h2>
+  <div class="kpis">
+    <div class="kpi"><div class="label">Chiffre d'affaires</div><div class="value">{{ d.kpis.ca_potentiel }}</div></div>
+    <div class="kpi"><div class="label">Encaissé</div><div class="value val-em">{{ d.kpis.encaisse }}</div><div class="sub">Taux d'encaissement {{ d.kpis.taux_encaissement }} %</div></div>
+    <div class="kpi"><div class="label">Reste à encaisser</div><div class="value val-warn">{{ d.kpis.reste_a_encaisser }}</div></div>
+    <div class="kpi"><div class="label">Valeur hypothécaire</div><div class="value">{{ d.kpis.valeur_hypothecaire }}</div><div class="sub">Couverture {{ d.kpis.couverture_hypothecaire }} %</div></div>
+    <div class="kpi"><div class="label">Avancement construction</div><div class="value">{{ d.kpis.avancement_construction_moyen }} %</div></div>
+    <div class="kpi"><div class="label">Commercialisation</div><div class="value">{{ d.kpis.taux_commercialisation }} %</div><div class="sub">Réservation {{ d.kpis.taux_reservation }} %</div></div>
+    <div class="kpi"><div class="label">IDCP moyen</div><div class="value{% if d.kpis.idcp_moyen > 15 %} val-risk{% endif %}">{% if d.kpis.idcp_moyen > 0 %}+{% endif %}{{ d.kpis.idcp_moyen }} %</div><div class="sub">Paiement − construction</div></div>
+    <div class="kpi"><div class="label">Clients à risque</div><div class="value val-risk">{{ d.at_risk_total }}</div><div class="sub">{{ d.kpis.clients_critiques }} critiques · {{ d.kpis.clients_eleves }} élevés</div></div>
+  </div>
+
+  <h2>Alertes métier</h2>
+  {% if d.alerts %}
+  <table>
+    <thead><tr><th>Niveau</th><th>Alerte</th><th class="num">Occurrences</th><th>Détail</th></tr></thead>
+    <tbody>
+      {% for a in d.alerts %}
+      <tr>
+        <td><span class="chip lvl-{{ a.level }}">{{ a.level }}</span></td>
+        <td>{{ a.label }}</td>
+        <td class="num">{{ a.count }}</td>
+        <td class="muted">{{ a.detail }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<div class="empty">Aucune alerte active.</div>{% endif %}
+
+  <h2>Santé des programmes</h2>
+  {% if d.programs_health %}
+  <table>
+    <thead><tr>
+      <th>Programme</th><th class="num">Score</th><th>Niveau</th>
+      <th class="num">Constr.</th><th class="num">Paiement</th><th class="num">Commerc.</th><th class="num">Lots vendus</th>
+    </tr></thead>
+    <tbody>
+      {% for p in d.programs_health %}
+      <tr>
+        <td><b>{{ p.name }}</b><br><span class="muted">{{ p.project }}</span></td>
+        <td class="num"><b>{{ p.score }}</b>/100 <span class="bar"><span style="width:{{ p.score }}%"></span></span></td>
+        <td>{{ p.band }}</td>
+        <td class="num">{{ p.construction }} %</td>
+        <td class="num">{{ p.payment }} %</td>
+        <td class="num">{{ p.commercialisation }} %</td>
+        <td class="num">{{ p.sold }} / {{ p.parcels }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<div class="empty">Aucun programme.</div>{% endif %}
+
+  <h2>Clients à risque — Indice de Déséquilibre Construction / Paiement</h2>
+  <div class="muted" style="margin-bottom:4px;">Paiement en avance sur l'avancement des travaux — {{ d.at_risk_total }} dossier(s) critiques ou élevés (top {{ d.clients_at_risk|length }}).</div>
+  {% if d.clients_at_risk %}
+  <table>
+    <thead><tr>
+      <th>Client</th><th>Programme</th><th>Lot</th>
+      <th class="num">Payé</th><th class="num">Constr.</th><th class="num">IDCP</th><th>Niveau</th>
+    </tr></thead>
+    <tbody>
+      {% for r in d.clients_at_risk %}
+      <tr>
+        <td>{{ r.customer }}</td>
+        <td>{{ r.program }}</td>
+        <td>{{ r.lot }}</td>
+        <td class="num">{{ r.payment_pct }} %</td>
+        <td class="num">{{ r.construction_pct }} %</td>
+        <td class="num">{% if r.idcp > 0 %}+{% endif %}{{ r.idcp }} %</td>
+        <td><span class="chip lvl-{{ r.level }}">{{ r.level }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<div class="empty">Aucun dossier à risque.</div>{% endif %}
+</body>
+</html>

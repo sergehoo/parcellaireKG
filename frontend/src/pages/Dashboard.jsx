@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { getAnalyticsDashboard } from '../api/analytics'
+import { exportDashboardReport, getAnalyticsDashboard } from '../api/analytics'
+import { useToast } from '../components/Toasts'
 import { levelStyle, bandStyle } from '../lib/criticality'
 
 const KPI_TILES = [
@@ -24,12 +25,25 @@ function Metric({ label, value, sub, accent }) {
 }
 
 export default function Dashboard() {
+  const toast = useToast()
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
+  const [exporting, setExporting] = useState(false)
 
   useEffect(() => {
     getAnalyticsDashboard().then(setData).catch(setError)
   }, [])
+
+  async function doExportPdf() {
+    setExporting(true)
+    try {
+      await exportDashboardReport()
+    } catch (err) {
+      toast(err.message, 'error')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   if (error) return <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-6 text-rose-700">{error.message}</div>
   if (!data) return <div className="py-20 text-center text-slate-500">Analyse en cours…</div>
@@ -38,11 +52,20 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Centre de pilotage</h1>
-        <p className="mt-0.5 text-sm text-slate-500">
-          Vision décisionnelle temps réel — indicateurs, santé des programmes, alertes et clients à risque.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Centre de pilotage</h1>
+          <p className="mt-0.5 text-sm text-slate-500">
+            Vision décisionnelle temps réel — indicateurs, santé des programmes, alertes et clients à risque.
+          </p>
+        </div>
+        <button type="button" onClick={doExportPdf} disabled={exporting}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50">
+          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="9" y1="15" x2="15" y2="15" />
+          </svg>
+          {exporting ? 'Génération…' : 'Rapport PDF'}
+        </button>
       </div>
 
       {/* Compteurs rapides */}
