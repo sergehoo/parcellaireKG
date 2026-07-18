@@ -536,6 +536,7 @@ class AlertSummaryAPIView(APIView):
     def get(self, request):
         by_level = dict(
             Alert.objects.filter(status__in=['NEW', 'ACK'])
+            .order_by()  # neutralise l'ordering Meta pour un GROUP BY propre
             .values('level')
             .annotate(n=Count('id'))
             .values_list('level', 'n')
@@ -571,7 +572,10 @@ class AlertMapAPIView(APIView):
 
     def get(self, request):
         levels = [x for x in (request.query_params.get('levels') or '').split(',') if x]
-        base = Alert.objects.filter(status__in=self.ACTIVE)
+        # .order_by() neutralise l'ordering Meta (-last_detected_at) : sans lui,
+        # certaines versions de Django l'injecteraient dans le GROUP BY et
+        # sur-découperaient les agrégats.
+        base = Alert.objects.filter(status__in=self.ACTIVE).order_by()
         if levels:
             base = base.filter(level__in=levels)
         # .order_by() vide : neutralise tout Meta.ordering pour garantir un
