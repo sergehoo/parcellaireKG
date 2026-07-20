@@ -115,10 +115,13 @@ export default function MapCanvas({
     baseRef.current = L.tileLayer(BASEMAPS.standard.url, BASEMAPS.standard.options).addTo(map)
     featureLayerRef.current = L.layerGroup().addTo(map)
     // Pane dédié (zIndex élevé) : les halos d'alerte se dessinent AU-DESSUS
-    // des polygones, quel que soit le style de calque courant.
+    // des polygones. `pointer-events: none` : les halos sont PUREMENT VISUELS
+    // et ne doivent pas intercepter les clics (sinon, en preferCanvas, le
+    // canvas des halos bloque le clic sur toutes les parcelles). La sélection
+    // se fait sur le polygone ; l'alerte reste accessible via le panneau détail.
     map.createPane('alerts')
     map.getPane('alerts').style.zIndex = 650
-    map.getPane('alerts').style.pointerEvents = 'auto'
+    map.getPane('alerts').style.pointerEvents = 'none'
     alertLayerRef.current = L.layerGroup().addTo(map)
     lastFitRef.current = null
 
@@ -413,13 +416,13 @@ export default function MapCanvas({
         : (feat.geometry ? centroidOf(feat.geometry) : null)
       if (!center) return
       const color = (LEVELS[info.level] || LEVELS.CRITIQUE).dot
+      // interactive:false → halo purement visuel : il n'intercepte pas les
+      // clics (le clic va au polygone en dessous ; toutes les parcelles
+      // restent consultables). L'alerte s'affiche dans le panneau de détail.
       const halo = L.circleMarker(center, {
-        pane: 'alerts', radius: 11, weight: 2,
+        pane: 'alerts', interactive: false, radius: 11, weight: 2,
         color, fillColor: color, fillOpacity: 0.25,
       })
-      const label = (LEVELS[info.level] || LEVELS.CRITIQUE).label
-      halo.bindTooltip(`${info.count} alerte(s) · ${label}`, { direction: 'top' })
-      halo.on('click', () => onSelectRef.current?.(feat))
       layer.addLayer(halo)
     })
   }, [assets, alertLevels, showAlerts])
