@@ -314,6 +314,37 @@ STATICFILES_DIRS = [BASE_DIR / 'static'] if (BASE_DIR / 'static').exists() else 
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# ---------------------------------------------------------------------------
+# Django REST Framework — filet de sécurité par défaut (audit H2).
+# Sans ce bloc, DRF autorise AllowAny + BasicAuthentication : toute vue
+# oubliant `permission_classes` devient publique, et les identifiants transitent
+# en clair à chaque requête. On impose donc :
+#  - IsAuthenticated par défaut (les vues internes gardent leurs classes
+#    explicites, qui restent prioritaires) ;
+#  - session uniquement (le SPA s'authentifie par session Django) — plus de
+#    BasicAuthentication ;
+#  - throttling anonyme + throttling « scopé » pour les endpoints coûteux
+#    (exports, rapport PDF, recalcul d'alertes) contre le DoS applicatif (M3).
+# ---------------------------------------------------------------------------
+REST_FRAMEWORK = {
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',
+    ],
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.ScopedRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '60/hour',
+        'export': '30/hour',
+        'report': '20/hour',
+        'regenerate': '12/hour',
+    },
+}
+
 CELERY_BEAT_SCHEDULE = {
     "sync-kaydan-stale-parcels-every-30-min": {
         "task": "parcelaire.tasks.sync_kaydan_stale_parcels_task",

@@ -1113,3 +1113,67 @@ class ReportDeliveryTests(TestCase):
         self.assertEqual(tos.count('ok1@example.com'), 1)  # pas de doublon
         self.assertEqual(tos.count('ok2@example.com'), 1)
         self.assertNotIn('bad@example.com', tos)
+
+
+# =====================================================================
+# Masquage API CRUD — financier & PII (audit C5 / H7)
+# =====================================================================
+class ApiMaskingTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.reader = User.objects.create_user('mask-reader', password='pwd')
+        cls.fin = User.objects.create_user('mask-fin', password='pwd')
+        cls.fin.user_permissions.add(Permission.objects.get(
+            content_type__app_label='parcelaire', codename='view_financial_data'))
+        cls.pii = User.objects.create_user('mask-pii', password='pwd')
+        cls.pii.user_permissions.add(Permission.objects.get(
+            content_type__app_label='parcelaire', codename='view_patient_data'))
+
+        cls.country = Country.objects.create(nom="Côte d'Ivoire", code='CI')
+        cls.project = ProjetImmobilier.objects.create(code='PA', nom='Projet A', country=cls.country)
+        cls.program = RealEstateProgram.objects.create(
+            code='PRG', name='Programme A', slug='programme-a', country=cls.country, project=cls.project)
+        cls.dataset = ParcelDataset.objects.create(program=cls.program, name='DS')
+        cls.parcel = Parcel.objects.create(
+            program=cls.program, dataset=cls.dataset, lot_number='L1', official_area_m2=200)
+        cls.customer = Customer.objects.create(
+            customer_type='INDIVIDUAL', last_name='Kouassi',
+            phone='+2250700000000', email='k@example.com', id_number='CI-987654', address='Abidjan')
+        cls.sale = SaleFile.objects.create(
+            sale_number='S-1', program=cls.program, customer=cls.customer, parcel=cls.parcel,
+            agreed_price=100_000_000, net_price=90_000_000, status='OPEN')
+        cls.payment = Payment.objects.create(
+            payment_number='P-1', sale_file=cls.sale, amount=50_000_000,
+            status='CONFIRMED', payment_method='BANK', payment_date=date(2026, 1, 15))
+
+    def _get(self, user, url):
+        self.client.force_login(user)
+        return self.client.get(url).json()
+
+    def test_sale_amounts_masked_without_financial_perm(self):
+        d = self._get(self.reader, f'/api/crud/sales/{self.sale.id}/')
+        self.assertEqual(d['net_price_display'], 'Masqué')
+        self.assertEqual(d['agreed_price_display'], 'Masqué')
+        d2 = self._get(self.fin, f'/api/crud/sales/{self.sale.id}/')
+        self.assertIn('FCFA', d2['net_price_display'])
+
+    def test_payment_amount_masked_without_financial_perm(self):
+        self.assertEqual(
+            self._get(self.reader, f'/api/crud/payments/{self.payment.id}/')['amount_display'], 'Masqué')
+        self.assertIn(
+            'FCFA', self._get(self.fin, f'/api/crud/payments/{self.payment.id}/')['amount_display'])
+
+    def test_customer_pii_masked_without_patient_perm(self):
+        d = self._get(self.reader, f'/api/crud/customers/{self.customer.id}/')
+        self.assertEqual(d['phone'], 'Masqué')
+        self.assertEqual(d['email'], 'Masqué')
+        self.assertEqual(d['id_number'], 'Masqué')
+        self.assertEqual(d['address'], 'Masqué')
+        self.assertEqual(d['last_name'], 'Kouassi')  # identité de base conservée
+        d2 = self._get(self.pii, f'/api/crud/customers/{self.customer.id}/')
+        self.assertEqual(d2['phone'], '+2250700000000')
+        self.assertEqual(d2['id_number'], 'CI-987654')
+
+    def test_customer_search_no_longer_matches_id_number(self):
+        d = self._get(self.pii, '/api/crud/customers/?search=CI-987654')
+        self.assertEqual(d['count'], 0)

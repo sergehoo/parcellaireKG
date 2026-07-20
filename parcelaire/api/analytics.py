@@ -357,6 +357,7 @@ class DashboardReportPDFView(APIView):
     de commandement (mêmes données réelles que le dashboard, masquage
     financier respecté). Rendu HTML → PDF via WeasyPrint."""
     permission_classes = [IsAuthenticated]
+    throttle_scope = 'report'
 
     def get(self, request):
         can_fin = _can_view_financial(request.user)
@@ -406,6 +407,7 @@ class AtRiskExportAPIView(APIView):
     (mêmes filtres que la liste). Les montants financiers restent masqués
     pour les utilisateurs sans view_financial_data."""
     permission_classes = [IsAuthenticated]
+    throttle_scope = 'export'
 
     def get(self, request):
         u = request.user
@@ -511,6 +513,7 @@ class AlertExportAPIView(APIView):
     """GET /api/alerts/export/ — export CSV des alertes (mêmes filtres que la
     liste). Ordre stable : plus récemment détectées d'abord."""
     permission_classes = [IsAuthenticated]
+    throttle_scope = 'export'
 
     def get(self, request):
         qs = _filter_alerts_qs(request).order_by('-last_detected_at')
@@ -637,6 +640,7 @@ class AlertRegenerateAPIView(APIView):
     recalculs concurrents (un seul à la fois, sinon 409). Exige change_alert.
     """
     permission_classes = [IsAuthenticated]
+    throttle_scope = 'regenerate'
 
     def post(self, request):
         if not (request.user.is_superuser or request.user.has_perm('parcelaire.change_alert')):

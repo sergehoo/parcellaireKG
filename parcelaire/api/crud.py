@@ -21,6 +21,10 @@ from rest_framework.permissions import BasePermission, IsAuthenticated, SAFE_MET
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from parcelaire.api.views import (
+    user_can_view_financial_data,
+    user_can_view_patient_data,
+)
 from parcelaire.models import (
     Country,
     Customer,
@@ -33,6 +37,8 @@ from parcelaire.models import (
     SaleFile,
 )
 
+MASKED = "Masqué"
+
 
 def fmt_money(value):
     try:
@@ -40,6 +46,19 @@ def fmt_money(value):
     except Exception:
         return "—"
     return f"{v:,}".replace(",", " ") + " FCFA"
+
+
+def _ctx_user(serializer):
+    """Utilisateur courant depuis le contexte DRF (None hors requête)."""
+    request = serializer.context.get("request")
+    return getattr(request, "user", None) if request else None
+
+
+def money_field(serializer, value):
+    """Montant formaté si l'utilisateur a view_financial_data, sinon « Masqué ».
+    Réplique le masquage centralisé (analytics/dashboard) côté CRUD."""
+    user = _ctx_user(serializer)
+    return fmt_money(value) if (user and user_can_view_financial_data(user)) else MASKED
 
 
 # =====================================================================
@@ -158,6 +177,9 @@ class CustomerSerializer(serializers.ModelSerializer):
     display_name = serializers.SerializerMethodField()
     customer_type_display = serializers.CharField(source="get_customer_type_display", read_only=True)
 
+    # PII de contact / pièce d'identité — masquée en LECTURE sans view_patient_data.
+    PII_FIELDS = ("phone", "email", "id_type", "id_number", "address", "notes")
+
     class Meta:
         model = Customer
         fields = [
@@ -171,11 +193,21 @@ class CustomerSerializer(serializers.ModelSerializer):
     def get_display_name(self, obj):
         return str(obj)
 
+    def to_representation(self, obj):
+        data = super().to_representation(obj)
+        user = _ctx_user(self)
+        if not (user and user_can_view_patient_data(user)):
+            for f in self.PII_FIELDS:
+                if data.get(f) not in (None, ""):
+                    data[f] = MASKED
+        return data
+
 
 class CustomerViewSet(BaseCrudViewSet):
     queryset = Customer.objects.filter(is_active=True).select_related("country", "place")
     serializer_class = CustomerSerializer
-    search_fields = ["first_name", "last_name", "company_name", "phone", "email", "id_number"]
+    # id_number retiré de la recherche : pas d'énumération par n° de pièce.
+    search_fields = ["first_name", "last_name", "company_name", "phone", "email"]
     filterset_fields = ["customer_type", "country"]
     ordering_fields = ["last_name", "company_name", "created_at"]
     ordering = ["-created_at"]
@@ -236,10 +268,10 @@ class ReservationSerializer(serializers.ModelSerializer):
         return (obj.parcel.lot_number or obj.parcel.parcel_code or f"#{obj.parcel_id}") if obj.parcel_id else "—"
 
     def get_reserved_price_display(self, obj):
-        return fmt_money(obj.reserved_price)
+        return money_field(self, obj.reserved_price)
 
     def get_deposit_display(self, obj):
-        return fmt_money(obj.deposit_amount)
+        return money_field(self, obj.deposit_amount)
 
 
 class ReservationViewSet(BaseReadViewSet):
@@ -271,10 +303,10 @@ class SaleSerializer(serializers.ModelSerializer):
         return str(obj.customer) if obj.customer_id else "—"
 
     def get_net_price_display(self, obj):
-        return fmt_money(obj.net_price)
+        return money_field(self, obj.net_price)
 
     def get_agreed_price_display(self, obj):
-        return fmt_money(obj.agreed_price)
+        return money_field(self, obj.agreed_price)
 
 
 class SaleViewSet(BaseReadViewSet):
@@ -303,7 +335,7 @@ class PaymentSerializer(serializers.ModelSerializer):
         return obj.sale_file.sale_number if obj.sale_file_id else "—"
 
     def get_amount_display(self, obj):
-        return fmt_money(obj.amount)
+        return money_field(self, obj.amount)
 
 
 class PaymentViewSet(BaseReadViewSet):
