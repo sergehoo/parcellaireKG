@@ -49,6 +49,18 @@ _react_app = login_required(TemplateView.as_view(
     template_name="parcelaire/orthophoto/react_app.html",
 ))
 
+
+def _spa(hash_url):
+    """Redirige une ancienne route HTML vers son équivalent du SPA React.
+
+    Le SPA React est désormais le frontend principal. Les routes de navigation
+    historiques (templates Django) pointent vers le SPA — ce qui, au passage,
+    retire les pages HTML héritées comme surface (elles n'exposent plus de
+    données financières/PII, cf. audit H3/H5) sans risque de verrouillage.
+    `%(pk)s` est substitué par l'identifiant de l'URL.
+    """
+    return RedirectView.as_view(url=hash_url, permanent=False)
+
 urlpatterns = [
                   path('admin/', admin.site.urls),
                   path("api/", include("parcelaire.api.urls")),
@@ -74,19 +86,23 @@ urlpatterns = [
 
                   path('accounts/', include('allauth.urls')),
 
-                  path("", ParcellaireDashboardView.as_view(), name="parcelaire_dashboard"),
+                  # Frontend principal = SPA React : la racine ouvre le SPA.
+                  # L'ancien tableau de bord HTML reste en repli sous /legacy/.
+                  path("", _spa("/app/"), name="parcelaire_dashboard"),
+                  path("legacy/dashboard/", ParcellaireDashboardView.as_view(), name="parcelaire_dashboard_legacy"),
 
-                  path("projects/", ProjetImmobilierListView.as_view(), name="project_list"),
-                  path("projects/add/", ProjetImmobilierCreateView.as_view(), name="project_add"),
-                  path("projects/<int:pk>/", ProjetImmobilierDetailView.as_view(), name="project_detail"),
-                  path("projects/<int:pk>/edit/", ProjetImmobilierUpdateView.as_view(), name="project_edit"),
-                  path("projects/<int:pk>/delete/", ProjetImmobilierDeleteView.as_view(), name="project_delete"),
+                  # -------- Entités migrées vers le SPA (redirections) --------
+                  path("projects/", _spa("/app/#/r/projects"), name="project_list"),
+                  path("projects/add/", _spa("/app/#/r/projects/new"), name="project_add"),
+                  path("projects/<int:pk>/", _spa("/app/#/r/projects/%(pk)s"), name="project_detail"),
+                  path("projects/<int:pk>/edit/", _spa("/app/#/r/projects/%(pk)s/edit"), name="project_edit"),
+                  path("projects/<int:pk>/delete/", _spa("/app/#/r/projects/%(pk)s"), name="project_delete"),
 
-                  path("programs/", RealEstateProgramListView.as_view(), name="program_list"),
-                  path("programs/add/", RealEstateProgramCreateView.as_view(), name="program_add"),
-                  path("programs/<int:pk>/", RealEstateProgramDetailView.as_view(), name="program_detail"),
-                  path("programs/<int:pk>/edit/", RealEstateProgramUpdateView.as_view(), name="program_edit"),
-                  path("programs/<int:pk>/delete/", RealEstateProgramDeleteView.as_view(), name="program_delete"),
+                  path("programs/", _spa("/app/#/r/programs"), name="program_list"),
+                  path("programs/add/", _spa("/app/#/r/programs/new"), name="program_add"),
+                  path("programs/<int:pk>/", _spa("/app/#/r/programs/%(pk)s"), name="program_detail"),
+                  path("programs/<int:pk>/edit/", _spa("/app/#/r/programs/%(pk)s/edit"), name="program_edit"),
+                  path("programs/<int:pk>/delete/", _spa("/app/#/r/programs/%(pk)s"), name="program_delete"),
 
                   path("phases/", ProgramPhaseListView.as_view(), name="phase_list"),
                   path("phases/add/", ProgramPhaseCreateView.as_view(), name="phase_add"),
@@ -105,11 +121,11 @@ urlpatterns = [
                   path("blocks/edit/<int:pk>", ProgramBlockUpdateView.as_view(), name="block_edit"),
                   path("blocks/<int:pk>/delete/", ProgramBlockDeleteView.as_view(), name="block_delete"),
 
-                  path("parcels/", ParcelListView.as_view(), name="parcel_list"),
-                  path("parcels/add/", ParcelCreateView.as_view(), name="parcel_add"),
-                  path("parcels/<int:pk>/", ParcelDetailView.as_view(), name="parcel_detail"),
-                  path("parcels/<int:pk>/edit/", ParcelUpdateView.as_view(), name="parcel_edit"),
-                  path("parcels/<int:pk>/delete/", ParcelDeleteView.as_view(), name="parcel_delete"),
+                  path("parcels/", _spa("/app/#/r/parcels"), name="parcel_list"),
+                  path("parcels/add/", _spa("/app/#/r/parcels/new"), name="parcel_add"),
+                  path("parcels/<int:pk>/", _spa("/app/#/r/parcels/%(pk)s"), name="parcel_detail"),
+                  path("parcels/<int:pk>/edit/", _spa("/app/#/r/parcels/%(pk)s/edit"), name="parcel_edit"),
+                  path("parcels/<int:pk>/delete/", _spa("/app/#/r/parcels/%(pk)s"), name="parcel_delete"),
 
                   path("assets/", PropertyAssetListView.as_view(), name="asset_list"),
                   path("assets/add/", PropertyAssetCreateView.as_view(), name="asset_add"),
@@ -117,26 +133,26 @@ urlpatterns = [
                   path("assets/<int:pk>/edit/", PropertyAssetUpdateView.as_view(), name="asset_edit"),
                   path("assets/<int:pk>/delete/", PropertyAssetDeleteView.as_view(), name="asset_delete"),
 
-                  path("customers/", CustomerListView.as_view(), name="customer_list"),
-                  path("customers/add/", CustomerCreateView.as_view(), name="customer_add"),
-                  path("customers/<int:pk>/edit/", CustomerUpdateView.as_view(), name="customer_edit"),
+                  path("customers/", _spa("/app/#/r/customers"), name="customer_list"),
+                  path("customers/add/", _spa("/app/#/r/customers/new"), name="customer_add"),
+                  path("customers/<int:pk>/edit/", _spa("/app/#/r/customers/%(pk)s/edit"), name="customer_edit"),
 
                   path("leads/", LeadListView.as_view(), name="lead_list"),
                   path("leads/add/", LeadCreateView.as_view(), name="lead_add"),
                   path("leads/<int:pk>/edit/", LeadUpdateView.as_view(), name="lead_edit"),
 
-                  path("reservations/", ReservationListView.as_view(), name="reservation_list"),
-                  path("reservations/add/", ReservationCreateView.as_view(), name="reservation_add"),
-                  path("reservations/<int:pk>/edit/", ReservationUpdateView.as_view(), name="reservation_edit"),
+                  path("reservations/", _spa("/app/#/r/reservations"), name="reservation_list"),
+                  path("reservations/add/", _spa("/app/#/r/reservations/new"), name="reservation_add"),
+                  path("reservations/<int:pk>/edit/", _spa("/app/#/r/reservations/%(pk)s/edit"), name="reservation_edit"),
 
-                  path("sales/", SaleFileListView.as_view(), name="sale_list"),
-                  path("sales/add/", SaleFileCreateView.as_view(), name="sale_add"),
-                  path("sales/<int:pk>/", SaleFileDetailView.as_view(), name="sale_detail"),
-                  path("sales/<int:pk>/edit/", SaleFileUpdateView.as_view(), name="sale_edit"),
+                  path("sales/", _spa("/app/#/r/sales"), name="sale_list"),
+                  path("sales/add/", _spa("/app/#/r/sales/new"), name="sale_add"),
+                  path("sales/<int:pk>/", _spa("/app/#/r/sales/%(pk)s"), name="sale_detail"),
+                  path("sales/<int:pk>/edit/", _spa("/app/#/r/sales/%(pk)s/edit"), name="sale_edit"),
 
-                  path("payments/", PaymentListView.as_view(), name="payment_list"),
-                  path("payments/add/", PaymentCreateView.as_view(), name="payment_add"),
-                  path("payments/<int:pk>/edit/", PaymentUpdateView.as_view(), name="payment_edit"),
+                  path("payments/", _spa("/app/#/r/payments"), name="payment_list"),
+                  path("payments/add/", _spa("/app/#/r/payments/new"), name="payment_add"),
+                  path("payments/<int:pk>/edit/", _spa("/app/#/r/payments/%(pk)s/edit"), name="payment_edit"),
 
                   path("construction-projects/", ConstructionProjectListView.as_view(),
                        name="construction_project_list"),
@@ -167,9 +183,11 @@ urlpatterns = [
                   path("ajax/program-stats/", ProgramStatsAjaxView.as_view(), name="ajax_program_stats"),
 
                   # -------- ORTHOPHOTOS --------
-                  path("orthophotos/", OrthophotoListView.as_view(), name="orthophoto_list"),
-                  path("orthophotos/add/", OrthophotoCreateView.as_view(), name="orthophoto_add"),
-                  path("orthophotos/<int:pk>/", OrthophotoDetailView.as_view(), name="orthophoto_detail"),
+                  # Navigation migrée vers le SPA ; les actions (status/retry/
+                  # set-current/delete-tiles/logs) et l'upload restent en place.
+                  path("orthophotos/", _spa("/app/#/orthophotos"), name="orthophoto_list"),
+                  path("orthophotos/add/", _spa("/app/#/orthophotos/upload"), name="orthophoto_add"),
+                  path("orthophotos/<int:pk>/", _spa("/app/#/orthophotos/%(pk)s"), name="orthophoto_detail"),
                   path("orthophotos/<int:pk>/status/", OrthophotoStatusAPIView.as_view(), name="orthophoto_status"),
                   path("orthophotos/<int:pk>/retry/", OrthophotoRetryView.as_view(), name="orthophoto_retry"),
                   path("orthophotos/<int:pk>/set-current/", OrthophotoSetCurrentView.as_view(), name="orthophoto_set_current"),
