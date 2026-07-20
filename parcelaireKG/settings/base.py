@@ -93,8 +93,17 @@ INSTALLED_APPS = [
     "csp",
     'drf_spectacular',
     'corsheaders',
+    'accounts',
     'parcelaire',
     'ai_construction'
+]
+
+# Backends d'authentification (audit H8) : allauth n'était pas enregistré,
+# Django retombait sur le seul ModelBackend → intégration allauth (login/e-mail,
+# vérification) non fiable. ModelBackend reste prioritaire (login username inchangé).
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',
+    'allauth.account.auth_backends.AuthenticationBackend',
 ]
 
 MIDDLEWARE = [
