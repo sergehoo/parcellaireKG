@@ -26,13 +26,18 @@ from parcelaire.api.views import (
     user_can_view_patient_data,
 )
 from parcelaire.models import (
+    ConstructionProject,
     Country,
     Customer,
     Lead,
     Parcel,
+    ParcelDataset,
     Payment,
     Place,
+    ProgramBlock,
+    ProgramPhase,
     ProjetImmobilier,
+    PropertyAsset,
     RealEstateProgram,
     Reservation,
     SaleFile,
@@ -397,6 +402,145 @@ class LeadViewSet(BaseReadViewSet):
 
 
 # =====================================================================
+# Entités techniques / référentielles — lecture seule (migrées au SPA ;
+# écritures conservées sur Django). Masquage financier sur les montants.
+# =====================================================================
+
+def _area(value):
+    return f"{value} m²" if value else "—"
+
+
+class PhaseSerializer(serializers.ModelSerializer):
+    program_label = serializers.CharField(source="program.name", read_only=True, default="")
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = ProgramPhase
+        fields = ["id", "code", "name", "program", "program_label", "order",
+                  "status", "status_display", "start_date", "end_date", "description"]
+
+
+class PhaseViewSet(BaseReadViewSet):
+    queryset = ProgramPhase.objects.filter(is_active=True).select_related("program")
+    serializer_class = PhaseSerializer
+    search_fields = ["code", "name", "program__name"]
+    filterset_fields = ["program", "status"]
+    ordering_fields = ["order", "name"]
+    ordering = ["program_id", "order"]
+
+
+class DatasetSerializer(serializers.ModelSerializer):
+    program_label = serializers.CharField(source="program.name", read_only=True, default="")
+
+    class Meta:
+        model = ParcelDataset
+        fields = ["id", "name", "program", "program_label", "source_code", "geojson_type",
+                  "crs_name", "version", "is_current", "imported_by", "created_at"]
+
+
+class DatasetViewSet(BaseReadViewSet):
+    queryset = ParcelDataset.objects.filter(is_active=True).select_related("program")
+    serializer_class = DatasetSerializer
+    search_fields = ["name", "source_code", "program__name", "imported_by"]
+    filterset_fields = ["program", "is_current"]
+    ordering_fields = ["name", "created_at"]
+    ordering = ["-created_at"]
+
+
+class BlockSerializer(serializers.ModelSerializer):
+    program_label = serializers.CharField(source="program.name", read_only=True, default="")
+    area = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProgramBlock
+        fields = ["id", "code", "label", "program", "program_label", "area", "description"]
+
+    def get_area(self, obj):
+        return _area(obj.block_area_m2)
+
+
+class BlockViewSet(BaseReadViewSet):
+    queryset = ProgramBlock.objects.filter(is_active=True).select_related("program")
+    serializer_class = BlockSerializer
+    search_fields = ["code", "label", "program__name"]
+    filterset_fields = ["program"]
+    ordering_fields = ["code", "label"]
+    ordering = ["program_id", "code"]
+
+
+class AssetSerializer(serializers.ModelSerializer):
+    program_label = serializers.CharField(source="program.name", read_only=True, default="")
+    category_label = serializers.CharField(source="asset_category.label", read_only=True, default="")
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    area = serializers.SerializerMethodField()
+    sale_price_display = serializers.SerializerMethodField()
+    market_value_display = serializers.SerializerMethodField()
+    mortgage_value_display = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PropertyAsset
+        fields = ["id", "code", "label", "program", "program_label", "category_label",
+                  "status", "status_display", "area", "floors", "is_multi_unit",
+                  "sale_price_display", "market_value_display", "mortgage_value_display",
+                  "delivery_date"]
+
+    def get_area(self, obj):
+        return _area(obj.built_area_m2)
+
+    def get_sale_price_display(self, obj):
+        return money_field(self, obj.sale_price)
+
+    def get_market_value_display(self, obj):
+        return money_field(self, obj.market_value)
+
+    def get_mortgage_value_display(self, obj):
+        return money_field(self, obj.mortgage_value)
+
+
+class AssetViewSet(BaseReadViewSet):
+    queryset = PropertyAsset.objects.filter(is_active=True).select_related(
+        "program", "asset_category")
+    serializer_class = AssetSerializer
+    search_fields = ["code", "label", "program__name"]
+    filterset_fields = ["program", "status", "asset_category"]
+    ordering_fields = ["code", "label"]
+    ordering = ["program_id", "code"]
+
+
+class ConstructionSerializer(serializers.ModelSerializer):
+    parcel_label = serializers.SerializerMethodField()
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    estimated_budget_display = serializers.SerializerMethodField()
+    actual_cost_display = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ConstructionProject
+        fields = ["id", "code", "title", "parcel", "parcel_label", "status", "status_display",
+                  "progress_percent", "planned_end_date", "actual_end_date",
+                  "estimated_budget_display", "actual_cost_display",
+                  "contractor_name", "site_manager"]
+
+    def get_parcel_label(self, obj):
+        p = obj.parcel
+        return (p.lot_number or p.parcel_code or f"#{p.id}") if p else "—"
+
+    def get_estimated_budget_display(self, obj):
+        return money_field(self, obj.estimated_budget)
+
+    def get_actual_cost_display(self, obj):
+        return money_field(self, obj.actual_cost)
+
+
+class ConstructionViewSet(BaseReadViewSet):
+    queryset = ConstructionProject.objects.select_related("parcel")
+    serializer_class = ConstructionSerializer
+    search_fields = ["code", "title", "contractor_name", "site_manager", "parcel__lot_number"]
+    filterset_fields = ["status", "parcel__program"]
+    ordering_fields = ["code", "progress_percent", "planned_end_date"]
+    ordering = ["-progress_percent"]
+
+
+# =====================================================================
 # Options pour les formulaires / filtres du SPA
 # =====================================================================
 
@@ -433,6 +577,9 @@ class CrudOptionsAPIView(APIView):
             "reservation_statuses": _choices(Reservation, "status"),
             "payment_statuses": _choices(Payment, "status"),
             "lead_statuses": _choices(Lead, "status"),
+            "phase_statuses": _choices(ProgramPhase, "status"),
+            "asset_statuses": _choices(PropertyAsset, "status"),
+            "construction_statuses": _choices(ConstructionProject, "status"),
             "permissions": {
                 "project": perms(ProjetImmobilier),
                 "program": perms(RealEstateProgram),

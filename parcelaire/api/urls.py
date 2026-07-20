@@ -33,6 +33,11 @@ router.register("reservations", crud_api.ReservationViewSet, basename="api-reser
 router.register("sales", crud_api.SaleViewSet, basename="api-sale")
 router.register("payments", crud_api.PaymentViewSet, basename="api-payment")
 router.register("leads", crud_api.LeadViewSet, basename="api-lead")
+router.register("phases", crud_api.PhaseViewSet, basename="api-phase")
+router.register("datasets", crud_api.DatasetViewSet, basename="api-dataset")
+router.register("blocks", crud_api.BlockViewSet, basename="api-block")
+router.register("assets", crud_api.AssetViewSet, basename="api-asset")
+router.register("construction", crud_api.ConstructionViewSet, basename="api-construction")
 
 urlpatterns = [
     # -------- Documentation OpenAPI (drf-spectacular, derrière auth) --------

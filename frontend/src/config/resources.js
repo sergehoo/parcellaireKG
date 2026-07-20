@@ -201,6 +201,97 @@ export const RESOURCES = {
       { key: 'status', label: 'Statut', optionsKey: 'lead_statuses' },
     ],
   },
+
+  phases: {
+    endpoint: 'phases',
+    title: 'Phases',
+    singular: 'Phase',
+    writable: false,
+    titleField: 'name',
+    columns: [
+      { key: 'code', label: 'Code' },
+      { key: 'name', label: 'Nom' },
+      { key: 'program_label', label: 'Programme' },
+      { key: 'status_display', label: 'Statut', badge: true },
+      { key: 'order', label: 'Ordre', align: 'right' },
+    ],
+    filters: [
+      { key: 'program', label: 'Programme', optionsKey: 'programs' },
+      { key: 'status', label: 'Statut', optionsKey: 'phase_statuses' },
+    ],
+  },
+
+  datasets: {
+    endpoint: 'datasets',
+    title: 'Jeux de données',
+    singular: 'Jeu de données',
+    writable: false,
+    titleField: 'name',
+    columns: [
+      { key: 'name', label: 'Nom' },
+      { key: 'program_label', label: 'Programme' },
+      { key: 'version', label: 'Version' },
+      { key: 'is_current', label: 'Courant', type: 'bool' },
+      { key: 'imported_by', label: 'Importé par' },
+    ],
+    filters: [
+      { key: 'program', label: 'Programme', optionsKey: 'programs' },
+    ],
+  },
+
+  blocks: {
+    endpoint: 'blocks',
+    title: 'Îlots',
+    singular: 'Îlot',
+    writable: false,
+    titleField: 'label',
+    columns: [
+      { key: 'code', label: 'Code' },
+      { key: 'label', label: 'Libellé' },
+      { key: 'program_label', label: 'Programme' },
+      { key: 'area', label: 'Superficie', align: 'right' },
+    ],
+    filters: [
+      { key: 'program', label: 'Programme', optionsKey: 'programs' },
+    ],
+  },
+
+  assets: {
+    endpoint: 'assets',
+    title: 'Actifs',
+    singular: 'Actif',
+    writable: false,
+    titleField: 'label',
+    columns: [
+      { key: 'code', label: 'Code' },
+      { key: 'label', label: 'Libellé' },
+      { key: 'program_label', label: 'Programme' },
+      { key: 'status_display', label: 'Statut', badge: true },
+      { key: 'sale_price_display', label: 'Prix de vente', align: 'right' },
+    ],
+    filters: [
+      { key: 'program', label: 'Programme', optionsKey: 'programs' },
+      { key: 'status', label: 'Statut', optionsKey: 'asset_statuses' },
+    ],
+  },
+
+  construction: {
+    endpoint: 'construction',
+    title: 'Chantiers',
+    singular: 'Chantier',
+    writable: false,
+    titleField: 'title',
+    columns: [
+      { key: 'code', label: 'Code' },
+      { key: 'title', label: 'Intitulé' },
+      { key: 'parcel_label', label: 'Lot' },
+      { key: 'status_display', label: 'Statut', badge: true },
+      { key: 'progress_percent', label: 'Avancement %', align: 'right' },
+    ],
+    filters: [
+      { key: 'status', label: 'Statut', optionsKey: 'construction_statuses' },
+    ],
+  },
 }
 
 export function getResourceConfig(key) {

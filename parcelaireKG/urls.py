@@ -104,20 +104,22 @@ urlpatterns = [
                   path("programs/<int:pk>/edit/", _spa("/app/#/r/programs/%(pk)s/edit"), name="program_edit"),
                   path("programs/<int:pk>/delete/", _spa("/app/#/r/programs/%(pk)s"), name="program_delete"),
 
-                  path("phases/", ProgramPhaseListView.as_view(), name="phase_list"),
+                  # Entités techniques migrées au SPA : liste/détail → SPA
+                  # (lecture, masquage financier), écritures conservées sur Django.
+                  path("phases/", _spa("/app/#/r/phases"), name="phase_list"),
                   path("phases/add/", ProgramPhaseCreateView.as_view(), name="phase_add"),
                   path("phases/<int:pk>/edit/", ProgramPhaseUpdateView.as_view(), name="phase_edit"),
                   path("phases/<int:pk>/delete/", ProgramPhaseDeleteView.as_view(), name="phase_delete"),
 
-                  path("datasets/", ParcelDatasetListView.as_view(), name="dataset_list"),
+                  path("datasets/", _spa("/app/#/r/datasets"), name="dataset_list"),
+                  path("datasets/<int:pk>/", _spa("/app/#/r/datasets/%(pk)s"), name="dataset_detail"),
                   path("datasets/add/", ParcelDatasetCreateView.as_view(), name="dataset_add"),
-                  path("datasets/<int:pk>/", ParcelDatasetDetailView.as_view(), name="dataset_detail"),
                   path("datasets/<int:pk>/edit/", ParcelDatasetUpdateView.as_view(), name="dataset_edit"),
                   path("datasets/<int:pk>/delete/", ParcelDatasetDeleteView.as_view(), name="dataset_delete"),
 
-                  path("blocks/", ProgramBlockListView.as_view(), name="block_list"),
+                  path("blocks/", _spa("/app/#/r/blocks"), name="block_list"),
+                  path("blocks/<int:pk>/", _spa("/app/#/r/blocks/%(pk)s"), name="block_detail"),
                   path("blocks/add/", ProgramBlockCreateView.as_view(), name="block_add"),
-                  path("blocks/<int:pk>/", ProgramBlockDetailView.as_view(), name="block_detail"),
                   path("blocks/edit/<int:pk>", ProgramBlockUpdateView.as_view(), name="block_edit"),
                   path("blocks/<int:pk>/delete/", ProgramBlockDeleteView.as_view(), name="block_delete"),
 
@@ -129,9 +131,9 @@ urlpatterns = [
                   path("parcels/<int:pk>/edit/", ParcelUpdateView.as_view(), name="parcel_edit"),
                   path("parcels/<int:pk>/delete/", ParcelDeleteView.as_view(), name="parcel_delete"),
 
-                  path("assets/", PropertyAssetListView.as_view(), name="asset_list"),
+                  path("assets/", _spa("/app/#/r/assets"), name="asset_list"),
+                  path("assets/<int:pk>/", _spa("/app/#/r/assets/%(pk)s"), name="asset_detail"),
                   path("assets/add/", PropertyAssetCreateView.as_view(), name="asset_add"),
-                  path("assets/<int:pk>/", PropertyAssetDetailView.as_view(), name="asset_detail"),
                   path("assets/<int:pk>/edit/", PropertyAssetUpdateView.as_view(), name="asset_edit"),
                   path("assets/<int:pk>/delete/", PropertyAssetDeleteView.as_view(), name="asset_delete"),
 
@@ -158,12 +160,12 @@ urlpatterns = [
                   path("payments/add/", PaymentCreateView.as_view(), name="payment_add"),
                   path("payments/<int:pk>/edit/", PaymentUpdateView.as_view(), name="payment_edit"),
 
-                  path("construction-projects/", ConstructionProjectListView.as_view(),
+                  path("construction-projects/", _spa("/app/#/r/construction"),
                        name="construction_project_list"),
+                  path("construction-projects/<int:pk>/", _spa("/app/#/r/construction/%(pk)s"),
+                       name="construction_project_detail"),
                   path("construction-projects/add/", ConstructionProjectCreateView.as_view(),
                        name="construction_project_add"),
-                  path("construction-projects/<int:pk>/", ConstructionProjectDetailView.as_view(),
-                       name="construction_project_detail"),
                   path("construction-projects/<int:pk>/edit/", ConstructionProjectUpdateView.as_view(),
                        name="construction_project_edit"),
 

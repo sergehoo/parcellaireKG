@@ -1145,10 +1145,16 @@ class ApiMaskingTests(TestCase):
         cls.payment = Payment.objects.create(
             payment_number='P-1', sale_file=cls.sale, amount=50_000_000,
             status='CONFIRMED', payment_method='BANK', payment_date=date(2026, 1, 15))
-        from parcelaire.models import Lead
+        from parcelaire.models import ConstructionProject, Lead, PropertyAsset
         cls.lead = Lead.objects.create(
             program=cls.program, customer=cls.customer, source='Web', status='NEW',
             budget_min=10_000_000, budget_max=50_000_000, notes='Rappeler au 07 00 00 00 00')
+        cls.asset = PropertyAsset.objects.create(
+            program=cls.program, code='A1', label='Villa A1',
+            sale_price=80_000_000, market_value=90_000_000, mortgage_value=70_000_000)
+        cls.construction = ConstructionProject.objects.create(
+            parcel=cls.parcel, code='CP1', title='Chantier A1',
+            estimated_budget=100_000_000, actual_cost=40_000_000, progress_percent=30)
 
     def _get(self, user, url):
         self.client.force_login(user)
@@ -1193,3 +1199,23 @@ class ApiMaskingTests(TestCase):
     def test_customer_search_no_longer_matches_id_number(self):
         d = self._get(self.pii, '/api/crud/customers/?search=CI-987654')
         self.assertEqual(d['count'], 0)
+
+    def test_asset_prices_masked_without_financial_perm(self):
+        d = self._get(self.reader, f'/api/crud/assets/{self.asset.id}/')
+        self.assertEqual(d['sale_price_display'], 'Masqué')
+        self.assertEqual(d['market_value_display'], 'Masqué')
+        self.assertEqual(d['mortgage_value_display'], 'Masqué')
+        self.assertIn('FCFA', self._get(self.fin, f'/api/crud/assets/{self.asset.id}/')['sale_price_display'])
+
+    def test_construction_budget_masked_without_financial_perm(self):
+        d = self._get(self.reader, f'/api/crud/construction/{self.construction.id}/')
+        self.assertEqual(d['estimated_budget_display'], 'Masqué')
+        self.assertEqual(d['actual_cost_display'], 'Masqué')
+        self.assertIn('FCFA', self._get(self.fin, f'/api/crud/construction/{self.construction.id}/')['estimated_budget_display'])
+
+    def test_technical_lists_reachable(self):
+        # Les 5 ressources techniques répondent (liste) pour un authentifié.
+        self.client.force_login(self.reader)
+        for res in ('phases', 'datasets', 'blocks', 'assets', 'construction'):
+            resp = self.client.get(f'/api/crud/{res}/')
+            self.assertEqual(resp.status_code, 200, res)

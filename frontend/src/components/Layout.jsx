@@ -14,6 +14,11 @@ const NAV = [
   { to: '/r/reservations', label: 'Réservations' },
   { to: '/r/sales', label: 'Ventes' },
   { to: '/r/payments', label: 'Paiements' },
+  { to: '/r/assets', label: 'Actifs' },
+  { to: '/r/construction', label: 'Chantiers' },
+  { to: '/r/blocks', label: 'Îlots' },
+  { to: '/r/phases', label: 'Phases' },
+  { to: '/r/datasets', label: 'Jeux de données' },
   { to: '/orthophotos', label: 'Orthophotos' },
 ]
 
