@@ -9,6 +9,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from parcelaire.services.alerts import generate_alerts as _generate_alerts
+from parcelaire.services.reports import send_dashboard_report as _send_dashboard_report
 from parcelaire.services.crm_sync import (
     sync_all_parcels,
     sync_program_parcels,
@@ -48,6 +49,18 @@ def generate_alerts_task(self):
     generate_alerts_task.delay().
     """
     return _generate_alerts()
+
+
+@shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=3)
+def send_dashboard_report_task(self):
+    """Envoie le rapport PDF de pilotage par e-mail aux destinataires actifs.
+
+    Action SORTANTE : volontairement NON planifiée par défaut dans
+    CELERY_BEAT_SCHEDULE. Un opérateur l'active explicitement (beat/cron) une
+    fois le SMTP configuré ; sinon on la déclenche à la demande via
+    send_dashboard_report_task.delay().
+    """
+    return _send_dashboard_report()
 
 
 # =====================================================================

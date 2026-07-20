@@ -1038,3 +1038,78 @@ class AlertsEngineTests(TestCase):
         d = self.client.get(f'/api/alerts/?parcel={self.parcel.id}').json()
         self.assertTrue(d['count'] >= 1)
         self.assertTrue(all(a['parcel_id'] == self.parcel.id for a in d['results']))
+
+
+# =====================================================================
+# Envoi par e-mail du rapport PDF de pilotage
+# =====================================================================
+from django.core import mail  # noqa: E402
+from django.core.management import call_command  # noqa: E402
+
+from parcelaire.models import ReportRecipient  # noqa: E402
+from parcelaire.services.reports import send_dashboard_report  # noqa: E402
+
+
+class ReportDeliveryTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.country = Country.objects.create(nom="Côte d'Ivoire", code='CI')
+        cls.project = ProjetImmobilier.objects.create(code='PA', nom='Projet A', country=cls.country)
+        cls.program = RealEstateProgram.objects.create(
+            code='PRG', name='Programme A', slug='programme-a', country=cls.country, project=cls.project)
+
+    def test_no_recipients_sends_nothing(self):
+        res = send_dashboard_report()
+        self.assertEqual(res['sent'], 0)
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_sends_pdf_to_active_recipients_only(self):
+        ReportRecipient.objects.create(email='dg@example.com', label='DG', with_financials=True)
+        ReportRecipient.objects.create(email='commercial@example.com', label='Commercial')
+        ReportRecipient.objects.create(email='ancien@example.com', is_active=False)  # exclu
+        res = send_dashboard_report()
+        self.assertEqual(res['sent'], 2)
+        self.assertEqual(len(mail.outbox), 2)
+        # Chaque e-mail porte une pièce jointe PDF.
+        for msg in mail.outbox:
+            self.assertEqual(len(msg.attachments), 1)
+            name, content, mimetype = msg.attachments[0]
+            self.assertTrue(name.endswith('.pdf'))
+            self.assertEqual(mimetype, 'application/pdf')
+            self.assertTrue(bytes(content).startswith(b'%PDF-'))
+        self.assertNotIn('ancien@example.com', [addr for m in mail.outbox for addr in m.to])
+
+    def test_management_command(self):
+        ReportRecipient.objects.create(email='dg@example.com', label='DG')
+        call_command('send_dashboard_report')
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['dg@example.com'])
+
+    def test_task_wrapper(self):
+        from parcelaire.tasks import send_dashboard_report_task
+        ReportRecipient.objects.create(email='dg@example.com', label='DG')
+        res = send_dashboard_report_task.run()
+        self.assertEqual(res['sent'], 1)
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_failed_recipient_isolated_no_duplicates(self):
+        # Un destinataire en échec ne doit ni interrompre le lot ni provoquer
+        # de doublon d'envoi aux autres (garde-fou anti-retry).
+        ReportRecipient.objects.create(email='ok1@example.com')
+        ReportRecipient.objects.create(email='bad@example.com')
+        ReportRecipient.objects.create(email='ok2@example.com')
+        real_send = mail.EmailMessage.send
+
+        def flaky_send(msg_self, *a, **k):
+            if 'bad@example.com' in msg_self.to:
+                raise Exception('SMTP refused')
+            return real_send(msg_self, *a, **k)
+
+        with mock.patch.object(mail.EmailMessage, 'send', flaky_send):
+            res = send_dashboard_report()
+        self.assertEqual(res['sent'], 2)
+        self.assertEqual(res['failed'], 1)
+        tos = [addr for m in mail.outbox for addr in m.to]
+        self.assertEqual(tos.count('ok1@example.com'), 1)  # pas de doublon
+        self.assertEqual(tos.count('ok2@example.com'), 1)
+        self.assertNotIn('bad@example.com', tos)

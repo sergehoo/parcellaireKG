@@ -211,20 +211,23 @@ def _at_risk_rows(request, can_fin):
     return rows
 
 
+def _can_view_financial(user):
+    """Droit de voir les montants financiers (superuser ou permission)."""
+    return bool(user.is_superuser or user.has_perm('parcelaire.view_financial_data'))
+
+
 class AnalyticsDashboardAPIView(APIView):
     """GET /api/analytics/dashboard/ — synthèse exécutive : KPIs, santé des
     programmes, alertes métier, top clients à risque."""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        return Response(self.build_dashboard(request.user))
+        return Response(self.build_dashboard(_can_view_financial(request.user)))
 
-    def build_dashboard(self, user):
+    def build_dashboard(self, can_fin):
         """Synthèse exécutive (KPIs, santé programmes, alertes, clients à
-        risque). Partagée par l'API JSON et le rapport PDF. Respecte le
-        masquage financier (view_financial_data)."""
-        can_fin = user.is_superuser or user.has_perm('parcelaire.view_financial_data')
-
+        risque). Partagée par l'API JSON, le rapport PDF et l'envoi planifié.
+        `can_fin=True` ⇒ montants visibles, `False` ⇒ masqués."""
         parcels = Parcel.objects.filter(is_active=True)
         sales = SaleFile.objects.filter(is_active=True)
         ca = sales.aggregate(s=Coalesce(Sum('net_price'), Decimal('0')))['s']
@@ -356,19 +359,26 @@ class DashboardReportPDFView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        data = AnalyticsDashboardAPIView().build_dashboard(request.user)
-        html = render_to_string('parcelaire/reports/dashboard_report.html', {
-            'd': data,
-            'generated_at': timezone.now(),
-            'username': request.user.get_full_name() or request.user.get_username(),
-        })
-        # Import tardif : WeasyPrint charge des libs natives (libgobject via
-        # cffi) ; on évite tout coût/échec d'import au chargement du module.
-        from weasyprint import HTML
-        pdf = HTML(string=html, base_url=request.build_absolute_uri('/')).write_pdf()
+        can_fin = _can_view_financial(request.user)
+        username = request.user.get_full_name() or request.user.get_username()
+        pdf = render_dashboard_pdf(can_fin, username)
         resp = HttpResponse(pdf, content_type='application/pdf')
         resp['Content-Disposition'] = 'attachment; filename="tableau-de-bord.pdf"'
         return resp
+
+
+def render_dashboard_pdf(can_fin, username='—'):
+    """Rend le rapport PDF exécutif du Centre de pilotage et renvoie les octets.
+    Réutilisé par l'endpoint HTTP et par l'envoi planifié. Import WeasyPrint
+    tardif (libs natives libgobject via cffi)."""
+    data = AnalyticsDashboardAPIView().build_dashboard(can_fin)
+    html = render_to_string('parcelaire/reports/dashboard_report.html', {
+        'd': data,
+        'generated_at': timezone.now(),
+        'username': username,
+    })
+    from weasyprint import HTML
+    return HTML(string=html).write_pdf()
 
 
 class AtRiskPagination(PageNumberPagination):

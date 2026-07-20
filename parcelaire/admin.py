@@ -1468,3 +1468,16 @@ class IntegrationLogAdmin(admin.ModelAdmin):
         "error_message",
         "external_id",
     )
+
+
+from .models import ReportRecipient  # noqa: E402
+
+
+@admin.register(ReportRecipient)
+class ReportRecipientAdmin(admin.ModelAdmin):
+    """Gestion des destinataires du rapport PDF de pilotage (envoi e-mail)."""
+    list_display = ("email", "label", "with_financials", "is_active", "created_at")
+    list_filter = ("is_active", "with_financials")
+    search_fields = ("email", "label")
+    list_editable = ("with_financials", "is_active")
+    ordering = ("email",)

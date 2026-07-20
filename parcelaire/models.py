@@ -2105,3 +2105,27 @@ class Alert(TimeStampedModel):
 
     def __str__(self):
         return f"[{self.level}] {self.title}"
+
+
+class ReportRecipient(TimeStampedModel):
+    """Destinataire d'un rapport de pilotage envoyé par e-mail.
+
+    L'envoi lui-même est déclenché explicitement (commande / tâche) — il n'y
+    a PAS de planification automatique par défaut : envoyer des e-mails est
+    une action sortante, activée sciemment par un opérateur une fois le SMTP
+    configuré.
+    """
+    email = models.EmailField(unique=True, verbose_name="Adresse e-mail")
+    label = models.CharField(max_length=150, blank=True, verbose_name="Nom / fonction")
+    with_financials = models.BooleanField(
+        default=False, verbose_name="Reçoit les montants financiers",
+        help_text="Sinon, les montants sont masqués dans le rapport reçu.")
+    is_active = models.BooleanField(default=True, verbose_name="Actif")
+
+    class Meta:
+        verbose_name = "Destinataire de rapport"
+        verbose_name_plural = "Destinataires de rapports"
+        ordering = ["email"]
+
+    def __str__(self):
+        return self.label or self.email
