@@ -1,4 +1,9 @@
 from django.urls import include, path
+from drf_spectacular.views import (
+    SpectacularAPIView,
+    SpectacularRedocView,
+    SpectacularSwaggerView,
+)
 from rest_framework.routers import DefaultRouter
 
 from parcelaire.api import crud as crud_api
@@ -29,6 +34,11 @@ router.register("sales", crud_api.SaleViewSet, basename="api-sale")
 router.register("payments", crud_api.PaymentViewSet, basename="api-payment")
 
 urlpatterns = [
+    # -------- Documentation OpenAPI (drf-spectacular, derrière auth) --------
+    path("schema/", SpectacularAPIView.as_view(), name="api-schema"),
+    path("docs/", SpectacularSwaggerView.as_view(url_name="api-schema"), name="api-swagger"),
+    path("redoc/", SpectacularRedocView.as_view(url_name="api-schema"), name="api-redoc"),
+
     path("map/assets/", RealEstateMapAPIView.as_view(), name="api-map-assets"),
     path("map/3d/", RealEstateMap3DView.as_view(), name="real-estate-map-3d"),
     # path("sap/health/", SAPHealthCheckView.as_view(), name="sap_health"),

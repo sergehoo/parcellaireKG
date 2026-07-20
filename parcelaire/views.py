@@ -1545,11 +1545,14 @@ class OrthophotoDownloadLogsView(_OrthophotoBaseMixin, View):
 
     def get(self, request, pk, *args, **kwargs):
         ortho = get_object_or_404(ProgramOrthophoto, pk=pk)
+        # Les commandes GDAL exposent des chemins serveur : réservées aux
+        # gestionnaires d'orthophotos (aligné sur l'API, M7).
+        show_cmd = request.user.has_perm("parcelaire.change_programorthophoto")
         lines = []
         for log in ortho.processing_logs.all():
             ts = log.created_at.strftime("%Y-%m-%d %H:%M:%S") if log.created_at else "-"
             lines.append(f"[{ts}] [{log.level}] {log.message}")
-            if log.command:
+            if log.command and show_cmd:
                 lines.append(f"  $ {log.command}")
         body = "\n".join(lines) or "(aucun log)"
         resp = HttpResponse(body, content_type="text/plain; charset=utf-8")

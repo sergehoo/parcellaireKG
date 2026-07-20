@@ -327,6 +327,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 #    (exports, rapport PDF, recalcul d'alertes) contre le DoS applicatif (M3).
 # ---------------------------------------------------------------------------
 REST_FRAMEWORK = {
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
@@ -343,6 +344,24 @@ REST_FRAMEWORK = {
         'report': '20/hour',
         'regenerate': '12/hour',
     },
+}
+
+# Documentation OpenAPI (drf-spectacular). Le schéma et les UIs Swagger/ReDoc
+# héritent du défaut IsAuthenticated (non public). SERVE_INCLUDE_SCHEMA=False :
+# on n'expose pas le schéma sur les vues elles-mêmes.
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'KAYDAN Parcellaire API',
+    'DESCRIPTION': (
+        'API sécurisée de gestion des projets immobiliers, programmes, '
+        'parcelles, orthophotos, bâtiments et données géospatiales.'
+    ),
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'COMPONENT_SPLIT_REQUEST': True,
+    'SCHEMA_PATH_PREFIX': r'/api',
+    # Les vues de doc drf-spectacular sont AllowAny par défaut : on les protège
+    # (schéma = cartographie complète de l'API, à ne pas exposer publiquement).
+    'SERVE_PERMISSIONS': ['rest_framework.permissions.IsAuthenticated'],
 }
 
 CELERY_BEAT_SCHEDULE = {
@@ -427,7 +446,7 @@ ORTHOPHOTO_GDAL_PROCESSES = int(os.environ.get("ORTHOPHOTO_GDAL_PROCESSES", "4")
 DATA_UPLOAD_MAX_MEMORY_SIZE = ORTHOPHOTO_MAX_BYTES
 FILE_UPLOAD_MAX_MEMORY_SIZE = 25 * 1024 * 1024   # bascule sur fichier temp >5 Mo
 FILE_UPLOAD_PERMISSIONS = 0o644
-DATA_UPLOAD_MAX_NUMBER_FIELDS = None             # pas de limite sur le nb de champs form
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000            # borne anti-« field bomb » (DoS) ; large pour tout form réel
 
 # Répertoire tampon pour les uploads : on l'isole dans `MEDIA_ROOT/_tmp_uploads`
 # plutôt que d'utiliser `/tmp` (souvent petit dans un container Linux et qui
