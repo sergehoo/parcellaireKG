@@ -63,6 +63,7 @@ urlpatterns = [
     path("alerts/regenerate/", AlertRegenerateAPIView.as_view(), name="api-alert-regenerate"),
     path("alerts/export/", AlertExportAPIView.as_view(), name="api-alert-export"),
     path("alerts/<int:pk>/<str:action>/", AlertActionAPIView.as_view(), name="api-alert-action"),
+    path("auth/me/", crud_api.MeAPIView.as_view(), name="api-me"),
     path("crud/options/", crud_api.CrudOptionsAPIView.as_view(), name="api-crud-options"),
     path("crud/", include(router.urls)),
 

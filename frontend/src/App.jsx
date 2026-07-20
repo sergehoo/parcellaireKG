@@ -11,10 +11,14 @@ import ResourceFormPage from './pages/ResourceFormPage'
 import OrthophotoList from './pages/OrthophotoList'
 import OrthophotoUpload from './pages/OrthophotoUpload'
 import OrthophotoDetail from './pages/OrthophotoDetail'
+import ProfilePage from './pages/ProfilePage'
 import { ensureCsrf } from './api/client'
+import { initTheme } from './lib/theme'
 
 // Pose le cookie csrftoken dès le chargement de l'app.
 ensureCsrf()
+// Applique le thème (clair/sombre) mémorisé / préférence système.
+initTheme()
 
 // HashRouter : le SPA est servi par Django sur /app/ (login requis) ;
 // tout le routage se fait après le `#`. La carte est la vue d'accueil.
@@ -29,6 +33,7 @@ export default function App() {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/pilotage/risques" element={<AtRiskPage />} />
             <Route path="/notifications" element={<NotificationCenter />} />
+            <Route path="/profile" element={<ProfilePage />} />
 
             {/* CRUD générique piloté par le registre config/resources.js */}
             <Route path="/r/:resource" element={<ResourceListPage />} />

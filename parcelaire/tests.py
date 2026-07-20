@@ -1219,3 +1219,12 @@ class ApiMaskingTests(TestCase):
         for res in ('phases', 'datasets', 'blocks', 'assets', 'construction'):
             resp = self.client.get(f'/api/crud/{res}/')
             self.assertEqual(resp.status_code, 200, res)
+
+    def test_me_endpoint(self):
+        self.assertEqual(self.client.get('/api/auth/me/').status_code, 403)  # anonyme
+        self.client.force_login(self.fin)
+        d = self.client.get('/api/auth/me/').json()
+        self.assertEqual(d['username'], 'mask-fin')
+        self.assertTrue(d['permissions']['financial'])
+        self.assertFalse(d['permissions']['patient'])
+        self.assertTrue(d['initials'])

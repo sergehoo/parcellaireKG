@@ -548,6 +548,36 @@ def _choices(model, field):
     return [{"value": v, "label": lbl} for v, lbl in model._meta.get_field(field).choices]
 
 
+class MeAPIView(APIView):
+    """GET /api/auth/me/ — utilisateur courant (barre du SPA : nom, e-mail,
+    initiales, droits, profil)."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        u = request.user
+        full = u.get_full_name()
+        initials = ((u.first_name[:1] + u.last_name[:1]).strip()
+                    or u.get_username()[:2]).upper()
+        prof = getattr(u, "profile", None)
+        return Response({
+            "username": u.get_username(),
+            "full_name": full or u.get_username(),
+            "email": u.email or "",
+            "initials": initials,
+            "is_staff": u.is_staff,
+            "is_superuser": u.is_superuser,
+            "profile": None if prof is None else {
+                "phone": prof.phone, "job_title": prof.job_title,
+                "organization": prof.organization, "department": prof.department,
+                "language": prof.language, "timezone": prof.timezone,
+            },
+            "permissions": {
+                "financial": user_can_view_financial_data(u),
+                "patient": user_can_view_patient_data(u),
+            },
+        })
+
+
 class CrudOptionsAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
