@@ -28,6 +28,7 @@ from parcelaire.api.views import (
 from parcelaire.models import (
     Country,
     Customer,
+    Lead,
     Parcel,
     Payment,
     Place,
@@ -347,6 +348,54 @@ class PaymentViewSet(BaseReadViewSet):
     ordering = ["-payment_date", "-created_at"]
 
 
+class LeadSerializer(serializers.ModelSerializer):
+    program_label = serializers.CharField(source="program.name", read_only=True, default="")
+    customer_label = serializers.SerializerMethodField()
+    parcel_label = serializers.SerializerMethodField()
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    budget_min_display = serializers.SerializerMethodField()
+    budget_max_display = serializers.SerializerMethodField()
+    notes_display = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Lead
+        fields = [
+            "id", "program", "program_label", "customer", "customer_label",
+            "interested_parcel", "parcel_label", "source", "status", "status_display",
+            "budget_min_display", "budget_max_display", "notes_display", "created_at",
+        ]
+
+    def get_customer_label(self, obj):
+        return str(obj.customer) if obj.customer_id else "—"
+
+    def get_parcel_label(self, obj):
+        p = obj.interested_parcel
+        return (p.lot_number or p.parcel_code or f"#{p.id}") if p else "—"
+
+    def get_budget_min_display(self, obj):
+        return money_field(self, obj.budget_min)
+
+    def get_budget_max_display(self, obj):
+        return money_field(self, obj.budget_max)
+
+    def get_notes_display(self, obj):
+        # Notes = potentiellement du PII (contexte prospect) → masqué sans droit.
+        if not obj.notes:
+            return ""
+        user = _ctx_user(self)
+        return obj.notes if (user and user_can_view_patient_data(user)) else MASKED
+
+
+class LeadViewSet(BaseReadViewSet):
+    queryset = Lead.objects.filter(is_active=True).select_related(
+        "program", "customer", "interested_parcel")
+    serializer_class = LeadSerializer
+    search_fields = ["customer__last_name", "customer__company_name", "program__name", "source"]
+    filterset_fields = ["program", "status"]
+    ordering_fields = ["created_at"]
+    ordering = ["-created_at"]
+
+
 # =====================================================================
 # Options pour les formulaires / filtres du SPA
 # =====================================================================
@@ -383,6 +432,7 @@ class CrudOptionsAPIView(APIView):
             "sale_statuses": _choices(SaleFile, "status"),
             "reservation_statuses": _choices(Reservation, "status"),
             "payment_statuses": _choices(Payment, "status"),
+            "lead_statuses": _choices(Lead, "status"),
             "permissions": {
                 "project": perms(ProjetImmobilier),
                 "program": perms(RealEstateProgram),

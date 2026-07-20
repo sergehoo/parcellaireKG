@@ -10,6 +10,7 @@ const NAV = [
   { to: '/r/programs', label: 'Programmes' },
   { to: '/r/parcels', label: 'Parcelles' },
   { to: '/r/customers', label: 'Clients' },
+  { to: '/r/leads', label: 'Prospects' },
   { to: '/r/reservations', label: 'Réservations' },
   { to: '/r/sales', label: 'Ventes' },
   { to: '/r/payments', label: 'Paiements' },

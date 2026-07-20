@@ -182,6 +182,25 @@ export const RESOURCES = {
       { key: 'status', label: 'Statut', optionsKey: 'payment_statuses' },
     ],
   },
+
+  leads: {
+    endpoint: 'leads',
+    title: 'Prospects',
+    singular: 'Prospect',
+    writable: false,
+    titleField: 'customer_label',
+    columns: [
+      { key: 'customer_label', label: 'Client' },
+      { key: 'program_label', label: 'Programme' },
+      { key: 'status_display', label: 'Statut', badge: true },
+      { key: 'source', label: 'Source' },
+      { key: 'budget_max_display', label: 'Budget max', align: 'right' },
+    ],
+    filters: [
+      { key: 'program', label: 'Programme', optionsKey: 'programs' },
+      { key: 'status', label: 'Statut', optionsKey: 'lead_statuses' },
+    ],
+  },
 }
 
 export function getResourceConfig(key) {

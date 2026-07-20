@@ -121,11 +121,13 @@ urlpatterns = [
                   path("blocks/edit/<int:pk>", ProgramBlockUpdateView.as_view(), name="block_edit"),
                   path("blocks/<int:pk>/delete/", ProgramBlockDeleteView.as_view(), name="block_delete"),
 
+                  # Lecture → SPA ; écritures conservées sur Django (le SPA est
+                  # en lecture seule pour les entités transactionnelles).
                   path("parcels/", _spa("/app/#/r/parcels"), name="parcel_list"),
-                  path("parcels/add/", _spa("/app/#/r/parcels/new"), name="parcel_add"),
                   path("parcels/<int:pk>/", _spa("/app/#/r/parcels/%(pk)s"), name="parcel_detail"),
-                  path("parcels/<int:pk>/edit/", _spa("/app/#/r/parcels/%(pk)s/edit"), name="parcel_edit"),
-                  path("parcels/<int:pk>/delete/", _spa("/app/#/r/parcels/%(pk)s"), name="parcel_delete"),
+                  path("parcels/add/", ParcelCreateView.as_view(), name="parcel_add"),
+                  path("parcels/<int:pk>/edit/", ParcelUpdateView.as_view(), name="parcel_edit"),
+                  path("parcels/<int:pk>/delete/", ParcelDeleteView.as_view(), name="parcel_delete"),
 
                   path("assets/", PropertyAssetListView.as_view(), name="asset_list"),
                   path("assets/add/", PropertyAssetCreateView.as_view(), name="asset_add"),
@@ -137,22 +139,24 @@ urlpatterns = [
                   path("customers/add/", _spa("/app/#/r/customers/new"), name="customer_add"),
                   path("customers/<int:pk>/edit/", _spa("/app/#/r/customers/%(pk)s/edit"), name="customer_edit"),
 
-                  path("leads/", LeadListView.as_view(), name="lead_list"),
+                  # Liste (fuite PII/budget) → SPA en lecture masquée ; écritures
+                  # conservées sur Django.
+                  path("leads/", _spa("/app/#/r/leads"), name="lead_list"),
                   path("leads/add/", LeadCreateView.as_view(), name="lead_add"),
                   path("leads/<int:pk>/edit/", LeadUpdateView.as_view(), name="lead_edit"),
 
                   path("reservations/", _spa("/app/#/r/reservations"), name="reservation_list"),
-                  path("reservations/add/", _spa("/app/#/r/reservations/new"), name="reservation_add"),
-                  path("reservations/<int:pk>/edit/", _spa("/app/#/r/reservations/%(pk)s/edit"), name="reservation_edit"),
+                  path("reservations/add/", ReservationCreateView.as_view(), name="reservation_add"),
+                  path("reservations/<int:pk>/edit/", ReservationUpdateView.as_view(), name="reservation_edit"),
 
                   path("sales/", _spa("/app/#/r/sales"), name="sale_list"),
-                  path("sales/add/", _spa("/app/#/r/sales/new"), name="sale_add"),
                   path("sales/<int:pk>/", _spa("/app/#/r/sales/%(pk)s"), name="sale_detail"),
-                  path("sales/<int:pk>/edit/", _spa("/app/#/r/sales/%(pk)s/edit"), name="sale_edit"),
+                  path("sales/add/", SaleFileCreateView.as_view(), name="sale_add"),
+                  path("sales/<int:pk>/edit/", SaleFileUpdateView.as_view(), name="sale_edit"),
 
                   path("payments/", _spa("/app/#/r/payments"), name="payment_list"),
-                  path("payments/add/", _spa("/app/#/r/payments/new"), name="payment_add"),
-                  path("payments/<int:pk>/edit/", _spa("/app/#/r/payments/%(pk)s/edit"), name="payment_edit"),
+                  path("payments/add/", PaymentCreateView.as_view(), name="payment_add"),
+                  path("payments/<int:pk>/edit/", PaymentUpdateView.as_view(), name="payment_edit"),
 
                   path("construction-projects/", ConstructionProjectListView.as_view(),
                        name="construction_project_list"),

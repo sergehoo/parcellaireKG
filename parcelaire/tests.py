@@ -1145,10 +1145,26 @@ class ApiMaskingTests(TestCase):
         cls.payment = Payment.objects.create(
             payment_number='P-1', sale_file=cls.sale, amount=50_000_000,
             status='CONFIRMED', payment_method='BANK', payment_date=date(2026, 1, 15))
+        from parcelaire.models import Lead
+        cls.lead = Lead.objects.create(
+            program=cls.program, customer=cls.customer, source='Web', status='NEW',
+            budget_min=10_000_000, budget_max=50_000_000, notes='Rappeler au 07 00 00 00 00')
 
     def _get(self, user, url):
         self.client.force_login(user)
         return self.client.get(url).json()
+
+    def test_lead_budget_masked_without_financial_perm(self):
+        d = self._get(self.reader, f'/api/crud/leads/{self.lead.id}/')
+        self.assertEqual(d['budget_max_display'], 'Masqué')
+        self.assertEqual(d['budget_min_display'], 'Masqué')
+        self.assertIn('FCFA', self._get(self.fin, f'/api/crud/leads/{self.lead.id}/')['budget_max_display'])
+
+    def test_lead_notes_masked_without_patient_perm(self):
+        self.assertEqual(
+            self._get(self.reader, f'/api/crud/leads/{self.lead.id}/')['notes_display'], 'Masqué')
+        self.assertIn(
+            '07 00', self._get(self.pii, f'/api/crud/leads/{self.lead.id}/')['notes_display'])
 
     def test_sale_amounts_masked_without_financial_perm(self):
         d = self._get(self.reader, f'/api/crud/sales/{self.sale.id}/')
