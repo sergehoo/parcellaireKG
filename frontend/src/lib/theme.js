@@ -17,6 +17,8 @@ export function applyTheme(theme) {
 export function setTheme(theme) {
   localStorage.setItem(KEY, theme)
   applyTheme(theme)
+  // Notifie les vues intéressées (ex. la carte adapte son fond au thème).
+  window.dispatchEvent(new CustomEvent('kg-theme-change', { detail: theme }))
 }
 
 export function initTheme() {

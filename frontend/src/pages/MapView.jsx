@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { getMapAssets } from '../api/map'
 import { getAlertMap } from '../api/analytics'
+import { getTheme } from '../lib/theme'
 import useReferenceData from '../hooks/useReferenceData'
 import MapCanvas from '../components/map/MapCanvas'
 import MapToolbar from '../components/map/MapToolbar'
@@ -26,7 +27,8 @@ export default function MapView() {
   const [error, setError] = useState(null)
   const [selected, setSelected] = useState(null)
 
-  const [basemap, setBasemap] = useState('standard')
+  // Fond de carte : suit le thème par défaut (sombre → fond « sombre »).
+  const [basemap, setBasemap] = useState(() => (getTheme() === 'dark' ? 'sombre' : 'standard'))
   const [layerStyle, setLayerStyle] = useState('polygones')
   const [alertMap, setAlertMap] = useState(null)
   const [showAlerts, setShowAlerts] = useState(true)
@@ -61,6 +63,17 @@ export default function MapView() {
 
   useEffect(() => load(), [load])
   useEffect(() => { if (api) api.toggleMinimap(minimapOn) }, [api, minimapOn])
+
+  // Le fond de carte neutre (standard/sombre) suit le thème ; un choix explicite
+  // (satellite/relief/clair) est préservé.
+  useEffect(() => {
+    const onTheme = (e) => {
+      const dark = (e.detail || getTheme()) === 'dark'
+      setBasemap((cur) => (cur === 'standard' || cur === 'sombre' ? (dark ? 'sombre' : 'standard') : cur))
+    }
+    window.addEventListener('kg-theme-change', onTheme)
+    return () => window.removeEventListener('kg-theme-change', onTheme)
+  }, [])
 
   // Sévérité d'alerte active par parcelle (chargée une fois pour le surlignage).
   useEffect(() => {
