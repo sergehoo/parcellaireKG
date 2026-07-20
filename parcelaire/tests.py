@@ -1228,3 +1228,14 @@ class ApiMaskingTests(TestCase):
         self.assertTrue(d['permissions']['financial'])
         self.assertFalse(d['permissions']['patient'])
         self.assertTrue(d['initials'])
+
+    def test_openapi_schema_builds_and_is_gated(self):
+        # Le schéma OpenAPI se génère sans erreur (garde de non-régression des
+        # décorateurs @extend_schema) et n'est pas public.
+        self.assertEqual(self.client.get('/api/schema/').status_code, 403)  # anonyme
+        self.client.force_login(self.fin)
+        resp = self.client.get('/api/schema/')
+        self.assertEqual(resp.status_code, 200)
+        body = resp.content.decode('utf-8')
+        self.assertIn('openapi', body)
+        self.assertIn('KAYDAN Parcellaire API', body)

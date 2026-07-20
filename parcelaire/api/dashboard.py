@@ -6,6 +6,7 @@ Les montants financiers sont masqués si l'utilisateur n'a pas le droit
 from decimal import Decimal
 
 from django.db.models import Count, Sum
+from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -29,6 +30,13 @@ def _fmt_money(value):
     return f"{v:,}".replace(",", " ") + " FCFA"
 
 
+@extend_schema_view(get=extend_schema(
+    summary="Statistiques du tableau de bord",
+    description="KPIs synthétiques (compteurs, statuts, montants). Les montants "
+                "sont masqués sans `view_financial_data`.",
+    tags=["Analytics"],
+    responses={200: OpenApiResponse(description="KPIs du tableau de bord.")},
+))
 class DashboardStatsAPIView(APIView):
     permission_classes = [IsAuthenticated]
 

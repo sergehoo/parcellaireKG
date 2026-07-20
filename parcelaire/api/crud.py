@@ -14,6 +14,7 @@ qui héritent de SoftDeleteModel.
 from decimal import Decimal
 
 from django_filters.rest_framework import DjangoFilterBackend
+from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
 from rest_framework import serializers, viewsets
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.pagination import PageNumberPagination
@@ -548,6 +549,13 @@ def _choices(model, field):
     return [{"value": v, "label": lbl} for v, lbl in model._meta.get_field(field).choices]
 
 
+@extend_schema_view(get=extend_schema(
+    summary="Utilisateur courant",
+    description="Identité de l'utilisateur connecté (nom, e-mail, initiales), ses "
+                "droits (financier / données clients) et son profil.",
+    tags=["Auth"],
+    responses={200: OpenApiResponse(description="Utilisateur courant.")},
+))
 class MeAPIView(APIView):
     """GET /api/auth/me/ — utilisateur courant (barre du SPA : nom, e-mail,
     initiales, droits, profil)."""
@@ -578,6 +586,13 @@ class MeAPIView(APIView):
         })
 
 
+@extend_schema_view(get=extend_schema(
+    summary="Options des formulaires / filtres CRUD",
+    description="Listes de référence (pays, lieux, projets, programmes, statuts…) "
+                "et permissions de l'utilisateur, pour les formulaires et filtres du SPA.",
+    tags=["CRUD"],
+    responses={200: OpenApiResponse(description="Listes d'options + permissions.")},
+))
 class CrudOptionsAPIView(APIView):
     permission_classes = [IsAuthenticated]
 

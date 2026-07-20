@@ -21,6 +21,12 @@ from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import ensure_csrf_cookie
+from drf_spectacular.utils import (
+    OpenApiParameter,
+    OpenApiResponse,
+    extend_schema,
+    extend_schema_view,
+)
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -139,6 +145,20 @@ def serialize_orthophoto(ortho, *, with_logs=False, can_manage=False):
 # Endpoints
 # =====================================================================
 
+@extend_schema_view(get=extend_schema(
+    summary="Liste des orthophotos",
+    description="Liste paginée des orthophotos avec filtres (projet, programme, "
+                "année, mois, statut, recherche).",
+    tags=["Orthophotos"],
+    parameters=[
+        OpenApiParameter("project", int), OpenApiParameter("program", int),
+        OpenApiParameter("year", int), OpenApiParameter("month", int),
+        OpenApiParameter("status", str, description="PENDING, PROCESSING, DONE, FAILED."),
+        OpenApiParameter("q", str, description="Recherche."),
+        OpenApiParameter("page", int), OpenApiParameter("page_size", int),
+    ],
+    responses={200: OpenApiResponse(description="Page d'orthophotos.")},
+))
 class OrthophotoListAPIView(APIView):
     """GET /api/orthophotos/ — liste paginée + filtres (mêmes filtres
     que OrthophotoListView côté templates)."""
@@ -190,6 +210,15 @@ class OrthophotoListAPIView(APIView):
         })
 
 
+@extend_schema_view(get=extend_schema(
+    summary="Détail d'une orthophoto",
+    description="Détail complet + 200 derniers logs de traitement. Les commandes "
+                "GDAL des logs sont masquées sans `change_programorthophoto`.",
+    tags=["Orthophotos"],
+    parameters=[OpenApiParameter("pk", int, OpenApiParameter.PATH)],
+    responses={200: OpenApiResponse(description="Orthophoto + logs."),
+               404: OpenApiResponse(description="Introuvable.")},
+))
 class OrthophotoDetailAPIView(APIView):
     """GET /api/orthophotos/<pk>/ — détail + 200 derniers logs."""
     permission_classes = [IsAuthenticated]
@@ -205,6 +234,15 @@ class OrthophotoDetailAPIView(APIView):
         return Response(serialize_orthophoto(ortho, with_logs=True, can_manage=can_manage))
 
 
+@extend_schema_view(post=extend_schema(
+    summary="Relancer le traitement",
+    description="Réinitialise l'orthophoto et relance le pipeline GDAL (Celery). "
+                "Exige `change_programorthophoto`.",
+    tags=["Orthophotos"], request=None,
+    parameters=[OpenApiParameter("pk", int, OpenApiParameter.PATH)],
+    responses={200: OpenApiResponse(description="Traitement relancé."),
+               202: OpenApiResponse(description="Réinitialisée, Celery injoignable.")},
+))
 class OrthophotoRetryAPIView(APIView):
     """POST /api/orthophotos/<pk>/retry/ — relance le pipeline GDAL."""
     permission_classes = [IsAuthenticated, CanChangeOrthophoto]
@@ -233,6 +271,14 @@ class OrthophotoRetryAPIView(APIView):
                          "orthophoto": serialize_orthophoto(ortho)})
 
 
+@extend_schema_view(post=extend_schema(
+    summary="Définir comme orthophoto courante",
+    description="Marque l'orthophoto comme courante pour son programme (exclusif). "
+                "Exige `change_programorthophoto`.",
+    tags=["Orthophotos"], request=None,
+    parameters=[OpenApiParameter("pk", int, OpenApiParameter.PATH)],
+    responses={200: OpenApiResponse(description="Orthophoto courante définie.")},
+))
 class OrthophotoSetCurrentAPIView(APIView):
     """POST /api/orthophotos/<pk>/set-current/ — définit la courante."""
     permission_classes = [IsAuthenticated, CanChangeOrthophoto]
@@ -248,6 +294,15 @@ class OrthophotoSetCurrentAPIView(APIView):
                          "orthophoto": serialize_orthophoto(ortho)})
 
 
+@extend_schema_view(post=extend_schema(
+    summary="Supprimer les tuiles",
+    description="Purge les tuiles générées et repasse le statut à PENDING. "
+                "Exige `delete_programorthophoto`.",
+    tags=["Orthophotos"], request=None,
+    parameters=[OpenApiParameter("pk", int, OpenApiParameter.PATH)],
+    responses={200: OpenApiResponse(description="Tuiles supprimées."),
+               500: OpenApiResponse(description="Échec de suppression.")},
+))
 class OrthophotoDeleteTilesAPIView(APIView):
     """POST /api/orthophotos/<pk>/delete-tiles/ — purge les tuiles
     et repasse le statut à PENDING (même logique que la vue template)."""
@@ -277,6 +332,13 @@ class OrthophotoDeleteTilesAPIView(APIView):
                          "orthophoto": serialize_orthophoto(ortho)})
 
 
+@extend_schema_view(get=extend_schema(
+    summary="Données de référence orthophotos",
+    description="Listes pour les filtres et le formulaire (projets, programmes, "
+                "statuts, années, mois).",
+    tags=["Orthophotos"],
+    responses={200: OpenApiResponse(description="Listes de référence.")},
+))
 class OrthophotoReferenceDataAPIView(APIView):
     """GET /api/orthophotos/reference-data/ — listes pour filtres et
     formulaire (projets, programmes, statuts, années, mois)."""

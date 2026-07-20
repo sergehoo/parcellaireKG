@@ -24,6 +24,14 @@ from django.db.models import Count, Q, Sum
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import (
+    OpenApiExample,
+    OpenApiParameter,
+    OpenApiResponse,
+    extend_schema,
+    extend_schema_view,
+)
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -216,6 +224,14 @@ def _can_view_financial(user):
     return bool(user.is_superuser or user.has_perm('parcelaire.view_financial_data'))
 
 
+@extend_schema_view(get=extend_schema(
+    summary="Synthèse du tableau de bord",
+    description="KPIs stratégiques, santé des programmes, alertes métier et top "
+                "clients à risque. Les montants sont masqués (« Masqué ») sans "
+                "la permission `view_financial_data`.",
+    tags=["Analytics"],
+    responses={200: OpenApiResponse(description="Objet de synthèse décisionnelle.")},
+))
 class AnalyticsDashboardAPIView(APIView):
     """GET /api/analytics/dashboard/ — synthèse exécutive : KPIs, santé des
     programmes, alertes métier, top clients à risque."""
@@ -352,6 +368,13 @@ class AnalyticsDashboardAPIView(APIView):
         return sorted(alerts, key=lambda a: LEVEL_ORDER.get(a['level'], 9))
 
 
+@extend_schema_view(get=extend_schema(
+    summary="Rapport PDF du tableau de bord",
+    description="Génère et télécharge le rapport PDF exécutif (WeasyPrint). "
+                "Masquage financier selon les droits de l'utilisateur.",
+    tags=["Analytics"],
+    responses={(200, "application/pdf"): OpenApiTypes.BINARY},
+))
 class DashboardReportPDFView(APIView):
     """GET /api/analytics/dashboard/report/ — rapport PDF exécutif du Centre
     de commandement (mêmes données réelles que le dashboard, masquage
@@ -388,6 +411,20 @@ class AtRiskPagination(PageNumberPagination):
     max_page_size = 200
 
 
+@extend_schema_view(get=extend_schema(
+    summary="Clients à risque (IDCP)",
+    description="Liste paginée des dossiers classés par Indice de Déséquilibre "
+                "Construction/Paiement décroissant. Montants masqués sans "
+                "`view_financial_data`.",
+    tags=["Analytics"],
+    parameters=[
+        OpenApiParameter("level", str, description="Filtre par niveau (CRITIQUE, ELEVE, MOYEN, FAIBLE, INFO)."),
+        OpenApiParameter("program", int, description="Filtre par identifiant de programme."),
+        OpenApiParameter("min_idcp", float, description="IDCP minimum (%)."),
+        OpenApiParameter("page", int), OpenApiParameter("page_size", int),
+    ],
+    responses={200: OpenApiResponse(description="Page de dossiers à risque.")},
+))
 class AtRiskClientsAPIView(APIView):
     """GET /api/analytics/at-risk/ — liste complète, filtrable, des clients
     classés par IDCP décroissant. Filtres : level, program, min_idcp."""
@@ -402,6 +439,13 @@ class AtRiskClientsAPIView(APIView):
         return paginator.get_paginated_response(page)
 
 
+@extend_schema_view(get=extend_schema(
+    summary="Export CSV des clients à risque",
+    description="Mêmes filtres que la liste. Montants masqués sans "
+                "`view_financial_data`. Débit limité (throttle « export »).",
+    tags=["Analytics"],
+    responses={(200, "text/csv"): OpenApiTypes.STR},
+))
 class AtRiskExportAPIView(APIView):
     """GET /api/analytics/at-risk/export/ — export CSV des clients à risque
     (mêmes filtres que la liste). Les montants financiers restent masqués
@@ -485,6 +529,21 @@ def _filter_alerts_qs(request):
     return qs
 
 
+@extend_schema_view(get=extend_schema(
+    summary="Liste des alertes",
+    description="Alertes métier persistées, filtrables. Par défaut, les alertes "
+                "résolues sont masquées. Renvoie aussi des compteurs et le drapeau "
+                "`can_manage`.",
+    tags=["Alertes"],
+    parameters=[
+        OpenApiParameter("level", str, description="CRITIQUE, ELEVE, MOYEN, FAIBLE, INFO."),
+        OpenApiParameter("status", str, description="NEW, ACK, RESOLVED."),
+        OpenApiParameter("rule", str, description="Code de règle (idcp, titre_manquant, …)."),
+        OpenApiParameter("program", int), OpenApiParameter("parcel", int),
+        OpenApiParameter("page", int), OpenApiParameter("page_size", int),
+    ],
+    responses={200: OpenApiResponse(description="Page d'alertes + compteurs.")},
+))
 class AlertListAPIView(APIView):
     """GET /api/alerts/ — centre de notifications : alertes persistées,
     filtrables (level, status, rule, program). Renvoie aussi des compteurs."""
@@ -509,6 +568,12 @@ class AlertListAPIView(APIView):
         return resp
 
 
+@extend_schema_view(get=extend_schema(
+    summary="Export CSV des alertes",
+    description="Mêmes filtres que la liste. Débit limité (throttle « export »).",
+    tags=["Alertes"],
+    responses={(200, "text/csv"): OpenApiTypes.STR},
+))
 class AlertExportAPIView(APIView):
     """GET /api/alerts/export/ — export CSV des alertes (mêmes filtres que la
     liste). Ordre stable : plus récemment détectées d'abord."""
@@ -536,6 +601,19 @@ class AlertExportAPIView(APIView):
         return csv_streaming_response('alertes.csv', header, lines())
 
 
+@extend_schema_view(post=extend_schema(
+    summary="Action sur une alerte",
+    description="Accuser (ack), résoudre (resolve) ou rouvrir (reopen) une alerte. "
+                "Traçable (qui / quand). Exige la permission `change_alert`.",
+    tags=["Alertes"],
+    parameters=[
+        OpenApiParameter("pk", int, OpenApiParameter.PATH, description="Identifiant de l'alerte."),
+        OpenApiParameter("action", str, OpenApiParameter.PATH, description="ack | resolve | reopen."),
+    ],
+    request=None,
+    responses={200: OpenApiResponse(description="Alerte mise à jour."),
+               403: OpenApiResponse(description="Permission requise (change_alert).")},
+))
 class AlertActionAPIView(APIView):
     """POST /api/alerts/<pk>/<action>/ — action = ack | resolve | reopen.
     Traçable (qui / quand). Exige la permission change_alert."""
@@ -564,6 +642,17 @@ class AlertActionAPIView(APIView):
         return Response(serialize_alert(alert))
 
 
+@extend_schema_view(get=extend_schema(
+    summary="Compteurs d'alertes actives",
+    description="Compteurs d'alertes ACTIVES (NEW+ACK) par niveau — endpoint léger "
+                "pour le badge de navigation.",
+    tags=["Alertes"],
+    responses={200: OpenApiResponse(
+        description="Compteurs par niveau.",
+        examples=[OpenApiExample("Exemple", value={
+            "critique": 94, "eleve": 138, "active_total": 1357,
+            "by_level": {"CRITIQUE": 94, "ELEVE": 138, "MOYEN": 1125}})])},
+))
 class AlertSummaryAPIView(APIView):
     """GET /api/alerts/summary/ — compteurs d'alertes ACTIVES (NEW+ACK) par
     niveau, pour le badge de la barre de navigation.
@@ -590,6 +679,20 @@ class AlertSummaryAPIView(APIView):
         })
 
 
+@extend_schema_view(get=extend_schema(
+    summary="Sévérité d'alerte par entité (carte)",
+    description="Sévérité d'alerte ACTIVE par parcelle et par programme, pour le "
+                "surlignage de la carte : {by_parcel, by_program} avec pire niveau "
+                "et total par entité.",
+    tags=["Alertes"],
+    parameters=[OpenApiParameter(
+        "levels", str, description="Filtre CSV de niveaux (ex. CRITIQUE,ELEVE).")],
+    responses={200: OpenApiResponse(
+        description="Sévérités par entité.",
+        examples=[OpenApiExample("Exemple", value={
+            "by_parcel": {"1765": {"level": "CRITIQUE", "count": 2}},
+            "by_program": {"6": {"level": "ELEVE", "count": 40}}})])},
+))
 class AlertMapAPIView(APIView):
     """GET /api/alerts/map/ — sévérité d'alerte ACTIVE (NEW+ACK) par entité
     géographique, pour surligner la carte. Renvoie {by_parcel, by_program}
@@ -631,6 +734,16 @@ class AlertMapAPIView(APIView):
         })
 
 
+@extend_schema_view(post=extend_schema(
+    summary="Recalcul des alertes à la demande",
+    description="Relance le moteur d'alertes (async via Celery si le broker répond, "
+                "sinon recalcul synchrone). Exige la permission `change_alert`.",
+    tags=["Alertes"],
+    request=None,
+    responses={202: OpenApiResponse(description="Recalcul lancé (async)."),
+               200: OpenApiResponse(description="Recalcul synchrone effectué."),
+               403: OpenApiResponse(description="Permission requise (change_alert).")},
+))
 class AlertRegenerateAPIView(APIView):
     """POST /api/alerts/regenerate/ — recalcul à la demande des alertes.
 

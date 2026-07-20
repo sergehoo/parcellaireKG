@@ -6,6 +6,12 @@ from decimal import Decimal, InvalidOperation
 from django.contrib.gis.geos import Polygon
 from django.db.models import Q, Sum, F, Prefetch
 from django.db.models.functions import Coalesce
+from drf_spectacular.utils import (
+    OpenApiParameter,
+    OpenApiResponse,
+    extend_schema,
+    extend_schema_view,
+)
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -51,6 +57,25 @@ def user_can_view_construction_data(user):
 
 
 
+@extend_schema_view(get=extend_schema(
+    summary="Données cartographiques (parcelles & actifs)",
+    description="Renvoie les entités géographiques (parcelles et actifs) avec leur "
+                "géométrie et leurs métadonnées d'affichage, filtrables par projet, "
+                "programme, statut, tag, recherche et emprise. Les données sensibles "
+                "(financier / clients / construction) sont masquées selon les droits.",
+    tags=["Cartographie"],
+    parameters=[
+        OpenApiParameter("program", int, description="Identifiant de programme."),
+        OpenApiParameter("project", int, description="Identifiant de projet."),
+        OpenApiParameter("status", str, description="Statut commercial (Disponibles, Réservés, Vendus, …)."),
+        OpenApiParameter("tag", str, description="Slug de tag."),
+        OpenApiParameter("search", str, description="Recherche multi-champs."),
+        OpenApiParameter("bbox", str, description="Emprise minLng,minLat,maxLng,maxLat."),
+        OpenApiParameter("zoom", int, description="Niveau de zoom (géométrie incluse si ≥ 14)."),
+        OpenApiParameter("limit", int, description="Plafond d'entités (défaut 11200, max 12500)."),
+    ],
+    responses={200: OpenApiResponse(description="Collection d'entités carto + résumés + contexte.")},
+))
 class RealEstateMapAPIView(APIView):
     # Toute la cartographie commerciale doit rester derrière l'authentification.
     # Le masquage par permission (financial/patient/construction) reste géré
