@@ -1,6 +1,8 @@
 # --- Secrets & environnement ---
 .env
 .env.*
+# gabarit sans secret : DOIT être versionné
+!.env.example
 
 # --- Python / Django ---
 __pycache__/

@@ -42,7 +42,10 @@ services:
       - static_volume:/app/staticfiles
       - ./media:/app/media
     environment:
-      - DEBUG=${DEBUG:-False}
+      # Production forcée : prod.py + DEBUG désactivé, indépendamment du .env
+      # (corrige la faille où la prod tournait en réalité sur dev.py/DEBUG=True).
+      - DJANGO_ENV=prod
+      - DEBUG=False
       - DJANGO_SETTINGS_MODULE=parcelaireKG.settings
       - STATIC_ROOT=/app/staticfiles
       - MEDIA_ROOT=/app/media
@@ -135,7 +138,10 @@ services:
       - ./media:/app/media
       - static_volume:/app/staticfiles
     environment:
-      - DEBUG=${DEBUG:-False}
+      # Production forcée : prod.py + DEBUG désactivé, indépendamment du .env
+      # (corrige la faille où la prod tournait en réalité sur dev.py/DEBUG=True).
+      - DJANGO_ENV=prod
+      - DEBUG=False
       - DJANGO_SETTINGS_MODULE=parcelaireKG.settings
       - STATIC_ROOT=/app/staticfiles
       - MEDIA_ROOT=/app/media
@@ -191,7 +197,10 @@ services:
       - static_volume:/app/staticfiles
 
     environment:
-      - DEBUG=${DEBUG:-False}
+      # Production forcée : prod.py + DEBUG désactivé, indépendamment du .env
+      # (corrige la faille où la prod tournait en réalité sur dev.py/DEBUG=True).
+      - DJANGO_ENV=prod
+      - DEBUG=False
       - DJANGO_SETTINGS_MODULE=parcelaireKG.settings
       - STATIC_ROOT=/app/staticfiles
       - MEDIA_ROOT=/app/media
@@ -344,8 +353,8 @@ services:
       sleep 5;
       mc alias set parc http://parcelaire-orthos3:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD;
       mc mb --ignore-existing parc/$$MINIO_BUCKET;
-      mc anonymous set download parc/$$MINIO_BUCKET || true;
-      echo 'MinIO bucket prêt : '$$MINIO_BUCKET;
+      mc anonymous set none parc/$$MINIO_BUCKET || true;
+      echo 'MinIO bucket prêt (privé) : '$$MINIO_BUCKET;
       "
     restart: "no"
 

@@ -217,9 +217,12 @@ urlpatterns = [
 # * MEDIA  : WhiteNoise ne sert PAS /media/ par défaut. Or les tuiles
 #   d'orthophoto sont sous /media/tiles_ortho/... et le navigateur
 #   Leaflet doit pouvoir les charger en prod aussi. On ajoute donc une
-#   route permanente via `django.views.static.serve` (pas idéal pour
-#   un site très chargé, mais OK pour des tuiles cadastrales internes
-#   et tant qu'un CDN dédié n'est pas en place).
+#   route via `django.views.static.serve`, MAIS protégée par
+#   `login_required` : /media/ contenait des tuiles cadastrales, des
+#   médias de construction et des documents accessibles à tout anonyme.
+#   L'utilisateur qui consulte la carte est authentifié, son cookie de
+#   session accompagne donc les requêtes de tuiles (pas de régression).
+#   (Idéalement remplacé par un CDN + URLs signées à terme.)
 # -------------------------------------------------------------------
 from django.urls import re_path as _re_path
 from django.views.static import serve as _serve
@@ -227,7 +230,7 @@ from django.views.static import serve as _serve
 urlpatterns += [
     _re_path(
         r"^media/(?P<path>.*)$",
-        _serve,
+        login_required(_serve),
         {"document_root": settings.MEDIA_ROOT},
         name="media-serve",
     ),
