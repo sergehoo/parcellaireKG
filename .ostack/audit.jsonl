@@ -1,1 +1,3 @@
 {"id":"66418d96-29d9-4886-b8a3-05c9d2de96db","timestamp":"2026-07-17T20:40:02.678Z","actorId":"ogahserge","action":"framework.install","projectId":"parcelairekg","outcome":"succeeded","details":{"assistant":"claude","version":"0.1.0","installed":30,"skipped":0}}
+{"id":"0ef54d87-a0e4-4233-b7a3-60add409e506","timestamp":"2026-07-24T15:01:15.560Z","actorId":"ogahserge","action":"security.review","projectId":"parcelairekg","outcome":"denied","details":{"recommendation":"BLOCKED","blockers":3}}
+{"id":"460eb41f-0935-480c-ba71-09830207c8d7","timestamp":"2026-07-24T15:03:02.235Z","actorId":"ogahserge","action":"security.review","projectId":"parcelairekg","outcome":"denied","details":{"recommendation":"BLOCKED","blockers":3}}
