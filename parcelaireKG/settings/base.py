@@ -325,7 +325,9 @@ SITE_ID = int(os.environ.get("SITE_ID", "1"))
 # n'y a pas de paramètre ?next (login direct, fin d'inscription…). On
 # pointe donc sur la coquille SPA, frontend principal de l'application.
 LOGIN_URL = "/accounts/login/"
-LOGIN_REDIRECT_URL = "/app/"
+# Le domaine public sert désormais directement le frontend React à la racine
+# via Nginx. Django ne fournit plus la page principale.
+LOGIN_REDIRECT_URL = "/"
 ACCOUNT_LOGOUT_REDIRECT_URL = "/accounts/login/"
 
 # Auto-inscription publique désactivée : comptes provisionnés par un admin.
@@ -509,4 +511,3 @@ SAP_CLIENT_ID = os.getenv("SAP_CLIENT_ID", "")
 SAP_CLIENT_SECRET = os.getenv("SAP_CLIENT_SECRET", "")
 SAP_TIMEOUT = int(os.getenv("SAP_TIMEOUT", "60"))
 SAP_VERIFY_SSL = os.getenv("SAP_VERIFY_SSL", "true").lower() == "true"
-

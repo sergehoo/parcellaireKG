@@ -1,10 +1,13 @@
-# Frontend React — parcelaireKG (Carte & Orthophotos)
+# Frontend React — parcelaireKG
 
-SPA React (Vite, JavaScript) qui devient l'interface principale, servie
-par Django sur **`/app/`** (login requis). Elle remplace progressivement
-les templates Django ; à ce stade elle couvre la **cartographie** et la
-**gestion des orthophotos**. Le CRUD (projets, ventes, paiements…) reste
-sur Django et est atteignable via « Ouvrir la fiche » / le tableau de bord.
+SPA React (Vite, JavaScript), interface publique principale de l'application.
+En production, son build est servi à la racine par un conteneur Nginx dédié.
+Django reste privé sur le réseau Docker et fournit les API, l'authentification,
+l'administration et les médias.
+
+Le frontend couvre la cartographie, les tableaux de bord, les notifications,
+les orthophotos et les écrans de consultation CRUD. Les projets, programmes et
+clients disposent également des formulaires React de création/modification.
 
 ## Cartographie premium (`#/carte`, vue d'accueil)
 
@@ -24,7 +27,7 @@ Composants (`src/components/map/`) :
   Noms lots / Repères (clustering `leaflet.markercluster`, pastilles animées) /
   Aucun ; bascule **Orthophoto**.
 - **FeatureDetailPanel** : panneau animé (spring) — chiffres clés, détails,
-  métriques, unités, tags, lien « Ouvrir la fiche complète » vers Django.
+  métriques, unités, tags, lien vers la fiche React complète.
 - **MapLegend** : synthèse (Actifs/Réservés-Vendus/CA) + légende adaptative
   (priorité travaux en mode Noms lots, statut sinon).
 
@@ -42,7 +45,7 @@ Composants (`src/components/map/`) :
 > La recherche intelligente inclut déjà un interpréteur de **commandes** léger
 > (rule-based, pas un LLM) qui applique des filtres à partir de mots-clés.
 
-> Les routes Django `/map/` et `/map_commercial` **redirigent** vers
+> Les anciennes routes Django `/map/` et `/map_commercial` **redirigent** vers
 > `#/carte`. Les templates Leaflet historiques restent en repli sous
 > `/map/legacy/` et `/map_commercial/legacy/`. La vue 3D (`map_3d.html`)
 > n'est pas encore portée — chantier séparé.
@@ -67,22 +70,24 @@ Composants (`src/components/map/`) :
 ## Architecture
 
 ```
-frontend/src
-├── api/
-│   ├── client.js        # fetch + session Django + CSRF (401→login, 403→erreur)
-│   ├── map.js           # GET /api/map/assets/
-│   └── orthophotos.js   # endpoints orthophotos (API DRF + upload)
-├── lib/
-│   ├── uploadMultipart.js  # découpage + PUT presigned + collecte ETags
-│   └── format.js
-├── components/
-│   ├── map/             # MapCanvas (Leaflet), MapFilters, MapLegend,
-│   │                    # FeatureDetailPanel
-│   └── …               # Layout, StatusBadge, ProgressBar, LogTimeline,
-│                        # FileDropzone, TileMapPreview, Toasts…
-└── pages/
-    ├── MapView.jsx      # carte (vue d'accueil)
-    ├── OrthophotoList.jsx / OrthophotoUpload.jsx / OrthophotoDetail.jsx
+frontend/
+├── Dockerfile           # build Vite puis image Nginx
+├── nginx.conf           # SPA + proxy des routes backend vers Django
+└── src/
+    ├── api/
+    │   ├── client.js        # fetch + session Django + CSRF
+    │   ├── map.js           # GET /api/map/assets/
+    │   └── orthophotos.js   # endpoints orthophotos
+    ├── lib/
+    │   ├── uploadMultipart.js
+    │   └── format.js
+    ├── components/
+    │   ├── map/             # composants Leaflet
+    │   └── …                # layout, toasts, contrôles…
+    └── pages/
+        ├── MapView.jsx
+        ├── ResourceListPage.jsx / ResourceDetailPage.jsx / ResourceFormPage.jsx
+        └── OrthophotoList.jsx / OrthophotoUpload.jsx / OrthophotoDetail.jsx
 ```
 
 Côté Django, l'API consommée est :
@@ -112,9 +117,9 @@ Le serveur Vite proxifie `/api`, `/orthophotos`, `/media` et `/accounts`
 vers Django (`http://localhost:8000` par défaut, surchargable :
 `DJANGO_URL=http://localhost:8030 npm run dev`).
 
-Connectez-vous d'abord au Django proxifié (http://localhost:5173/accounts/login/)
-pour obtenir le cookie de session. L'app est servie en dev sur
-http://localhost:5173/static/orthophotos-app/ (même chemin que la prod).
+Connectez-vous au Django proxifié via
+`http://localhost:5173/accounts/login/` pour obtenir le cookie de session.
+L'application React est servie sur `http://localhost:5173/`.
 
 ### 100 % local sans Docker (macOS)
 
@@ -142,15 +147,13 @@ worker Celery** (docker compose, ou services locaux équivalents).
 ## Build production
 
 ```bash
-cd frontend
-npm run build        # écrit dans static/orthophotos-app/ (noms fixes, sans hash)
+docker compose build frontend
 ```
 
-Puis côté Django : `collectstatic` (le cache-busting est géré par le
-manifest WhiteNoise). L'app est servie sur **`/app/`** (route `react_app`,
-login requis) via `templates/parcelaire/orthophoto/react_app.html`.
-`/app/orthophotos/` redirige vers `#/orthophotos` (rétrocompat).
+Le premier stage construit le bundle Vite dans `dist/`; le second le copie
+dans l'image Nginx. Dans Dockploy, le domaine principal doit cibler le service
+`frontend` sur le port `80`, jamais `parcelaireweb`.
 
-Le routage interne utilise `HashRouter` (`/app/#/carte`,
-`/app/#/orthophotos/12`…) : aucune réécriture d'URL serveur n'est
+Le routage interne utilise `HashRouter` (`/#/carte`,
+`/#/orthophotos/12`…) : aucune réécriture d'URL serveur n'est
 nécessaire.

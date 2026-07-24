@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { getAlertSummary } from '../api/analytics'
 import { getMe, logout } from '../api/auth'
+import { redirectToLogin } from '../api/client'
 import { getTheme, setTheme } from '../lib/theme'
 
 // Navigation groupée : la carte en accès direct, le reste réparti en menus
@@ -182,7 +183,14 @@ export default function Layout() {
 
   useEffect(() => {
     const c = new AbortController()
-    getMe({ signal: c.signal }).then(setMe).catch(() => {})
+    getMe({ signal: c.signal })
+      .then(setMe)
+      .catch((err) => {
+        // Le frontend est maintenant servi directement par Nginx : il n'est
+        // plus enveloppé par login_required côté Django. L'appel d'identité
+        // devient donc le garde d'authentification initial du SPA.
+        if (err.status === 401 || err.status === 403) redirectToLogin()
+      })
     return () => c.abort()
   }, [])
 

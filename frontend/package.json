@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "SPA React de gestion des orthophotos (upload S3 multipart, suivi pipeline GDAL, carte).",
+  "description": "Frontend React principal de parcelaireKG.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

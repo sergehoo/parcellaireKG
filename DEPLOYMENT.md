@@ -95,13 +95,16 @@ Dans Dockploy :
 
    | Usage | Service | Port conteneur |
    |-------|---------|----------------|
-   | Application | `parcelaireweb` | `8000` |
+   | Application React | `frontend` | `80` |
    | API S3 publique | `parcelaire-orthos3` | `9000` |
    | Console MinIO | `parcelaire-orthos3` | `9001` |
 
    Les hôtes S3 et console doivent correspondre à `MINIO_S3_HOST` et
    `MINIO_CONSOLE_HOST`. Dockploy ajoute automatiquement les réseaux et labels
-   de routage ; aucun label Traefik n'est défini dans le projet.
+   de routage ; aucun label Traefik n'est défini dans le projet. Ne créez pas
+   de domaine pour `parcelaireweb` : ce backend reste privé et le Nginx du
+   service `frontend` lui transmet `/api`, `/accounts`, `/admin`, `/media` et
+   les autres routes serveur.
 5. Vérifier **Preview Compose**, puis lancer **Deploy**. Toute modification
    d'un domaine Compose nécessite ensuite un nouveau déploiement.
 
@@ -116,11 +119,13 @@ PostgreSQL, Redis, les médias et MinIO utilisent des volumes Docker nommés.
 Ils ne publient aucun port sur l'hôte et peuvent être sauvegardés via les
 sauvegardes de volumes Dockploy.
 
-Le front React est **déjà buildé et versionné** (`static/orthophotos-app/assets/`).
-Pour le reconstruire après une évolution front :
+Le frontend React est construit automatiquement par son image Docker à chaque
+déploiement. Pour le lancer en développement avec le rechargement à chaud :
 
 ```bash
-cd frontend && npm ci && npm run build   # écrit index.js / index.css à noms fixes
+cd frontend
+npm ci
+npm run dev
 ```
 
 ---
@@ -131,13 +136,13 @@ cd frontend && npm ci && npm run build   # écrit index.js / index.css à noms f
 # Aucune alerte de sécurité attendue (hors W009 si SECRET_KEY factice)
 docker compose exec parcelaireweb python manage.py check --deploy
 
-# Suite de tests (104 tests)
+# Suite de tests (114 tests)
 docker compose exec parcelaireweb python manage.py test
 ```
 
 Contrôles manuels (smoke test) :
 
-- [ ] `https://<domaine>/` redirige vers la connexion, puis charge le SPA `/app/`.
+- [ ] `https://<domaine>/` redirige vers la connexion, puis charge le SPA React à la racine.
 - [ ] Une requête anonyme sur `/api/...` renvoie **403** (auth requise).
 - [ ] `/api/schema/swagger-ui/` et `/redoc/` renvoient **403** en anonyme, OK connecté.
 - [ ] Une tuile `/media/tiles_ortho/...` renvoie **302/403** en anonyme.
@@ -149,7 +154,7 @@ Contrôles manuels (smoke test) :
 
 ## 5. Exploitation courante
 
-- **Logs** : onglet **Logs** de Dockploy (`parcelaireweb`,
+- **Logs** : onglet **Logs** de Dockploy (`frontend`, `parcelaireweb`,
   `parcelairecelery`, `parcelairebeat`).
 - **Régénération des alertes** : bouton dans le SPA (chemin async Celery, repli
   synchrone si le broker est indisponible) ou tâche `beat` planifiée.

@@ -8,8 +8,7 @@ import { LEVELS } from '../../lib/criticality'
  * « Ouvrir la fiche complète » : les parcelles ouvrent la fiche interne du
  * SPA (`#/r/parcels/:id`) — cohérent et fonctionnel en dev comme en prod
  * (le lien Django absolu `/parcels/:id/` n'existe pas sous le serveur Vite).
- * Les lots (PropertyAsset), non encore portés dans le SPA, pointent vers la
- * page Django `/assets/:id/`.
+ * Les lots (PropertyAsset) ouvrent également leur fiche React.
  *
  * Rappels : on n'utilise PAS les classes Tailwind `statusBadge`/`priority_badge`
  * de l'API (purgées au build) ; on s'appuie sur les couleurs (`color`,
@@ -18,7 +17,7 @@ import { LEVELS } from '../../lib/criticality'
 function detailTarget(feat) {
   if (!feat?.id) return null
   if (feat.entity_type === 'PARCEL') return { spa: `/r/parcels/${feat.id}` }
-  if (feat.entity_type === 'PROPERTY_ASSET') return { href: `/assets/${feat.id}/` }
+  if (feat.entity_type === 'PROPERTY_ASSET') return { spa: `/r/assets/${feat.id}` }
   return null
 }
 

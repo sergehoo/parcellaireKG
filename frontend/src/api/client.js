@@ -24,7 +24,7 @@ export function ensureCsrf() {
   return csrfReady
 }
 
-function redirectToLogin() {
+export function redirectToLogin() {
   const next = encodeURIComponent(window.location.pathname + window.location.hash)
   window.location.href = `/accounts/login/?next=${next}`
 }

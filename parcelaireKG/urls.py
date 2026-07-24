@@ -17,6 +17,7 @@ Including another URLconf
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
+from django.http import JsonResponse
 from django.urls import path, include
 
 from parcelaire.views import HomeView, MapView, ParcellaireDashboardView, ProjetImmobilierListView, \
@@ -40,20 +41,22 @@ from parcelaire.views import HomeView, MapView, ParcellaireDashboardView, Projet
     OrthophotoUploadInitView, OrthophotoUploadCompleteView, OrthophotoUploadAbortView
 
 from django.contrib.auth.decorators import login_required
-from django.views.generic import RedirectView, TemplateView
+from django.views.generic import RedirectView
 
-# SPA React (build Vite servi par WhiteNoise depuis static/orthophotos-app/).
-# HashRouter → une seule route Django suffit ; le routage interne se fait
-# après le `#`. La carte est la vue d'accueil du SPA.
-_react_app = login_required(TemplateView.as_view(
-    template_name="parcelaire/orthophoto/react_app.html",
-))
+
+def _backend_root(request):
+    """Réponse minimale du backend lorsqu'il est joint directement.
+
+    En production, la racine publique est servie par le conteneur frontend
+    React. Django reste uniquement le backend API/auth/médias.
+    """
+    return JsonResponse({"service": "parcelaireKG-backend", "status": "ok"})
 
 
 def _spa(hash_url):
     """Redirige une ancienne route HTML vers son équivalent du SPA React.
 
-    Le SPA React est désormais le frontend principal. Les routes de navigation
+    Le SPA React est le frontend principal. Les routes de navigation
     historiques (templates Django) pointent vers le SPA — ce qui, au passage,
     retire les pages HTML héritées comme surface (elles n'exposent plus de
     données financières/PII, cf. audit H3/H5) sans risque de verrouillage.
@@ -66,11 +69,12 @@ urlpatterns = [
                   path("api/", include("parcelaire.api.urls")),
                   path("ai/", include("ai_construction.urls")),
 
-                  # Coquille SPA (carte, orthophotos, …).
-                  path("app/", _react_app, name="react_app"),
+                  # Ancienne URL de la coquille Django : retour vers le
+                  # frontend React désormais servi à la racine par Nginx.
+                  path("app/", RedirectView.as_view(url="/", permanent=False), name="react_app"),
                   # Rétrocompat de l'itération précédente.
                   path("app/orthophotos/",
-                       RedirectView.as_view(url="/app/#/orthophotos", permanent=False),
+                       RedirectView.as_view(url="/#/orthophotos", permanent=False),
                        name="orthophoto_react_app"),
 
                   path('home', HomeView.as_view(), name='home'),
@@ -79,90 +83,90 @@ urlpatterns = [
                   # SPA React (parité 2D atteinte). Les templates Leaflet
                   # historiques restent accessibles en repli sous /map/legacy/
                   # tant que la parité n'est pas définitivement validée.
-                  path('map/', RedirectView.as_view(url="/app/#/carte", permanent=False), name='map'),
-                  path('map_commercial', RedirectView.as_view(url="/app/#/carte", permanent=False), name='map_commercial'),
+                  path('map/', RedirectView.as_view(url="/#/carte", permanent=False), name='map'),
+                  path('map_commercial', RedirectView.as_view(url="/#/carte", permanent=False), name='map_commercial'),
                   path('map/legacy/', MapView.as_view(), name='map_legacy'),
                   path('map_commercial/legacy/', MapCommercialView.as_view(), name='map_commercial_legacy'),
 
                   path('accounts/', include('allauth.urls')),
 
-                  # Frontend principal = SPA React : la racine ouvre le SPA.
-                  # L'ancien tableau de bord HTML reste en repli sous /legacy/.
-                  path("", _spa("/app/"), name="parcelaire_dashboard"),
+                  # La racine publique appartient au service React/Nginx.
+                  # Une requête directe au backend renvoie uniquement son état.
+                  path("", _backend_root, name="parcelaire_dashboard"),
                   path("legacy/dashboard/", ParcellaireDashboardView.as_view(), name="parcelaire_dashboard_legacy"),
 
                   # -------- Entités migrées vers le SPA (redirections) --------
-                  path("projects/", _spa("/app/#/r/projects"), name="project_list"),
-                  path("projects/add/", _spa("/app/#/r/projects/new"), name="project_add"),
-                  path("projects/<int:pk>/", _spa("/app/#/r/projects/%(pk)s"), name="project_detail"),
-                  path("projects/<int:pk>/edit/", _spa("/app/#/r/projects/%(pk)s/edit"), name="project_edit"),
-                  path("projects/<int:pk>/delete/", _spa("/app/#/r/projects/%(pk)s"), name="project_delete"),
+                  path("projects/", _spa("/#/r/projects"), name="project_list"),
+                  path("projects/add/", _spa("/#/r/projects/new"), name="project_add"),
+                  path("projects/<int:pk>/", _spa("/#/r/projects/%(pk)s"), name="project_detail"),
+                  path("projects/<int:pk>/edit/", _spa("/#/r/projects/%(pk)s/edit"), name="project_edit"),
+                  path("projects/<int:pk>/delete/", _spa("/#/r/projects/%(pk)s"), name="project_delete"),
 
-                  path("programs/", _spa("/app/#/r/programs"), name="program_list"),
-                  path("programs/add/", _spa("/app/#/r/programs/new"), name="program_add"),
-                  path("programs/<int:pk>/", _spa("/app/#/r/programs/%(pk)s"), name="program_detail"),
-                  path("programs/<int:pk>/edit/", _spa("/app/#/r/programs/%(pk)s/edit"), name="program_edit"),
-                  path("programs/<int:pk>/delete/", _spa("/app/#/r/programs/%(pk)s"), name="program_delete"),
+                  path("programs/", _spa("/#/r/programs"), name="program_list"),
+                  path("programs/add/", _spa("/#/r/programs/new"), name="program_add"),
+                  path("programs/<int:pk>/", _spa("/#/r/programs/%(pk)s"), name="program_detail"),
+                  path("programs/<int:pk>/edit/", _spa("/#/r/programs/%(pk)s/edit"), name="program_edit"),
+                  path("programs/<int:pk>/delete/", _spa("/#/r/programs/%(pk)s"), name="program_delete"),
 
                   # Entités techniques migrées au SPA : liste/détail → SPA
                   # (lecture, masquage financier), écritures conservées sur Django.
-                  path("phases/", _spa("/app/#/r/phases"), name="phase_list"),
+                  path("phases/", _spa("/#/r/phases"), name="phase_list"),
                   path("phases/add/", ProgramPhaseCreateView.as_view(), name="phase_add"),
                   path("phases/<int:pk>/edit/", ProgramPhaseUpdateView.as_view(), name="phase_edit"),
                   path("phases/<int:pk>/delete/", ProgramPhaseDeleteView.as_view(), name="phase_delete"),
 
-                  path("datasets/", _spa("/app/#/r/datasets"), name="dataset_list"),
-                  path("datasets/<int:pk>/", _spa("/app/#/r/datasets/%(pk)s"), name="dataset_detail"),
+                  path("datasets/", _spa("/#/r/datasets"), name="dataset_list"),
+                  path("datasets/<int:pk>/", _spa("/#/r/datasets/%(pk)s"), name="dataset_detail"),
                   path("datasets/add/", ParcelDatasetCreateView.as_view(), name="dataset_add"),
                   path("datasets/<int:pk>/edit/", ParcelDatasetUpdateView.as_view(), name="dataset_edit"),
                   path("datasets/<int:pk>/delete/", ParcelDatasetDeleteView.as_view(), name="dataset_delete"),
 
-                  path("blocks/", _spa("/app/#/r/blocks"), name="block_list"),
-                  path("blocks/<int:pk>/", _spa("/app/#/r/blocks/%(pk)s"), name="block_detail"),
+                  path("blocks/", _spa("/#/r/blocks"), name="block_list"),
+                  path("blocks/<int:pk>/", _spa("/#/r/blocks/%(pk)s"), name="block_detail"),
                   path("blocks/add/", ProgramBlockCreateView.as_view(), name="block_add"),
                   path("blocks/edit/<int:pk>", ProgramBlockUpdateView.as_view(), name="block_edit"),
                   path("blocks/<int:pk>/delete/", ProgramBlockDeleteView.as_view(), name="block_delete"),
 
                   # Lecture → SPA ; écritures conservées sur Django (le SPA est
                   # en lecture seule pour les entités transactionnelles).
-                  path("parcels/", _spa("/app/#/r/parcels"), name="parcel_list"),
-                  path("parcels/<int:pk>/", _spa("/app/#/r/parcels/%(pk)s"), name="parcel_detail"),
+                  path("parcels/", _spa("/#/r/parcels"), name="parcel_list"),
+                  path("parcels/<int:pk>/", _spa("/#/r/parcels/%(pk)s"), name="parcel_detail"),
                   path("parcels/add/", ParcelCreateView.as_view(), name="parcel_add"),
                   path("parcels/<int:pk>/edit/", ParcelUpdateView.as_view(), name="parcel_edit"),
                   path("parcels/<int:pk>/delete/", ParcelDeleteView.as_view(), name="parcel_delete"),
 
-                  path("assets/", _spa("/app/#/r/assets"), name="asset_list"),
-                  path("assets/<int:pk>/", _spa("/app/#/r/assets/%(pk)s"), name="asset_detail"),
+                  path("assets/", _spa("/#/r/assets"), name="asset_list"),
+                  path("assets/<int:pk>/", _spa("/#/r/assets/%(pk)s"), name="asset_detail"),
                   path("assets/add/", PropertyAssetCreateView.as_view(), name="asset_add"),
                   path("assets/<int:pk>/edit/", PropertyAssetUpdateView.as_view(), name="asset_edit"),
                   path("assets/<int:pk>/delete/", PropertyAssetDeleteView.as_view(), name="asset_delete"),
 
-                  path("customers/", _spa("/app/#/r/customers"), name="customer_list"),
-                  path("customers/add/", _spa("/app/#/r/customers/new"), name="customer_add"),
-                  path("customers/<int:pk>/edit/", _spa("/app/#/r/customers/%(pk)s/edit"), name="customer_edit"),
+                  path("customers/", _spa("/#/r/customers"), name="customer_list"),
+                  path("customers/add/", _spa("/#/r/customers/new"), name="customer_add"),
+                  path("customers/<int:pk>/edit/", _spa("/#/r/customers/%(pk)s/edit"), name="customer_edit"),
 
                   # Liste (fuite PII/budget) → SPA en lecture masquée ; écritures
                   # conservées sur Django.
-                  path("leads/", _spa("/app/#/r/leads"), name="lead_list"),
+                  path("leads/", _spa("/#/r/leads"), name="lead_list"),
                   path("leads/add/", LeadCreateView.as_view(), name="lead_add"),
                   path("leads/<int:pk>/edit/", LeadUpdateView.as_view(), name="lead_edit"),
 
-                  path("reservations/", _spa("/app/#/r/reservations"), name="reservation_list"),
+                  path("reservations/", _spa("/#/r/reservations"), name="reservation_list"),
                   path("reservations/add/", ReservationCreateView.as_view(), name="reservation_add"),
                   path("reservations/<int:pk>/edit/", ReservationUpdateView.as_view(), name="reservation_edit"),
 
-                  path("sales/", _spa("/app/#/r/sales"), name="sale_list"),
-                  path("sales/<int:pk>/", _spa("/app/#/r/sales/%(pk)s"), name="sale_detail"),
+                  path("sales/", _spa("/#/r/sales"), name="sale_list"),
+                  path("sales/<int:pk>/", _spa("/#/r/sales/%(pk)s"), name="sale_detail"),
                   path("sales/add/", SaleFileCreateView.as_view(), name="sale_add"),
                   path("sales/<int:pk>/edit/", SaleFileUpdateView.as_view(), name="sale_edit"),
 
-                  path("payments/", _spa("/app/#/r/payments"), name="payment_list"),
+                  path("payments/", _spa("/#/r/payments"), name="payment_list"),
                   path("payments/add/", PaymentCreateView.as_view(), name="payment_add"),
                   path("payments/<int:pk>/edit/", PaymentUpdateView.as_view(), name="payment_edit"),
 
-                  path("construction-projects/", _spa("/app/#/r/construction"),
+                  path("construction-projects/", _spa("/#/r/construction"),
                        name="construction_project_list"),
-                  path("construction-projects/<int:pk>/", _spa("/app/#/r/construction/%(pk)s"),
+                  path("construction-projects/<int:pk>/", _spa("/#/r/construction/%(pk)s"),
                        name="construction_project_detail"),
                   path("construction-projects/add/", ConstructionProjectCreateView.as_view(),
                        name="construction_project_add"),
@@ -191,9 +195,9 @@ urlpatterns = [
                   # -------- ORTHOPHOTOS --------
                   # Navigation migrée vers le SPA ; les actions (status/retry/
                   # set-current/delete-tiles/logs) et l'upload restent en place.
-                  path("orthophotos/", _spa("/app/#/orthophotos"), name="orthophoto_list"),
-                  path("orthophotos/add/", _spa("/app/#/orthophotos/upload"), name="orthophoto_add"),
-                  path("orthophotos/<int:pk>/", _spa("/app/#/orthophotos/%(pk)s"), name="orthophoto_detail"),
+                  path("orthophotos/", _spa("/#/orthophotos"), name="orthophoto_list"),
+                  path("orthophotos/add/", _spa("/#/orthophotos/upload"), name="orthophoto_add"),
+                  path("orthophotos/<int:pk>/", _spa("/#/orthophotos/%(pk)s"), name="orthophoto_detail"),
                   path("orthophotos/<int:pk>/status/", OrthophotoStatusAPIView.as_view(), name="orthophoto_status"),
                   path("orthophotos/<int:pk>/retry/", OrthophotoRetryView.as_view(), name="orthophoto_retry"),
                   path("orthophotos/<int:pk>/set-current/", OrthophotoSetCurrentView.as_view(), name="orthophoto_set_current"),
@@ -248,4 +252,3 @@ urlpatterns += [
 
 if settings.DEBUG:
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
-

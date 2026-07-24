@@ -1,7 +1,7 @@
 # Réduit le contexte de build Docker (~25 Go → quelques Mo).
 # Sans ce fichier, `COPY . /app/` embarque media/, .git/ et venv/ :
 # chaque build transférait tout au daemon. Au runtime ces dossiers
-# sont fournis par les bind-mounts du docker-compose, pas par l'image.
+# sont fournis par des volumes Docker au runtime, pas par l'image.
 .git
 .gitignore
 .idea
@@ -21,7 +21,7 @@ celerybeat-schedule.db
 node_modules/
 frontend/node_modules/
 
-# Données volumineuses (bind-mount ./media:/app/media au runtime)
+# Données volumineuses (volume media_data monté sur /app/media au runtime)
 media/
 staticfiles/
 *.log

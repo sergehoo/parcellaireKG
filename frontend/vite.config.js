@@ -7,23 +7,12 @@ const DJANGO = process.env.DJANGO_URL || 'http://localhost:8000'
 export default defineConfig({
   plugins: [react()],
 
-  // En production le build est servi par Django/WhiteNoise depuis
-  // static/orthophotos-app/ (voir templates/parcelaire/orthophoto/react_app.html).
-  base: '/static/orthophotos-app/',
+  // En production le build est servi à la racine par le conteneur Nginx.
+  base: '/',
 
   build: {
-    outDir: '../static/orthophotos-app',
+    outDir: 'dist',
     emptyOutDir: true,
-    rollupOptions: {
-      output: {
-        // Noms fixes (pas de hash) : le template Django référence
-        // assets/index.js et assets/index.css. Le cache-busting est
-        // assuré par le manifest WhiteNoise au collectstatic.
-        entryFileNames: 'assets/index.js',
-        chunkFileNames: 'assets/[name].js',
-        assetFileNames: 'assets/[name][extname]',
-      },
-    },
   },
 
   server: {
@@ -34,12 +23,10 @@ export default defineConfig({
       '/orthophotos': { target: DJANGO, changeOrigin: false },
       '/media': { target: DJANGO, changeOrigin: false },
       '/accounts': { target: DJANGO, changeOrigin: false },
-      '/static/css': { target: DJANGO, changeOrigin: false },
-      // Pages Django encore consommées par le SPA (fiches lots/parcelles,
-      // liens « Ouvrir la fiche »). En prod Django sert ces routes ; en dev
-      // on les proxifie pour éviter l'erreur « base URL /static/... ».
-      '/parcels': { target: DJANGO, changeOrigin: false },
-      '/assets': { target: DJANGO, changeOrigin: false },
+      '/admin': { target: DJANGO, changeOrigin: false },
+      '/static': { target: DJANGO, changeOrigin: false },
+      '/ai': { target: DJANGO, changeOrigin: false },
+      '/ajax': { target: DJANGO, changeOrigin: false },
     },
   },
 })

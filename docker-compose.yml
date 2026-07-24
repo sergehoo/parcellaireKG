@@ -46,7 +46,7 @@ services:
       # Volume nommé : persistant et sauvegardable depuis Dockploy.
       - media_data:/app/media
     expose:
-      # Port interne à sélectionner dans Dockploy > Domains.
+      # Backend interne, joint par le frontend Nginx.
       - "8000"
     environment:
       # Production forcée : prod.py + DEBUG désactivé, indépendamment du .env
@@ -100,6 +100,33 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    networks:
+      - default
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import socket; s=socket.create_connection(('127.0.0.1', 8000), 5); s.close()"
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+
+  # Frontend public : build Vite servi par Nginx. Dockploy doit router le
+  # domaine principal vers ce service sur le port 80. Nginx transmet ensuite
+  # uniquement les routes backend (/api, /accounts, /admin, /media, etc.) à
+  # parcelaireweb sur le réseau Docker privé.
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    depends_on:
+      parcelaireweb:
+        condition: service_healthy
+    expose:
+      - "80"
     networks:
       - default
     restart: unless-stopped

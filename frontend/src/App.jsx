@@ -20,8 +20,8 @@ ensureCsrf()
 // Applique le thème (clair/sombre) mémorisé / préférence système.
 initTheme()
 
-// HashRouter : le SPA est servi par Django sur /app/ (login requis) ;
-// tout le routage se fait après le `#`. La carte est la vue d'accueil.
+// HashRouter : le SPA est servi à la racine par Nginx ; tout le routage
+// applicatif se fait après le `#`. Django ne fournit plus la coquille HTML.
 export default function App() {
   return (
     <ToastProvider>
