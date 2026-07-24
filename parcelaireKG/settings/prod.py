@@ -58,6 +58,19 @@ CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "redis://redis:6379/0")
 CELERY_RESULT_BACKEND = os.environ.get("CELERY_RESULT_BACKEND", "redis://redis:6379/0")
 
 # ---------------------------------------------------------------------
+# Cache Django sur Redis. Sans cache partagé, le rate-limit de login
+# (allauth) et les throttles DRF vivent dans un LocMemCache PAR PROCESSUS :
+# avec plusieurs workers gunicorn, les compteurs ne sont pas globaux et les
+# limites sont diluées. DB 1 pour ne pas collisionner avec le broker (DB 0).
+# ---------------------------------------------------------------------
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": os.environ.get("CACHE_URL", "redis://redis:6379/1"),
+    }
+}
+
+# ---------------------------------------------------------------------
 # E-mail (rapports exécutifs, notifications) — piloté par l'environnement.
 # Sans EMAIL_HOST configuré, aucun envoi n'est tenté (les rapports restent
 # consultables/téléchargeables dans l'app).

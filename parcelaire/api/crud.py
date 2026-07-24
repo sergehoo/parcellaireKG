@@ -251,13 +251,26 @@ class ParcelViewSet(BaseReadViewSet):
     ordering = ["lot_number", "id"]
 
 
-class ReservationSerializer(serializers.ModelSerializer):
+class _NotesMaskMixin:
+    """Masque `notes` (PII potentiel) sans `view_patient_data` — parité avec
+    LeadSerializer.get_notes_display. Le champ `notes` était exposé en clair sur
+    Reservation/Sale/Payment à tout compte authentifié, contournant le masquage."""
+
+    def get_notes_display(self, obj):
+        if not getattr(obj, "notes", None):
+            return ""
+        user = _ctx_user(self)
+        return obj.notes if (user and user_can_view_patient_data(user)) else MASKED
+
+
+class ReservationSerializer(_NotesMaskMixin, serializers.ModelSerializer):
     customer_label = serializers.SerializerMethodField()
     program_label = serializers.CharField(source="program.name", read_only=True, default="")
     parcel_label = serializers.SerializerMethodField()
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     reserved_price_display = serializers.SerializerMethodField()
     deposit_display = serializers.SerializerMethodField()
+    notes_display = serializers.SerializerMethodField()
 
     class Meta:
         model = Reservation
@@ -265,7 +278,7 @@ class ReservationSerializer(serializers.ModelSerializer):
             "id", "reservation_number", "program", "program_label",
             "customer", "customer_label", "parcel", "parcel_label",
             "reservation_date", "expiry_date", "status", "status_display",
-            "reserved_price_display", "deposit_display", "notes", "created_at",
+            "reserved_price_display", "deposit_display", "notes_display", "created_at",
         ]
 
     def get_customer_label(self, obj):
@@ -290,12 +303,13 @@ class ReservationViewSet(BaseReadViewSet):
     ordering = ["-reservation_date", "-created_at"]
 
 
-class SaleSerializer(serializers.ModelSerializer):
+class SaleSerializer(_NotesMaskMixin, serializers.ModelSerializer):
     customer_label = serializers.SerializerMethodField()
     program_label = serializers.CharField(source="program.name", read_only=True, default="")
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     net_price_display = serializers.SerializerMethodField()
     agreed_price_display = serializers.SerializerMethodField()
+    notes_display = serializers.SerializerMethodField()
 
     class Meta:
         model = SaleFile
@@ -303,7 +317,7 @@ class SaleSerializer(serializers.ModelSerializer):
             "id", "sale_number", "program", "program_label", "customer",
             "customer_label", "sale_date", "status", "status_display",
             "agreed_price_display", "net_price_display", "financing_mode",
-            "sales_agent", "notes", "created_at",
+            "sales_agent", "notes_display", "created_at",
         ]
 
     def get_customer_label(self, obj):
@@ -325,17 +339,18 @@ class SaleViewSet(BaseReadViewSet):
     ordering = ["-sale_date", "-created_at"]
 
 
-class PaymentSerializer(serializers.ModelSerializer):
+class PaymentSerializer(_NotesMaskMixin, serializers.ModelSerializer):
     sale_label = serializers.SerializerMethodField()
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     amount_display = serializers.SerializerMethodField()
+    notes_display = serializers.SerializerMethodField()
 
     class Meta:
         model = Payment
         fields = [
             "id", "payment_number", "sale_file", "sale_label", "payment_date",
             "amount_display", "payment_method", "reference", "status",
-            "status_display", "received_by", "notes", "created_at",
+            "status_display", "received_by", "notes_display", "created_at",
         ]
 
     def get_sale_label(self, obj):

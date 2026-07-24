@@ -15,7 +15,7 @@ Couverture :
 from unittest import mock
 
 from django.contrib.auth.models import Permission, User
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from parcelaire.models import (
@@ -257,6 +257,57 @@ class OrthophotoActionsPermissionTests(OrthophotoAPITestCase):
             reverse("api-orthophoto-delete-tiles", args=[self.ortho_done.pk]),
         )
         self.assertEqual(response.status_code, 403)
+
+
+class LegacyHtmlWritePermissionTests(OrthophotoAPITestCase):
+    """Parité HTML/API : les vues d'écriture HTML héritées exigent la permission
+    modèle add/change/delete (comme ModelWritePermission côté API). Un compte
+    authentifié sans droit reçoit 403 et ne peut donc pas contourner l'API en
+    POSTant directement sur les routes HTML."""
+
+    def test_create_views_refusent_sans_permission(self):
+        self.login()  # testeur : aucune permission métier
+        for name in ("sale_add", "payment_add", "parcel_add", "asset_add",
+                     "reservation_add", "lead_add"):
+            resp = self.client.post(reverse(name), data={})
+            self.assertEqual(resp.status_code, 403, name)
+
+    def test_delete_view_refuse_sans_permission(self):
+        # La permission est vérifiée dans dispatch(), avant get_object → 403
+        # même sur un pk inexistant (pas de 404 qui fuiterait l'existence).
+        self.login()
+        resp = self.client.post(reverse("parcel_delete", args=[999999]))
+        self.assertEqual(resp.status_code, 403)
+
+    @override_settings(STORAGES={
+        "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+        "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+    })
+    def test_permission_debloque_la_creation(self):
+        # Avec add_salefile, la vue n'est plus refusée : le formulaire se
+        # re-rend (≠ 403). Prouve que c'est bien la permission qui gate.
+        # (Storage statique simple : pas de manifeste hashé en test.)
+        vendeur = User.objects.create_user("vendeur", password="pwd-x")
+        vendeur.user_permissions.add(Permission.objects.get(
+            content_type__app_label="parcelaire", codename="add_salefile"))
+        self.client.force_login(vendeur)
+        resp = self.client.post(reverse("sale_add"), data={})
+        self.assertNotEqual(resp.status_code, 403)
+
+    def test_html_ortho_actions_refusent_sans_permission(self):
+        self.login()
+        r_retry = self.client.post(reverse("orthophoto_retry", args=[self.ortho_done.pk]))
+        r_set = self.client.post(reverse("orthophoto_set_current", args=[self.ortho_pending.pk]))
+        r_del = self.client.post(reverse("orthophoto_delete_tiles", args=[self.ortho_done.pk]))
+        self.assertEqual(r_retry.status_code, 403)
+        self.assertEqual(r_set.status_code, 403)
+        self.assertEqual(r_del.status_code, 403)
+        # rien n'a été relancé ni purgé
+        self.ortho_done.refresh_from_db()
+        self.assertEqual(self.ortho_done.status, "DONE")
+        self.assertTrue(self.ortho_done.tiles_url)
+        self.ortho_pending.refresh_from_db()
+        self.assertFalse(self.ortho_pending.is_current)
 
 
 class OrthophotoActionsAPITests(OrthophotoAPITestCase):
@@ -598,6 +649,23 @@ class CrudAPITests(TestCase):
         # recherche
         empty = self.client.get("/api/crud/customers/?search=introuvable").json()
         self.assertEqual(empty["count"], 0)
+
+    def test_notes_masquees_sans_view_patient_data(self):
+        # Reservation/Sale/Payment : le champ `notes` (PII potentiel) est masqué
+        # sans view_patient_data, comme pour Lead/Customer (parité du masquage).
+        from types import SimpleNamespace
+        from parcelaire.api.crud import (
+            MASKED, ReservationSerializer, SaleSerializer, PaymentSerializer,
+        )
+        obj = SimpleNamespace(notes="RIB et coordonnées confidentielles")
+        patient = User.objects.create_user("crud-patient", password="pwd")
+        patient.user_permissions.add(Permission.objects.get(
+            content_type__app_label="parcelaire", codename="view_patient_data"))
+        for ser_cls in (ReservationSerializer, SaleSerializer, PaymentSerializer):
+            masked = ser_cls(context={"request": SimpleNamespace(user=self.reader)})
+            self.assertEqual(masked.get_notes_display(obj), MASKED, ser_cls.__name__)
+            visible = ser_cls(context={"request": SimpleNamespace(user=patient)})
+            self.assertEqual(visible.get_notes_display(obj), obj.notes, ser_cls.__name__)
 
     def test_create_requires_add_permission(self):
         self.client.force_login(self.reader)  # aucune permission

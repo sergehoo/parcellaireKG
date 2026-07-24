@@ -119,6 +119,8 @@ services:
       - "traefik.http.middlewares.parcelaire-sec.headers.forceSTSHeader=true"
       - "traefik.http.middlewares.parcelaire-sec.headers.frameDeny=true"
       - "traefik.http.middlewares.parcelaire-sec.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.parcelaire-sec.headers.referrerPolicy=strict-origin-when-cross-origin"
+      - "traefik.http.middlewares.parcelaire-sec.headers.permissionsPolicy=geolocation=(), camera=(), microphone=(), payment=()"
 
       # ATTENTION : NE PAS ajouter de middleware `buffering` ici.
       # Par défaut Traefik stream le body directement vers Gunicorn
@@ -268,7 +270,9 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5437:5432"
+      # Lié à localhost uniquement : la DB n'est pas exposée sur le réseau
+      # (les ports Docker publiés contournent ufw). Accès distant = tunnel SSH.
+      - "127.0.0.1:5437:5432"
     networks:
       - default
     restart: unless-stopped
@@ -301,7 +305,9 @@ services:
     depends_on:
       - parcelairedb
     ports:
-      - "8081:8080"
+      # Adminer (UI admin BDD) lié à localhost uniquement : jamais exposé sur
+      # le réseau en prod. Accès = tunnel SSH. Idéalement désactivé en prod.
+      - "127.0.0.1:8081:8080"
     environment:
       - ADMINER_DEFAULT_SERVER=parcelairedb
     networks:
@@ -323,7 +329,7 @@ services:
   #   MINIO_CONSOLE_HOST  (default minio-parcelaire.${DOMAIN})
   # =================================================================
   parcelaire-orthos3:
-    image: minio/minio:latest
+    image: minio/minio:RELEASE.2024-10-13T13-34-11Z
     container_name: parcelaire-orthos3
     hostname: parcelaire-orthos3
     restart: unless-stopped
@@ -360,7 +366,7 @@ services:
 
   # Bootstrap : crée le bucket et configure la policy au premier démarrage.
   parcelaire-orthos3-init:
-    image: minio/mc:latest
+    image: minio/mc:RELEASE.2024-10-08T09-37-26Z
     container_name: parcelaire-orthos3-init
     depends_on:
       - parcelaire-orthos3

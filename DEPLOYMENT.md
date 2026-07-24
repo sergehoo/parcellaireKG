@@ -145,9 +145,9 @@ Ces points ne sont pas bloquants mais fortement conseillés en prod :
    tag d'image défait, fichiers hôtes parasites embarqués). Prévoir un compose
    prod **sans** ces 3 lignes `- .:/app` (ne garder que les montages de données
    `media`/`static_volume`), pour que l'image buildée fasse foi.
-2. **Ports exposés sur l'hôte** : Postgres (`5437:5432`) et Adminer (`8081:8080`)
-   sont publiés. En prod, ne pas les exposer publiquement (les retirer ou les
-   binder sur `127.0.0.1` + tunnel SSH). Adminer devrait être désactivé en prod.
+2. **Ports Postgres/Adminer** : désormais liés à `127.0.0.1` (plus exposés sur
+   le réseau — accès distant via tunnel SSH). Idéalement, **retirer le service
+   Adminer** du compose de prod (client d'admin BDD).
 3. **Anti-bruteforce sur `/admin/login/`** : `/accounts/login/` (allauth) est
    déjà limité nativement (10/min/IP), mais l'admin Django ne l'est pas. Ajouter
    `django-axes` (dépendance + `INSTALLED_APPS` + `AxesStandaloneBackend` +
@@ -172,6 +172,19 @@ Ces points ne sont pas bloquants mais fortement conseillés en prod :
    authentifié peut lire n'importe quel fichier `media/` (documents de vente,
    pièces d'identité) en devinant le chemin. À terme : URLs signées à durée
    limitée ou vue à contrôle par objet/rôle sur les répertoires sensibles.
+10. **CSP `script-src`** : contient encore `'unsafe-inline'` et `'unsafe-eval'`
+    (requis par Alpine.js v3 sur les pages legacy). Migrer vers une CSP à nonces
+    + Alpine `@alpinejs/csp` (ou décommissionner les pages HTML legacy) pour les
+    retirer.
+11. **Subresource Integrity** : les gabarits HTML legacy (`base.html`, `map.html`,
+    `index.html`…) chargent Alpine/Leaflet depuis un CDN sans `integrity` et avec
+    une version Alpine flottante (`3.x.x`). Self-héberger/bundler (comme la SPA)
+    ou figer les versions + ajouter les hash SRI.
+
+> Un audit de sécurité complet (`ostack security` + revue de code adversariale
+> OWASP) a été réalisé le 2026-07-24 : les 5 failles HIGH et la plupart des MED
+> ont été corrigées ; les points 1, 3, 9, 10, 11 ci-dessus sont les résidus
+> connus (non bloquants), suivis en tâches de fond.
 
 ---
 

@@ -311,6 +311,10 @@ LOGIN_URL = "/accounts/login/"
 LOGIN_REDIRECT_URL = "/app/"
 ACCOUNT_LOGOUT_REDIRECT_URL = "/accounts/login/"
 
+# Auto-inscription publique désactivée : comptes provisionnés par un admin.
+# Ferme /accounts/signup/ qui donnait une session authentifiée à tout anonyme.
+ACCOUNT_ADAPTER = "accounts.adapter.NoPublicSignupAccountAdapter"
+
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
@@ -354,10 +358,15 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_THROTTLE_CLASSES': [
         'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
         'rest_framework.throttling.ScopedRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
         'anon': '60/hour',
+        # Plafond par utilisateur authentifié : sans lui, tout compte pouvait
+        # marteler sans limite les endpoints analytics/CRUD non scopés (DoS
+        # applicatif), a fortiori si l'auto-inscription était ouverte.
+        'user': '2000/hour',
         'export': '30/hour',
         'report': '20/hour',
         'regenerate': '12/hour',

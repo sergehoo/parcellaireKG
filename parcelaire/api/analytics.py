@@ -15,6 +15,7 @@ Concepts clés :
 """
 import csv
 import logging
+import math
 from decimal import Decimal
 
 from django.db import connection, transaction
@@ -223,8 +224,13 @@ def _at_risk_rows(request, can_fin):
     level = request.query_params.get('level')
     program = request.query_params.get('program')
     try:
-        min_idcp = float(request.query_params.get('min_idcp')) if request.query_params.get('min_idcp') else None
-    except ValueError:
+        raw_min = request.query_params.get('min_idcp')
+        min_idcp = float(raw_min) if raw_min else None
+        # float('nan')/'inf' ne lèvent pas ValueError mais fausseraient le
+        # filtre (NaN >= x est toujours faux → résultat vidé silencieusement).
+        if min_idcp is not None and not math.isfinite(min_idcp):
+            min_idcp = None
+    except (ValueError, TypeError):
         min_idcp = None
     if level:
         rows = [r for r in rows if r['level'] == level]

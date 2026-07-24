@@ -1,4 +1,4 @@
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
 from django.db.models import Count, Sum, Q
 from django.http import JsonResponse
@@ -16,6 +16,37 @@ from parcelaire.models import ProgramBlock, ProjetImmobilier, RealEstateProgram,
 
 
 # Create your views here.
+
+
+class _ModelPermMixin(PermissionRequiredMixin):
+    """Parité HTML/API pour les écritures.
+
+    Exige la permission modèle add/change/delete correspondant à l'opération
+    de la vue générique (exactement comme `ModelWritePermission` côté API DRF).
+    Sans ce garde, les vues Create/Update/Delete HTML n'exigeaient que
+    l'authentification : un compte « lecture seule » pouvait créer/modifier/
+    supprimer ventes, paiements, parcelles, etc. en POSTant directement.
+    `raise_exception=True` → 403 (et non une redirection login) pour un compte
+    authentifié dépourvu du droit.
+    """
+    raise_exception = True
+
+    def get_permission_required(self):
+        # Un override explicite `permission_required` reste respecté.
+        if getattr(self, 'permission_required', None):
+            return super().get_permission_required()
+        model = getattr(self, 'model', None)
+        if model is None:
+            qs = getattr(self, 'queryset', None)
+            model = qs.model if qs is not None else self.get_form_class()._meta.model
+        opts = model._meta
+        if isinstance(self, DeleteView):
+            action = 'delete'
+        elif isinstance(self, UpdateView):
+            action = 'change'
+        else:
+            action = 'add'
+        return (f'{opts.app_label}.{action}_{opts.model_name}',)
 
 class HomeView(LoginRequiredMixin, TemplateView):
     template_name = "index.html"
@@ -164,7 +195,7 @@ class ProjetImmobilierDetailView(LoginRequiredMixin, DetailView):
         return context
 
 
-class ProjetImmobilierCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView):
+class ProjetImmobilierCreateView(LoginRequiredMixin, _ModelPermMixin, SuccessMessageMixin, CreateView):
     model = ProjetImmobilier
     form_class = ProjetImmobilierForm
     template_name = "parcelaire/project/form.html"
@@ -174,7 +205,7 @@ class ProjetImmobilierCreateView(LoginRequiredMixin, SuccessMessageMixin, Create
         return reverse("project_detail", kwargs={"pk": self.object.pk})
 
 
-class ProjetImmobilierUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
+class ProjetImmobilierUpdateView(LoginRequiredMixin, _ModelPermMixin, SuccessMessageMixin, UpdateView):
     model = ProjetImmobilier
     form_class = ProjetImmobilierForm
     template_name = "parcelaire/project/form.html"
@@ -184,7 +215,7 @@ class ProjetImmobilierUpdateView(LoginRequiredMixin, SuccessMessageMixin, Update
         return reverse("project_detail", kwargs={"pk": self.object.pk})
 
 
-class ProjetImmobilierDeleteView(LoginRequiredMixin, DeleteView):
+class ProjetImmobilierDeleteView(LoginRequiredMixin, _ModelPermMixin, DeleteView):
     model = ProjetImmobilier
     template_name = "parcelaire/project/delete.html"
     success_url = reverse_lazy("project_list")
@@ -248,7 +279,7 @@ class RealEstateProgramDetailView(LoginRequiredMixin, DetailView):
         return context
 
 
-class RealEstateProgramCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView):
+class RealEstateProgramCreateView(LoginRequiredMixin, _ModelPermMixin, SuccessMessageMixin, CreateView):
     model = RealEstateProgram
     form_class = RealEstateProgramForm
     template_name = "parcelaire/program/form.html"
@@ -265,7 +296,7 @@ class RealEstateProgramCreateView(LoginRequiredMixin, SuccessMessageMixin, Creat
         return reverse("program_detail", kwargs={"pk": self.object.pk})
 
 
-class RealEstateProgramUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
+class RealEstateProgramUpdateView(LoginRequiredMixin, _ModelPermMixin, SuccessMessageMixin, UpdateView):
     model = RealEstateProgram
     form_class = RealEstateProgramForm
     template_name = "parcelaire/program/form.html"
@@ -275,7 +306,7 @@ class RealEstateProgramUpdateView(LoginRequiredMixin, SuccessMessageMixin, Updat
         return reverse("program_detail", kwargs={"pk": self.object.pk})
 
 
-class RealEstateProgramDeleteView(LoginRequiredMixin, DeleteView):
+class RealEstateProgramDeleteView(LoginRequiredMixin, _ModelPermMixin, DeleteView):
     model = RealEstateProgram
     template_name = "parcelaire/program/delete.html"
 
@@ -307,7 +338,7 @@ class ProgramPhaseListView(LoginRequiredMixin, SearchFilterMixin, ListView):
         return queryset.order_by("program__name", "order", "name")
 
 
-class ProgramPhaseCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView):
+class ProgramPhaseCreateView(LoginRequiredMixin, _ModelPermMixin, SuccessMessageMixin, CreateView):
     model = ProgramPhase
     form_class = ProgramPhaseForm
     template_name = "parcelaire/phase/form.html"
@@ -324,7 +355,7 @@ class ProgramPhaseCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView
         return reverse("program_detail", kwargs={"pk": self.object.program_id})
 
 
-class ProgramPhaseUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
+class ProgramPhaseUpdateView(LoginRequiredMixin, _ModelPermMixin, SuccessMessageMixin, UpdateView):
     model = ProgramPhase
     form_class = ProgramPhaseForm
     template_name = "parcelaire/phase/form.html"
@@ -334,7 +365,7 @@ class ProgramPhaseUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView
         return reverse("program_detail", kwargs={"pk": self.object.program_id})
 
 
-class ProgramPhaseDeleteView(LoginRequiredMixin, DeleteView):
+class ProgramPhaseDeleteView(LoginRequiredMixin, _ModelPermMixin, DeleteView):
     model = ProgramPhase
     template_name = "parcelaire/phase/delete.html"
 
@@ -385,7 +416,7 @@ class ParcelDatasetDetailView(LoginRequiredMixin, DetailView):
         return context
 
 
-class ParcelDatasetCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView):
+class ParcelDatasetCreateView(LoginRequiredMixin, _ModelPermMixin, SuccessMessageMixin, CreateView):
     model = ParcelDataset
     form_class = ParcelDatasetForm
     template_name = "parcelaire/dataset/form.html"
@@ -402,7 +433,7 @@ class ParcelDatasetCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateVie
         return reverse("dataset_detail", kwargs={"pk": self.object.pk})
 
 
-class ParcelDatasetUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
+class ParcelDatasetUpdateView(LoginRequiredMixin, _ModelPermMixin, SuccessMessageMixin, UpdateView):
     model = ParcelDataset
     form_class = ParcelDatasetForm
     template_name = "parcelaire/dataset/form.html"
@@ -412,7 +443,7 @@ class ParcelDatasetUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateVie
         return reverse("dataset_detail", kwargs={"pk": self.object.pk})
 
 
-class ParcelDatasetDeleteView(LoginRequiredMixin, DeleteView):
+class ParcelDatasetDeleteView(LoginRequiredMixin, _ModelPermMixin, DeleteView):
     model = ParcelDataset
     template_name = "parcelaire/dataset/delete.html"
 
@@ -468,7 +499,7 @@ class ProgramBlockDetailView(LoginRequiredMixin, DetailView):
         return context
 
 
-class ProgramBlockCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView):
+class ProgramBlockCreateView(LoginRequiredMixin, _ModelPermMixin, SuccessMessageMixin, CreateView):
     model = ProgramBlock
     form_class = ProgramBlockForm
     template_name = "parcelaire/block/form.html"
@@ -488,7 +519,7 @@ class ProgramBlockCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView
         return reverse("block_detail", kwargs={"pk": self.object.pk})
 
 
-class ProgramBlockUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
+class ProgramBlockUpdateView(LoginRequiredMixin, _ModelPermMixin, SuccessMessageMixin, UpdateView):
     model = ProgramBlock
     form_class = ProgramBlockForm
     template_name = "parcelaire/block/form.html"
@@ -498,7 +529,7 @@ class ProgramBlockUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView
         return reverse("block_detail", kwargs={"pk": self.object.pk})
 
 
-class ProgramBlockDeleteView(LoginRequiredMixin, DeleteView):
+class ProgramBlockDeleteView(LoginRequiredMixin, _ModelPermMixin, DeleteView):
     model = ProgramBlock
     template_name = "parcelaire/block/delete.html"
 
@@ -575,7 +606,7 @@ class ParcelDetailView(LoginRequiredMixin, DetailView):
         return context
 
 
-class ParcelCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView):
+class ParcelCreateView(LoginRequiredMixin, _ModelPermMixin, SuccessMessageMixin, CreateView):
     model = Parcel
     form_class = ParcelForm
     template_name = "parcelaire/parcel/form.html"
@@ -599,7 +630,7 @@ class ParcelCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView):
         return reverse("parcel_detail", kwargs={"pk": self.object.pk})
 
 
-class ParcelUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
+class ParcelUpdateView(LoginRequiredMixin, _ModelPermMixin, SuccessMessageMixin, UpdateView):
     model = Parcel
     form_class = ParcelForm
     template_name = "parcelaire/parcel/form.html"
@@ -609,7 +640,7 @@ class ParcelUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
         return reverse("parcel_detail", kwargs={"pk": self.object.pk})
 
 
-class ParcelDeleteView(LoginRequiredMixin, DeleteView):
+class ParcelDeleteView(LoginRequiredMixin, _ModelPermMixin, DeleteView):
     model = Parcel
     template_name = "parcelaire/parcel/delete.html"
 
@@ -638,7 +669,7 @@ class CustomerListView(LoginRequiredMixin, SearchFilterMixin, ListView):
         return queryset.order_by("company_name", "last_name", "first_name")
 
 
-class CustomerCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView):
+class CustomerCreateView(LoginRequiredMixin, _ModelPermMixin, SuccessMessageMixin, CreateView):
     model = Customer
     form_class = CustomerForm
     template_name = "parcelaire/customer/form.html"
@@ -646,7 +677,7 @@ class CustomerCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView):
     success_url = reverse_lazy("customer_list")
 
 
-class CustomerUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
+class CustomerUpdateView(LoginRequiredMixin, _ModelPermMixin, SuccessMessageMixin, UpdateView):
     model = Customer
     form_class = CustomerForm
     template_name = "parcelaire/customer/form.html"
@@ -679,7 +710,7 @@ class ReservationListView(LoginRequiredMixin, SearchFilterMixin, ListView):
         return queryset.order_by("-reservation_date", "-created_at")
 
 
-class ReservationCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView):
+class ReservationCreateView(LoginRequiredMixin, _ModelPermMixin, SuccessMessageMixin, CreateView):
     model = Reservation
     form_class = ReservationForm
     template_name = "parcelaire/reservation/form.html"
@@ -687,7 +718,7 @@ class ReservationCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView)
     success_url = reverse_lazy("reservation_list")
 
 
-class ReservationUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
+class ReservationUpdateView(LoginRequiredMixin, _ModelPermMixin, SuccessMessageMixin, UpdateView):
     model = Reservation
     form_class = ReservationForm
     template_name = "parcelaire/reservation/form.html"
@@ -776,7 +807,7 @@ class PropertyAssetDetailView(LoginRequiredMixin, DetailView):
         return context
 
 
-class PropertyAssetCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView):
+class PropertyAssetCreateView(LoginRequiredMixin, _ModelPermMixin, SuccessMessageMixin, CreateView):
     model = PropertyAsset
     form_class = PropertyAssetForm
     template_name = "parcelaire/asset/form.html"
@@ -801,7 +832,7 @@ class PropertyAssetCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateVie
         return reverse("asset_detail", kwargs={"pk": self.object.pk})
 
 
-class PropertyAssetUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
+class PropertyAssetUpdateView(LoginRequiredMixin, _ModelPermMixin, SuccessMessageMixin, UpdateView):
     model = PropertyAsset
     form_class = PropertyAssetForm
     template_name = "parcelaire/asset/form.html"
@@ -811,7 +842,7 @@ class PropertyAssetUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateVie
         return reverse("asset_detail", kwargs={"pk": self.object.pk})
 
 
-class PropertyAssetDeleteView(LoginRequiredMixin, DeleteView):
+class PropertyAssetDeleteView(LoginRequiredMixin, _ModelPermMixin, DeleteView):
     model = PropertyAsset
     template_name = "parcelaire/asset/delete.html"
 
@@ -870,7 +901,7 @@ class LeadListView(LoginRequiredMixin, SearchFilterMixin, ListView):
         return context
 
 
-class LeadCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView):
+class LeadCreateView(LoginRequiredMixin, _ModelPermMixin, SuccessMessageMixin, CreateView):
     model = Lead
     form_class = LeadForm
     template_name = "parcelaire/lead/form.html"
@@ -895,7 +926,7 @@ class LeadCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView):
         return reverse("lead_list")
 
 
-class LeadUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
+class LeadUpdateView(LoginRequiredMixin, _ModelPermMixin, SuccessMessageMixin, UpdateView):
     model = Lead
     form_class = LeadForm
     template_name = "parcelaire/lead/form.html"
@@ -939,7 +970,7 @@ class SaleFileDetailView(LoginRequiredMixin, DetailView):
         return context
 
 
-class SaleFileCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView):
+class SaleFileCreateView(LoginRequiredMixin, _ModelPermMixin, SuccessMessageMixin, CreateView):
     model = SaleFile
     form_class = SaleFileForm
     template_name = "parcelaire/sale/form.html"
@@ -949,7 +980,7 @@ class SaleFileCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView):
         return reverse("sale_detail", kwargs={"pk": self.object.pk})
 
 
-class SaleFileUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
+class SaleFileUpdateView(LoginRequiredMixin, _ModelPermMixin, SuccessMessageMixin, UpdateView):
     model = SaleFile
     form_class = SaleFileForm
     template_name = "parcelaire/sale/form.html"
@@ -982,7 +1013,7 @@ class PaymentListView(LoginRequiredMixin, SearchFilterMixin, ListView):
         return queryset.order_by("-payment_date", "-created_at")
 
 
-class PaymentCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView):
+class PaymentCreateView(LoginRequiredMixin, _ModelPermMixin, SuccessMessageMixin, CreateView):
     model = Payment
     form_class = PaymentForm
     template_name = "parcelaire/payment/form.html"
@@ -990,7 +1021,7 @@ class PaymentCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView):
     success_url = reverse_lazy("payment_list")
 
 
-class PaymentUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
+class PaymentUpdateView(LoginRequiredMixin, _ModelPermMixin, SuccessMessageMixin, UpdateView):
     model = Payment
     form_class = PaymentForm
     template_name = "parcelaire/payment/form.html"
@@ -1036,7 +1067,7 @@ class ConstructionProjectDetailView(LoginRequiredMixin, DetailView):
         return context
 
 
-class ConstructionProjectCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView):
+class ConstructionProjectCreateView(LoginRequiredMixin, _ModelPermMixin, SuccessMessageMixin, CreateView):
     model = ConstructionProject
     form_class = ConstructionProjectForm
     template_name = "parcelaire/construction_project/form.html"
@@ -1056,7 +1087,7 @@ class ConstructionProjectCreateView(LoginRequiredMixin, SuccessMessageMixin, Cre
         return reverse("construction_project_detail", kwargs={"pk": self.object.pk})
 
 
-class ConstructionProjectUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
+class ConstructionProjectUpdateView(LoginRequiredMixin, _ModelPermMixin, SuccessMessageMixin, UpdateView):
     model = ConstructionProject
     form_class = ConstructionProjectForm
     template_name = "parcelaire/construction_project/form.html"
@@ -1066,7 +1097,7 @@ class ConstructionProjectUpdateView(LoginRequiredMixin, SuccessMessageMixin, Upd
         return reverse("construction_project_detail", kwargs={"pk": self.object.pk})
 
 
-class ConstructionUpdateCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView):
+class ConstructionUpdateCreateView(LoginRequiredMixin, _ModelPermMixin, SuccessMessageMixin, CreateView):
     model = ConstructionUpdate
     form_class = ConstructionUpdateForm
     template_name = "parcelaire/construction_update/form.html"
@@ -1083,7 +1114,7 @@ class ConstructionUpdateCreateView(LoginRequiredMixin, SuccessMessageMixin, Crea
         return reverse("construction_project_detail", kwargs={"pk": self.object.construction_project_id})
 
 
-class ConstructionUpdateUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
+class ConstructionUpdateUpdateView(LoginRequiredMixin, _ModelPermMixin, SuccessMessageMixin, UpdateView):
     model = ConstructionUpdate
     form_class = ConstructionUpdateForm
     template_name = "parcelaire/construction_update/form.html"
@@ -1093,7 +1124,7 @@ class ConstructionUpdateUpdateView(LoginRequiredMixin, SuccessMessageMixin, Upda
         return reverse("construction_project_detail", kwargs={"pk": self.object.construction_project_id})
 
 
-class ConstructionPhotoCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView):
+class ConstructionPhotoCreateView(LoginRequiredMixin, _ModelPermMixin, SuccessMessageMixin, CreateView):
     model = ConstructionPhoto
     form_class = ConstructionPhotoForm
     template_name = "parcelaire/construction_photo/form.html"
@@ -1110,7 +1141,7 @@ class ConstructionPhotoCreateView(LoginRequiredMixin, SuccessMessageMixin, Creat
         return reverse("construction_project_detail", kwargs={"pk": self.object.construction_project_id})
 
 
-class ConstructionPhotoUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
+class ConstructionPhotoUpdateView(LoginRequiredMixin, _ModelPermMixin, SuccessMessageMixin, UpdateView):
     model = ConstructionPhoto
     form_class = ConstructionPhotoForm
     template_name = "parcelaire/construction_photo/form.html"
@@ -1120,7 +1151,7 @@ class ConstructionPhotoUpdateView(LoginRequiredMixin, SuccessMessageMixin, Updat
         return reverse("construction_project_detail", kwargs={"pk": self.object.construction_project_id})
 
 
-class ConstructionMediaCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView):
+class ConstructionMediaCreateView(LoginRequiredMixin, _ModelPermMixin, SuccessMessageMixin, CreateView):
     model = ConstructionMedia
     form_class = ConstructionMediaForm
     template_name = "parcelaire/construction_media/form.html"
@@ -1270,6 +1301,33 @@ class _OrthophotoAddPermMixin:
                 status=403,
             )
         return super().dispatch(request, *args, **kwargs)
+
+
+class _OrthophotoPermMixin:
+    """Exige `required_perm` (JSON 401/403). Parité avec les endpoints API
+    orthophoto (CanChangeOrthophoto / CanDeleteOrthophoto). Sans ce garde, les
+    vues HTML héritées retry/set-current/delete-tiles n'exigeaient que le login :
+    tout compte authentifié pouvait purger les tuiles de prod ou basculer
+    l'orthophoto courante."""
+    required_perm = None
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return JsonResponse({"error": "Authentification requise."}, status=401)
+        if self.required_perm and not request.user.has_perm(self.required_perm):
+            return JsonResponse(
+                {"error": "Vous n'avez pas la permission requise pour cette action."},
+                status=403,
+            )
+        return super().dispatch(request, *args, **kwargs)
+
+
+class _OrthophotoChangePermMixin(_OrthophotoPermMixin):
+    required_perm = "parcelaire.change_programorthophoto"
+
+
+class _OrthophotoDeletePermMixin(_OrthophotoPermMixin):
+    required_perm = "parcelaire.delete_programorthophoto"
 
 
 class OrthophotoListView(_OrthophotoBaseMixin, SearchFilterMixin, ListView):
@@ -1481,7 +1539,7 @@ class OrthophotoStatusAPIView(LoginRequiredMixin, View):
 
 
 @method_decorator(require_POST, name="dispatch")
-class OrthophotoRetryView(_OrthophotoBaseMixin, View):
+class OrthophotoRetryView(_OrthophotoChangePermMixin, _OrthophotoBaseMixin, View):
     """Relance la tâche Celery."""
 
     def post(self, request, pk, *args, **kwargs):
@@ -1502,7 +1560,7 @@ class OrthophotoRetryView(_OrthophotoBaseMixin, View):
 
 
 @method_decorator(require_POST, name="dispatch")
-class OrthophotoSetCurrentView(_OrthophotoBaseMixin, View):
+class OrthophotoSetCurrentView(_OrthophotoChangePermMixin, _OrthophotoBaseMixin, View):
     """Marque une orthophoto comme courante (les autres du même programme sont décochées)."""
 
     def post(self, request, pk, *args, **kwargs):
@@ -1515,7 +1573,7 @@ class OrthophotoSetCurrentView(_OrthophotoBaseMixin, View):
 
 
 @method_decorator(require_POST, name="dispatch")
-class OrthophotoDeleteTilesView(_OrthophotoBaseMixin, View):
+class OrthophotoDeleteTilesView(_OrthophotoDeletePermMixin, _OrthophotoBaseMixin, View):
     """Supprime physiquement les tuiles et remet le statut à PENDING."""
 
     def post(self, request, pk, *args, **kwargs):
