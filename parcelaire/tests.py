@@ -936,32 +936,46 @@ class AlertsEngineTests(TestCase):
 
     def test_regenerate_async_when_broker_ok(self):
         self.client.force_login(self.mgr)
-        fake = mock.Mock(id='task-xyz')
-        with mock.patch('parcelaire.tasks.generate_alerts_task.delay', return_value=fake) as delay:
+        with mock.patch('parcelaire.api.analytics._broker_available', return_value=True), \
+                mock.patch('parcelaire.tasks.generate_alerts_task.apply_async') as apply_async:
             resp = self.client.post('/api/alerts/regenerate/')
         self.assertEqual(resp.status_code, 202)
         self.assertEqual(resp.json()['mode'], 'async')
-        self.assertEqual(resp.json()['task_id'], 'task-xyz')
-        delay.assert_called_once()
+        apply_async.assert_called_once()
+        # fire-and-forget : pas de suivi de résultat (le front ne le consulte pas)
+        self.assertEqual(apply_async.call_args.kwargs.get('ignore_result'), True)
 
     def test_regenerate_sync_fallback_when_broker_down(self):
+        # Sonde du broker négative → repli synchrone (sans jamais appeler apply_async).
         self.client.force_login(self.mgr)
         self.assertEqual(Alert.objects.count(), 0)
-        with mock.patch('parcelaire.tasks.generate_alerts_task.delay',
-                        side_effect=OSError('broker injoignable')):
+        with mock.patch('parcelaire.api.analytics._broker_available', return_value=False), \
+                mock.patch('parcelaire.tasks.generate_alerts_task.apply_async') as apply_async:
             resp = self.client.post('/api/alerts/regenerate/')
         self.assertEqual(resp.status_code, 200)
         body = resp.json()
         self.assertEqual(body['mode'], 'sync')
         self.assertGreaterEqual(body['active'], 3)
+        apply_async.assert_not_called()
         # le repli synchrone a bien persisté les alertes
         self.assertEqual(Alert.objects.filter(status__in=['NEW', 'ACK']).count(), body['active'])
+
+    def test_regenerate_sync_fallback_when_publish_raises_runtimeerror(self):
+        # Course rare : sonde OK mais Redis tombe à la publication → apply_async
+        # lève un RuntimeError (pré-abonnement pubsub du result backend). Doit
+        # basculer en synchrone, PAS renvoyer 500 (régression corrigée).
+        self.client.force_login(self.mgr)
+        with mock.patch('parcelaire.api.analytics._broker_available', return_value=True), \
+                mock.patch('parcelaire.tasks.generate_alerts_task.apply_async',
+                           side_effect=RuntimeError('Retry limit exceeded')):
+            resp = self.client.post('/api/alerts/regenerate/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()['mode'], 'sync')
 
     def test_regenerate_sync_conflict_when_locked(self):
         # Broker injoignable + verrou déjà détenu → 409 sans double recalcul.
         self.client.force_login(self.mgr)
-        with mock.patch('parcelaire.tasks.generate_alerts_task.delay',
-                        side_effect=OSError('broker injoignable')), \
+        with mock.patch('parcelaire.api.analytics._broker_available', return_value=False), \
                 mock.patch('parcelaire.api.analytics._try_regen_lock', return_value=False):
             resp = self.client.post('/api/alerts/regenerate/')
         self.assertEqual(resp.status_code, 409)
@@ -973,8 +987,9 @@ class AlertsEngineTests(TestCase):
         # avec une panne de broker : elle remonte, elle n'est pas repliée en
         # sync ni masquée en « succès ».
         self.client.force_login(self.mgr)
-        with mock.patch('parcelaire.tasks.generate_alerts_task.delay',
-                        side_effect=ImportError('module cassé')):
+        with mock.patch('parcelaire.api.analytics._broker_available', return_value=True), \
+                mock.patch('parcelaire.tasks.generate_alerts_task.apply_async',
+                           side_effect=ImportError('module cassé')):
             with self.assertRaises(ImportError):
                 self.client.post('/api/alerts/regenerate/')
         self.assertEqual(Alert.objects.count(), 0)

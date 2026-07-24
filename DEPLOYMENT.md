@@ -75,23 +75,21 @@ Le `.env` réel n'est **jamais** committé (`.gitignore`). Seul `.env.example`
 
 ## 3. Build, migrations et démarrage
 
-Le service `parcelaireweb` exécute automatiquement `collectstatic` au démarrage,
-puis `gunicorn`. Les **migrations ne sont pas automatiques** : à lancer à la main.
+Le service `parcelaireweb` exécute automatiquement, au démarrage :
+`migrate --noinput` → `collectstatic --noinput` → `gunicorn`. Les services
+applicatifs attendent en outre que Postgres et Redis soient **sains**
+(`healthcheck` + `depends_on: condition: service_healthy`), donc `migrate` ne
+tourne jamais avant que la base accepte les connexions. Un simple
+`docker compose up -d` amène donc une base neuve à un état migré et fonctionnel.
 
 ```bash
 # 1) Construire les images
 docker compose build
 
-# 2) Démarrer la base et Redis d'abord (facultatif mais plus propre)
-docker compose up -d parcelairedb redis
-
-# 3) Appliquer les migrations (inclut l'app `accounts` : profils utilisateurs)
-docker compose run --rm parcelaireweb python manage.py migrate
-
-# 4) Démarrer toute la stack (web + celery + beat + minio + traefik)
+# 2) Démarrer toute la stack (migrations + collectstatic automatiques)
 docker compose up -d
 
-# 5) Créer le premier compte administrateur
+# 3) Créer le premier compte administrateur
 docker compose exec parcelaireweb python manage.py createsuperuser
 ```
 
@@ -110,7 +108,7 @@ cd frontend && npm ci && npm run build   # écrit index.js / index.css à noms f
 # Aucune alerte de sécurité attendue (hors W009 si SECRET_KEY factice)
 docker compose exec parcelaireweb python manage.py check --deploy
 
-# Suite de tests (103 tests)
+# Suite de tests (104 tests)
 docker compose exec parcelaireweb python manage.py test
 ```
 
@@ -133,8 +131,8 @@ Contrôles manuels (smoke test) :
   synchrone si le broker est indisponible) ou tâche `beat` planifiée.
 - **Rapports e-mail** : nécessitent `EMAIL_HOST` configuré + destinataires actifs.
 - **Mise à jour applicative** : `git pull` → `docker compose build` →
-  `docker compose run --rm parcelaireweb python manage.py migrate` →
-  `docker compose up -d`.
+  `docker compose up -d` (les migrations tournent automatiquement au démarrage
+  du service web).
 
 ---
 
@@ -142,21 +140,38 @@ Contrôles manuels (smoke test) :
 
 Ces points ne sont pas bloquants mais fortement conseillés en prod :
 
-1. **Bind-mount source `.:/app`** (docker-compose, service web) : en prod, il
-   masque les artefacts de l'image par le code de l'hôte. Prévoir un
-   `docker-compose.prod.yml` (override) **sans** cette ligne pour garantir que
-   l'image buildée est utilisée telle quelle.
+1. **Bind-mount source `.:/app`** (docker-compose, services web/celery/beat) : en
+   prod, il masque les artefacts de l'image par le code de l'hôte (rollback par
+   tag d'image défait, fichiers hôtes parasites embarqués). Prévoir un compose
+   prod **sans** ces 3 lignes `- .:/app` (ne garder que les montages de données
+   `media`/`static_volume`), pour que l'image buildée fasse foi.
 2. **Ports exposés sur l'hôte** : Postgres (`5437:5432`) et Adminer (`8081:8080`)
    sont publiés. En prod, ne pas les exposer publiquement (les retirer ou les
    binder sur `127.0.0.1` + tunnel SSH). Adminer devrait être désactivé en prod.
-3. **Sauvegardes** : `pg_dump` planifié de PostgreSQL + snapshot du volume
+3. **Anti-bruteforce sur `/admin/login/`** : `/accounts/login/` (allauth) est
+   déjà limité nativement (10/min/IP), mais l'admin Django ne l'est pas. Ajouter
+   `django-axes` (dépendance + `INSTALLED_APPS` + `AxesStandaloneBackend` +
+   middleware) **ou** restreindre `/admin/` par IP au niveau Traefik.
+4. **Médias privés suivis par git** : ~34 500 fichiers sous `media/` (imagerie
+   cadastrale, photos de chantier) sont traqués malgré `.gitignore` (committés
+   avant la règle). Arrêter le suivi (les fichiers restent sur le disque) :
+   ```bash
+   git rm -r --cached media/ && git commit -m "Retire media/ du suivi git (données privées)"
+   ```
+   Si le remote a déjà reçu ces objets sur un dépôt public → purge d'historique
+   nécessaire en plus (action opérateur, cf. §1).
+5. **Sauvegardes** : `pg_dump` planifié de PostgreSQL + snapshot du volume
    MinIO ; tester la restauration.
-4. **TLS** : Traefik doit servir HTTPS (Let's Encrypt) ; vérifier le
+6. **TLS** : Traefik doit servir HTTPS (Let's Encrypt) ; vérifier le
    renouvellement automatique.
-5. **Surveillance** : agréger les logs (erreurs 5xx, échecs Celery) et alerter.
-6. **Comptes & rôles** : créer les groupes de permissions
+7. **Surveillance** : agréger les logs (erreurs 5xx, échecs Celery) et alerter.
+8. **Comptes & rôles** : créer les groupes de permissions
    (`view_financial_data`, `view_patient_data`, …) et n'attribuer les données
    sensibles qu'aux rôles habilités.
+9. **Contrôle d'accès `/media/` par objet** : aujourd'hui tout compte
+   authentifié peut lire n'importe quel fichier `media/` (documents de vente,
+   pièces d'identité) en devinant le chemin. À terme : URLs signées à durée
+   limitée ou vue à contrôle par objet/rôle sur les répertoires sensibles.
 
 ---
 

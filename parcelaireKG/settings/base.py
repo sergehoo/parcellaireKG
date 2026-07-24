@@ -302,6 +302,15 @@ USE_I18N = True
 USE_TZ = True
 SITE_ID = int(os.environ.get("SITE_ID", "1"))
 
+# --- Redirections d'authentification ---------------------------------
+# Sans réglage explicite, Django/allauth renvoie après login vers
+# /accounts/profile/ (URL inexistante → 404 générique en prod) dès qu'il
+# n'y a pas de paramètre ?next (login direct, fin d'inscription…). On
+# pointe donc sur la coquille SPA, frontend principal de l'application.
+LOGIN_URL = "/accounts/login/"
+LOGIN_REDIRECT_URL = "/app/"
+ACCOUNT_LOGOUT_REDIRECT_URL = "/accounts/login/"
+
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 

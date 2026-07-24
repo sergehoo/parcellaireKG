@@ -49,6 +49,23 @@ try:  # pragma: no cover - dépend de la présence de kombu (fourni par celery)
 except Exception:  # pragma: no cover
     _BROKER_ERRORS = (OSError,)
 
+
+def _broker_available(celery_app, timeout=2):
+    """Sonde rapide du broker : True s'il répond, False sinon.
+
+    Échoue en ~`timeout` s au lieu de subir la boucle de reconnexion de
+    Celery (~20 s). Indispensable car, broker et result-backend pointant le
+    même Redis, une panne fait échouer le pré-abonnement pubsub du backend
+    (RuntimeError, hors `_BROKER_ERRORS`) AVANT la publication : sans cette
+    sonde, `.delay()` renvoyait 500 au lieu du repli synchrone documenté.
+    """
+    try:
+        with celery_app.connection() as conn:
+            conn.ensure_connection(max_retries=1, timeout=timeout)
+        return True
+    except Exception:  # noqa: BLE001 - toute erreur de connexion => indisponible
+        return False
+
 # Clé stable d'un verrou consultatif PostgreSQL : sérialise les recalculs
 # synchrones concurrents (un seul à la fois) sans dépendre de Redis.
 _REGEN_LOCK_KEY = 4726351
@@ -763,14 +780,21 @@ class AlertRegenerateAPIView(APIView):
         # try : une erreur d'import est un vrai bug et doit remonter en 500,
         # non être confondue avec une panne de broker et masquée.
         from parcelaire.tasks import generate_alerts_task
+        # Sonde rapide : si Redis (broker + back-end) est injoignable, on
+        # bascule tout de suite en recalcul synchrone (le repli documenté).
+        if not _broker_available(generate_alerts_task.app):
+            logger.warning("Broker Celery injoignable, repli sur recalcul synchrone.")
+            return self._regenerate_sync("broker indisponible")
         try:
-            result = generate_alerts_task.delay()
-        except _BROKER_ERRORS as exc:
-            logger.warning("Broker Celery injoignable, repli sur recalcul synchrone : %s", exc)
+            # ignore_result=True : le front ne consulte pas le résultat (pas de
+            # pré-abonnement pubsub) ; retry=False : échoue vite si Redis tombe
+            # juste après la sonde, au lieu de boucler ~20 s.
+            generate_alerts_task.apply_async(ignore_result=True, retry=False)
+        except (*_BROKER_ERRORS, RuntimeError) as exc:
+            logger.warning("Publication de la tâche échouée, repli synchrone : %s", exc)
             return self._regenerate_sync(str(exc))
         return Response(
-            {'mode': 'async', 'task_id': str(result.id),
-             'detail': "Recalcul lancé en arrière-plan."},
+            {'mode': 'async', 'detail': "Recalcul lancé en arrière-plan."},
             status=202,
         )
 

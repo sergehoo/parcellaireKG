@@ -12,6 +12,10 @@ services:
       - -c
       - |
         set -e
+        # migrate AVANT collectstatic/gunicorn : un `docker compose up` sur une
+        # base neuve ne doit pas servir gunicorn contre une DB non migrée
+        # (sinon 500 sur toute vue ORM). migrate est idempotent.
+        python manage.py migrate --noinput
         python manage.py collectstatic --noinput
         # --workers gthread + --threads = workers asynchrones (l'I/O des
         #   gros uploads ne bloque pas le worker, qui peut continuer à
@@ -89,8 +93,10 @@ services:
     env_file:
       - .env
     depends_on:
-      - parcelairedb
-      - redis
+      parcelairedb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - proxy
       - default
@@ -180,8 +186,10 @@ services:
     env_file:
       - .env
     depends_on:
-      - parcelairedb
-      - redis
+      parcelairedb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - default
     restart: unless-stopped
@@ -240,8 +248,10 @@ services:
     env_file:
       - .env
     depends_on:
-      - parcelairedb
-      - redis
+      parcelairedb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - default
     restart: unless-stopped
@@ -262,6 +272,12 @@ services:
     networks:
       - default
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   redis:
     image: redis:7-alpine
@@ -272,6 +288,12 @@ services:
     networks:
       - default
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
   parcelaireadminer:
     image: adminer:4
     container_name: parcelaire-adminer
@@ -362,7 +384,6 @@ volumes:
   postgres_data:
   redis_data:
   static_volume:
-  media_volume:
   parcelaire_orthos3_data:
 
 networks:
