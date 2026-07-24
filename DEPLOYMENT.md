@@ -69,29 +69,52 @@ Points de vigilance dans le `.env` :
   rapports ; ils restent consultables/téléchargeables dans l'app).
 
 Le `.env` réel n'est **jamais** committé (`.gitignore`). Seul `.env.example`
-(sans secret) l'est.
+(sans secret) l'est. Dans Dockploy, collez ces variables dans l'onglet
+**Environment** du service Compose ; Dockploy génère le `.env` utilisé par
+`docker-compose.yml`.
 
 ---
 
-## 3. Build, migrations et démarrage
+## 3. Déploiement avec Dockploy
 
 Le service `parcelaireweb` exécute automatiquement, au démarrage :
 `migrate --noinput` → `collectstatic --noinput` → `gunicorn`. Les services
 applicatifs attendent en outre que Postgres et Redis soient **sains**
 (`healthcheck` + `depends_on: condition: service_healthy`), donc `migrate` ne
-tourne jamais avant que la base accepte les connexions. Un simple
-`docker compose up -d` amène donc une base neuve à un état migré et fonctionnel.
+tourne jamais avant que la base accepte les connexions.
+
+Dans Dockploy :
+
+1. Créer un service **Compose** avec le type **Docker Compose** (pas
+   « Docker Stack », car le fichier construit les images avec `build`).
+2. Sélectionner le dépôt et définir **Compose Path** sur
+   `./docker-compose.yml`.
+3. Activer **Isolated Deployments** et renseigner les variables de
+   `.env.example` dans l'onglet **Environment**.
+4. Dans **Domains**, créer les routes HTTPS suivantes :
+
+   | Usage | Service | Port conteneur |
+   |-------|---------|----------------|
+   | Application | `parcelaireweb` | `8000` |
+   | API S3 publique | `parcelaire-orthos3` | `9000` |
+   | Console MinIO | `parcelaire-orthos3` | `9001` |
+
+   Les hôtes S3 et console doivent correspondre à `MINIO_S3_HOST` et
+   `MINIO_CONSOLE_HOST`. Dockploy ajoute automatiquement les réseaux et labels
+   de routage ; aucun label Traefik n'est défini dans le projet.
+5. Vérifier **Preview Compose**, puis lancer **Deploy**. Toute modification
+   d'un domaine Compose nécessite ensuite un nouveau déploiement.
+
+Après le premier déploiement, ouvrir le terminal du service `parcelaireweb`
+dans Dockploy et exécuter :
 
 ```bash
-# 1) Construire les images
-docker compose build
-
-# 2) Démarrer toute la stack (migrations + collectstatic automatiques)
-docker compose up -d
-
-# 3) Créer le premier compte administrateur
-docker compose exec parcelaireweb python manage.py createsuperuser
+python manage.py createsuperuser
 ```
+
+PostgreSQL, Redis, les médias et MinIO utilisent des volumes Docker nommés.
+Ils ne publient aucun port sur l'hôte et peuvent être sauvegardés via les
+sauvegardes de volumes Dockploy.
 
 Le front React est **déjà buildé et versionné** (`static/orthophotos-app/assets/`).
 Pour le reconstruire après une évolution front :
@@ -126,33 +149,24 @@ Contrôles manuels (smoke test) :
 
 ## 5. Exploitation courante
 
-- **Logs** : `docker compose logs -f parcelaireweb` (gunicorn), `... parcelairecelery`.
+- **Logs** : onglet **Logs** de Dockploy (`parcelaireweb`,
+  `parcelairecelery`, `parcelairebeat`).
 - **Régénération des alertes** : bouton dans le SPA (chemin async Celery, repli
   synchrone si le broker est indisponible) ou tâche `beat` planifiée.
 - **Rapports e-mail** : nécessitent `EMAIL_HOST` configuré + destinataires actifs.
-- **Mise à jour applicative** : `git pull` → `docker compose build` →
-  `docker compose up -d` (les migrations tournent automatiquement au démarrage
-  du service web).
+- **Mise à jour applicative** : relancer **Deploy** dans Dockploy, ou utiliser
+  son webhook après un push. Les migrations tournent automatiquement au
+  démarrage du service web.
 
 ---
 
 ## 6. Durcissements recommandés (à décider par l'opérateur)
 
-Ces points ne sont pas bloquants mais fortement conseillés en prod :
+Ces points ne sont pas bloquants mais fortement conseillés en prod. Le compose
+principal n'utilise déjà plus de bind-mount de code, ne publie ni PostgreSQL ni
+Redis et n'embarque plus Adminer :
 
-1. **Bind-mount source `.:/app`** (docker-compose, services web/celery/beat) : en
-   prod, il masque les artefacts de l'image par le code de l'hôte (rollback par
-   tag d'image défait, fichiers hôtes parasites embarqués). Prévoir un compose
-   prod **sans** ces 3 lignes `- .:/app` (ne garder que les montages de données
-   `media`/`static_volume`), pour que l'image buildée fasse foi.
-2. **Ports Postgres/Adminer** : désormais liés à `127.0.0.1` (plus exposés sur
-   le réseau — accès distant via tunnel SSH). Idéalement, **retirer le service
-   Adminer** du compose de prod (client d'admin BDD).
-3. **Anti-bruteforce sur `/admin/login/`** : `/accounts/login/` (allauth) est
-   déjà limité nativement (10/min/IP), mais l'admin Django ne l'est pas. Ajouter
-   `django-axes` (dépendance + `INSTALLED_APPS` + `AxesStandaloneBackend` +
-   middleware) **ou** restreindre `/admin/` par IP au niveau Traefik.
-4. **Médias privés suivis par git** : ~34 500 fichiers sous `media/` (imagerie
+1. **Médias privés suivis par git** : ~34 500 fichiers sous `media/` (imagerie
    cadastrale, photos de chantier) sont traqués malgré `.gitignore` (committés
    avant la règle). Arrêter le suivi (les fichiers restent sur le disque) :
    ```bash
@@ -160,30 +174,30 @@ Ces points ne sont pas bloquants mais fortement conseillés en prod :
    ```
    Si le remote a déjà reçu ces objets sur un dépôt public → purge d'historique
    nécessaire en plus (action opérateur, cf. §1).
-5. **Sauvegardes** : `pg_dump` planifié de PostgreSQL + snapshot du volume
-   MinIO ; tester la restauration.
-6. **TLS** : Traefik doit servir HTTPS (Let's Encrypt) ; vérifier le
-   renouvellement automatique.
-7. **Surveillance** : agréger les logs (erreurs 5xx, échecs Celery) et alerter.
-8. **Comptes & rôles** : créer les groupes de permissions
+2. **Sauvegardes** : activer dans Dockploy les sauvegardes des volumes
+   PostgreSQL, `media_data` et MinIO ; tester la restauration.
+3. **TLS** : activer HTTPS pour les trois domaines Dockploy et vérifier le
+   renouvellement automatique des certificats.
+4. **Surveillance** : agréger les logs (erreurs 5xx, échecs Celery) et alerter.
+5. **Comptes & rôles** : créer les groupes de permissions
    (`view_financial_data`, `view_patient_data`, …) et n'attribuer les données
    sensibles qu'aux rôles habilités.
-9. **Contrôle d'accès `/media/` par objet** : aujourd'hui tout compte
+6. **Contrôle d'accès `/media/` par objet** : aujourd'hui tout compte
    authentifié peut lire n'importe quel fichier `media/` (documents de vente,
    pièces d'identité) en devinant le chemin. À terme : URLs signées à durée
    limitée ou vue à contrôle par objet/rôle sur les répertoires sensibles.
-10. **CSP `script-src`** : contient encore `'unsafe-inline'` et `'unsafe-eval'`
+7. **CSP `script-src`** : contient encore `'unsafe-inline'` et `'unsafe-eval'`
     (requis par Alpine.js v3 sur les pages legacy). Migrer vers une CSP à nonces
     + Alpine `@alpinejs/csp` (ou décommissionner les pages HTML legacy) pour les
     retirer.
-11. **Subresource Integrity** : les gabarits HTML legacy (`base.html`, `map.html`,
+8. **Subresource Integrity** : les gabarits HTML legacy (`base.html`, `map.html`,
     `index.html`…) chargent Alpine/Leaflet depuis un CDN sans `integrity` et avec
     une version Alpine flottante (`3.x.x`). Self-héberger/bundler (comme la SPA)
     ou figer les versions + ajouter les hash SRI.
 
 > Un audit de sécurité complet (`ostack security` + revue de code adversariale
 > OWASP) a été réalisé le 2026-07-24 : les 5 failles HIGH et la plupart des MED
-> ont été corrigées ; les points 1, 3, 9, 10, 11 ci-dessus sont les résidus
+> ont été corrigées ; les points ci-dessus sont les résidus
 > connus (non bloquants), suivis en tâches de fond.
 
 ---

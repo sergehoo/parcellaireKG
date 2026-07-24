@@ -1,10 +1,9 @@
 services:
   parcelaireweb:
     build: .
-    container_name: parcelaireweb
     # Form YAML liste pour éviter toute imbrication de quotes ambiguë
     # (le `>` + `sh -c "…"` mangeait l'argument `--bind`, gunicorn
-    # restait alors sur 127.0.0.1 et Traefik renvoyait Bad Gateway).
+    # restait alors sur 127.0.0.1 et le frontal renvoyait Bad Gateway).
     # `exec gunicorn` remplace le shell par gunicorn → PID 1 dans le
     # container (meilleure gestion de SIGTERM, log gunicorn direct).
     command:
@@ -44,7 +43,11 @@ services:
       # Pour du live-reload en dev local, ajouter `- .:/app` dans un
       # docker-compose.override.yml (gitignoré, non déployé).
       - static_volume:/app/staticfiles
-      - ./media:/app/media
+      # Volume nommé : persistant et sauvegardable depuis Dockploy.
+      - media_data:/app/media
+    expose:
+      # Port interne à sélectionner dans Dockploy > Domains.
+      - "8000"
     environment:
       # Production forcée : prod.py + DEBUG désactivé, indépendamment du .env
       # (corrige la faille où la prod tournait en réalité sur dev.py/DEBUG=True).
@@ -76,7 +79,7 @@ services:
 
       # MinIO / S3 — stockage objet pour les TIFF source
       # Hostname interne = nom du service Docker (Docker DNS) ;
-      # hostname externe = sous-domaine Traefik configurable via .env.
+      # hostname externe = domaine public configuré dans Dockploy et le .env.
       - S3_ENDPOINT_URL=http://parcelaire-orthos3:9000
       - S3_ENDPOINT_URL_EXTERNAL=https://${MINIO_S3_HOST:-s3-parcelaire.${DOMAIN}}
       - S3_ACCESS_KEY=${MINIO_ROOT_USER}
@@ -98,50 +101,15 @@ services:
       redis:
         condition: service_healthy
     networks:
-      - proxy
       - default
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=proxy"
-
-      # Router HTTPS principal
-      - "traefik.http.routers.parcelaire.rule=Host(`${DOMAIN}`)"
-      - "traefik.http.routers.parcelaire.entrypoints=websecure"
-      - "traefik.http.routers.parcelaire.tls.certresolver=lets"
-
-      # Service interne gunicorn
-      - "traefik.http.services.parcelaire.loadbalancer.server.port=8000"
-
-      # Middlewares
-      - "traefik.http.middlewares.parcelaire-compress.compress=true"
-      - "traefik.http.middlewares.parcelaire-sec.headers.stsSeconds=31536000"
-      - "traefik.http.middlewares.parcelaire-sec.headers.stsIncludeSubdomains=true"
-      - "traefik.http.middlewares.parcelaire-sec.headers.forceSTSHeader=true"
-      - "traefik.http.middlewares.parcelaire-sec.headers.frameDeny=true"
-      - "traefik.http.middlewares.parcelaire-sec.headers.contentTypeNosniff=true"
-      - "traefik.http.middlewares.parcelaire-sec.headers.referrerPolicy=strict-origin-when-cross-origin"
-      - "traefik.http.middlewares.parcelaire-sec.headers.permissionsPolicy=geolocation=(), camera=(), microphone=(), payment=()"
-
-      # ATTENTION : NE PAS ajouter de middleware `buffering` ici.
-      # Par défaut Traefik stream le body directement vers Gunicorn
-      # (= comportement souhaité pour les gros uploads orthophoto).
-      # Le middleware `buffering` tente de tout charger en mémoire/disque
-      # tampon AVANT de relayer, ce qui casse les uploads >100 Mo
-      # (timeout interne, /tmp saturé, etc.) → 500/502 sans même que
-      # Gunicorn voie passer la requête.
-
-      - "traefik.http.routers.parcelaire.middlewares=parcelaire-compress,parcelaire-sec"
-
     restart: unless-stopped
 
   parcelairecelery:
     build: .
-    container_name: parcelairecelery
     command: celery -A parcelaire.celery:app worker -l info
     volumes:
-      # Bind media partagé avec parcelaireweb (tuiles générées par Celery
-      # servies par le web). Pas de bind du code source : image buildée.
-      - ./media:/app/media
+      # Données partagées avec parcelaireweb (tuiles générées par Celery).
+      - media_data:/app/media
       - static_volume:/app/staticfiles
     environment:
       # Production forcée : prod.py + DEBUG désactivé, indépendamment du .env
@@ -173,7 +141,7 @@ services:
 
       # MinIO / S3 — stockage objet pour les TIFF source
       # Hostname interne = nom du service Docker (Docker DNS) ;
-      # hostname externe = sous-domaine Traefik configurable via .env.
+      # hostname externe = domaine public configuré dans Dockploy et le .env.
       - S3_ENDPOINT_URL=http://parcelaire-orthos3:9000
       - S3_ENDPOINT_URL_EXTERNAL=https://${MINIO_S3_HOST:-s3-parcelaire.${DOMAIN}}
       - S3_ACCESS_KEY=${MINIO_ROOT_USER}
@@ -196,11 +164,10 @@ services:
 
   parcelairebeat:
     build: .
-    container_name: parcelairebeat
     command: celery -A parcelaire.celery:app beat -l info
     volumes:
-      # Idem parcelairecelery : bind media partagé, pas de bind du code source.
-      - ./media:/app/media
+      # Idem parcelairecelery : volume média partagé, pas de bind du code source.
+      - media_data:/app/media
       - static_volume:/app/staticfiles
 
     environment:
@@ -234,7 +201,7 @@ services:
 
       # MinIO / S3 — stockage objet pour les TIFF source
       # Hostname interne = nom du service Docker (Docker DNS) ;
-      # hostname externe = sous-domaine Traefik configurable via .env.
+      # hostname externe = domaine public configuré dans Dockploy et le .env.
       - S3_ENDPOINT_URL=http://parcelaire-orthos3:9000
       - S3_ENDPOINT_URL_EXTERNAL=https://${MINIO_S3_HOST:-s3-parcelaire.${DOMAIN}}
       - S3_ACCESS_KEY=${MINIO_ROOT_USER}
@@ -257,7 +224,6 @@ services:
 
   parcelairedb:
     image: postgis/postgis:15-3.4
-    container_name: parcelairedb
     environment:
       - POSTGRES_DB=${DB_NAME}
       - POSTGRES_USER=${DB_USER}
@@ -266,10 +232,6 @@ services:
       - PGTZ=${TIME_ZONE:-Africa/Abidjan}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      # Lié à localhost uniquement : la DB n'est pas exposée sur le réseau
-      # (les ports Docker publiés contournent ufw). Accès distant = tunnel SSH.
-      - "127.0.0.1:5437:5432"
     networks:
       - default
     restart: unless-stopped
@@ -282,7 +244,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: parcelaire-redis
     command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
@@ -295,39 +256,16 @@ services:
       timeout: 5s
       retries: 5
       start_period: 5s
-  parcelaireadminer:
-    image: adminer:4
-    container_name: parcelaire-adminer
-    restart: unless-stopped
-    depends_on:
-      - parcelairedb
-    ports:
-      # Adminer (UI admin BDD) lié à localhost uniquement : jamais exposé sur
-      # le réseau en prod. Accès = tunnel SSH. Idéalement désactivé en prod.
-      - "127.0.0.1:8081:8080"
-    environment:
-      - ADMINER_DEFAULT_SERVER=parcelairedb
-    networks:
-      - default
-      - proxy
-    # Traefik désactivé tant qu'on n'a pas terminé l'investigation
-    # Let's Encrypt (rate-limit ACME bloque le domaine adminer). On
-    # accède toujours à adminer via http://<host>:8081 en direct.
-    labels:
-      - "traefik.enable=false"
-
   # =================================================================
   # MinIO dédié au parcellaire — stockage S3-compatible des orthophotos.
-  # Tous les noms (service / container / volume / routes Traefik) sont
-  # préfixés `parcelaire-orthos3` pour ne pas entrer en conflit avec une
-  # autre instance MinIO déjà présente sur l'hôte.
+  # Tous les noms (service / volume) sont préfixés `parcelaire-orthos3`
+  # pour ne pas entrer en conflit avec une autre instance MinIO.
   # Les sous-domaines publics sont configurables via `.env` :
   #   MINIO_S3_HOST       (default s3-parcelaire.${DOMAIN})
   #   MINIO_CONSOLE_HOST  (default minio-parcelaire.${DOMAIN})
   # =================================================================
   parcelaire-orthos3:
     image: minio/minio:RELEASE.2024-10-13T13-34-11Z
-    container_name: parcelaire-orthos3
     hostname: parcelaire-orthos3
     restart: unless-stopped
     command: server /data --console-address ":9001"
@@ -340,31 +278,17 @@ services:
       MINIO_SERVER_URL: https://${MINIO_S3_HOST:-s3-parcelaire.${DOMAIN}}
     volumes:
       - parcelaire_orthos3_data:/data
+    expose:
+      # Deux domaines Dockploy doivent cibler ce même service :
+      # API S3 -> 9000 ; console MinIO -> 9001.
+      - "9000"
+      - "9001"
     networks:
       - default
-      - proxy
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=proxy"
-
-      # ----- Router 1 : API S3 (presigned PUT, GET) -----
-      - "traefik.http.routers.parcelaire-orthos3-api.rule=Host(`${MINIO_S3_HOST:-s3-parcelaire.${DOMAIN}}`)"
-      - "traefik.http.routers.parcelaire-orthos3-api.entrypoints=websecure"
-      - "traefik.http.routers.parcelaire-orthos3-api.tls.certresolver=lets"
-      - "traefik.http.routers.parcelaire-orthos3-api.service=parcelaire-orthos3-api"
-      - "traefik.http.services.parcelaire-orthos3-api.loadbalancer.server.port=9000"
-
-      # ----- Router 2 : Console MinIO (UI admin) -----
-      - "traefik.http.routers.parcelaire-orthos3-ui.rule=Host(`${MINIO_CONSOLE_HOST:-minio-parcelaire.${DOMAIN}}`)"
-      - "traefik.http.routers.parcelaire-orthos3-ui.entrypoints=websecure"
-      - "traefik.http.routers.parcelaire-orthos3-ui.tls.certresolver=lets"
-      - "traefik.http.routers.parcelaire-orthos3-ui.service=parcelaire-orthos3-ui"
-      - "traefik.http.services.parcelaire-orthos3-ui.loadbalancer.server.port=9001"
 
   # Bootstrap : crée le bucket et configure la policy au premier démarrage.
   parcelaire-orthos3-init:
     image: minio/mc:RELEASE.2024-10-08T09-37-26Z
-    container_name: parcelaire-orthos3-init
     depends_on:
       - parcelaire-orthos3
     networks:
@@ -387,8 +311,5 @@ volumes:
   postgres_data:
   redis_data:
   static_volume:
+  media_data:
   parcelaire_orthos3_data:
-
-networks:
-  proxy:
-    external: true
