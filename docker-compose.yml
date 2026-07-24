@@ -38,11 +38,11 @@ services:
             --access-logfile - \
             --error-logfile -
     volumes:
-      # NB : ce bind écrase /app par le code source de l'hôte.
-      # En prod, considérer un compose dédié sans cette ligne pour
-      # garantir que l'image (avec son CSS et ses statics buildés)
-      # soit utilisée telle quelle.
-      - .:/app
+      # Pas de bind-mount du code source : l'image buildée fait foi en prod
+      # (rollback par tag d'image, et aucun fichier hôte — .env/.git/db.sqlite3 —
+      # embarqué dans le conteneur). Mise à jour du code = `docker compose build`.
+      # Pour du live-reload en dev local, ajouter `- .:/app` dans un
+      # docker-compose.override.yml (gitignoré, non déployé).
       - static_volume:/app/staticfiles
       - ./media:/app/media
     environment:
@@ -139,10 +139,8 @@ services:
     container_name: parcelairecelery
     command: celery -A parcelaire.celery:app worker -l info
     volumes:
-      - .:/app
-      # IMPORTANT : même bind-mount que parcelaireweb pour que les tuiles
-      # générées par Celery (/app/media/tiles_ortho/…) soient visibles
-      # par le serveur web qui les sert via WhiteNoise.
+      # Bind media partagé avec parcelaireweb (tuiles générées par Celery
+      # servies par le web). Pas de bind du code source : image buildée.
       - ./media:/app/media
       - static_volume:/app/staticfiles
     environment:
@@ -201,8 +199,7 @@ services:
     container_name: parcelairebeat
     command: celery -A parcelaire.celery:app beat -l info
     volumes:
-      - .:/app
-      # Idem parcelairecelery : on partage le même bind-mount media.
+      # Idem parcelairecelery : bind media partagé, pas de bind du code source.
       - ./media:/app/media
       - static_volume:/app/staticfiles
 

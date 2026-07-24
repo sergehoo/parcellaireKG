@@ -310,6 +310,29 @@ class LegacyHtmlWritePermissionTests(OrthophotoAPITestCase):
         self.assertFalse(self.ortho_pending.is_current)
 
 
+@override_settings(
+    AXES_FAILURE_LIMIT=3,
+    AXES_RESET_ON_SUCCESS=True,
+    STORAGES={
+        "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+        "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+    },
+)
+class AxesAdminLockoutTests(TestCase):
+    """django-axes verrouille /admin/login/ après N échecs (anti-bruteforce)."""
+
+    def test_admin_login_verrouille_apres_echecs(self):
+        User.objects.create_superuser("admin-axes", "a@ex.local", "bon-mot-de-passe")
+        url = reverse("admin:login")
+        for _ in range(3):
+            self.client.post(url, {"username": "admin-axes", "password": "faux", "next": "/admin/"})
+        # Après la limite, même le BON mot de passe est bloqué (pas de 302 succès).
+        resp = self.client.post(
+            url, {"username": "admin-axes", "password": "bon-mot-de-passe", "next": "/admin/"})
+        self.assertIn(resp.status_code, (403, 429))
+        self.assertNotEqual(resp.status_code, 302)
+
+
 class OrthophotoActionsAPITests(OrthophotoAPITestCase):
     def setUp(self):
         self.client.force_login(self.manager)
@@ -1322,3 +1345,55 @@ class ApiMaskingTests(TestCase):
         body = resp.content.decode('utf-8')
         self.assertIn('openapi', body)
         self.assertIn('KAYDAN Parcellaire API', body)
+
+
+# =====================================================================
+# Contrôle d'accès par objet sur /media/documents/ (A01-3)
+# =====================================================================
+import tempfile  # noqa: E402
+from django.core.files.uploadedfile import SimpleUploadedFile  # noqa: E402
+from parcelaire.models import CustomerDocument  # noqa: E402
+
+_MEDIA_TMP = tempfile.mkdtemp()
+
+
+@override_settings(MEDIA_ROOT=_MEDIA_TMP)
+class MediaDocumentAccessTests(TestCase):
+    """Une pièce d'identité sous /media/documents/ n'est lisible qu'avec la
+    permission métier (view_patient_data) — plus par simple devinette de chemin."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.reader = User.objects.create_user("doc-reader", password="pwd")
+        cls.patient = User.objects.create_user("doc-patient", password="pwd")
+        cls.patient.user_permissions.add(Permission.objects.get(
+            content_type__app_label="parcelaire", codename="view_patient_data"))
+
+    def _make_doc(self):
+        customer = Customer.objects.create(
+            customer_type="INDIVIDUAL", first_name="Awa", last_name="Koné")
+        return CustomerDocument.objects.create(
+            customer=customer, title="CNI", document_type="IDENTITY",
+            file=SimpleUploadedFile("cni.pdf", b"%PDF-1.4 fake", content_type="application/pdf"),
+        )
+
+    def test_refuse_sans_view_patient_data(self):
+        doc = self._make_doc()
+        self.client.force_login(self.reader)
+        self.assertEqual(self.client.get("/media/" + doc.file.name).status_code, 403)
+
+    def test_ok_avec_view_patient_data(self):
+        doc = self._make_doc()
+        self.client.force_login(self.patient)
+        self.assertEqual(self.client.get("/media/" + doc.file.name).status_code, 200)
+
+    def test_chemin_inconnu_404(self):
+        self.client.force_login(self.patient)
+        self.assertEqual(
+            self.client.get("/media/documents/2000/01/inexistant.pdf").status_code, 404)
+
+    def test_anonyme_redirige_login(self):
+        doc = self._make_doc()
+        resp = self.client.get("/media/" + doc.file.name)
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/accounts/login/", resp["Location"])

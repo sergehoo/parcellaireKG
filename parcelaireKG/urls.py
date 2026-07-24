@@ -226,8 +226,18 @@ urlpatterns = [
 # -------------------------------------------------------------------
 from django.urls import re_path as _re_path
 from django.views.static import serve as _serve
+from parcelaire.views import serve_document as _serve_document
 
 urlpatterns += [
+    # Documents (pièces d'identité, contrats, preuves de paiement) : vue à
+    # contrôle d'accès PAR OBJET (permission métier + is_confidential). DOIT
+    # précéder le serve /media/ générique ci-dessous.
+    _re_path(
+        r"^media/documents/(?P<path>.*)$",
+        _serve_document,
+        name="media-document",
+    ),
+    # Reste de /media/ (tuiles d'orthophoto non sensibles) : login requis.
     _re_path(
         r"^media/(?P<path>.*)$",
         login_required(_serve),

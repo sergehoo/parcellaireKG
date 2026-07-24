@@ -1,7 +1,9 @@
+from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
+from django.core.exceptions import PermissionDenied
 from django.db.models import Count, Sum, Q
-from django.http import JsonResponse
+from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import render, get_object_or_404
 from django.urls import reverse, reverse_lazy
 from django.views import View
@@ -13,6 +15,8 @@ from parcelaire.forms import ProgramPhaseForm, ParcelDatasetForm, ProgramBlockFo
 from parcelaire.models import ProgramBlock, ProjetImmobilier, RealEstateProgram, Parcel, PropertyAsset, Customer, Lead, \
     Reservation, SaleFile, ProgramPhase, ParcelDataset, Payment, ConstructionProject, ConstructionUpdate, \
     ConstructionPhoto, ConstructionMedia
+from parcelaire.models import AssetDocument, UnitDocument, SaleDocument, ProgramDocument, \
+    ParcelDocument, CustomerDocument
 
 
 # Create your views here.
@@ -47,6 +51,52 @@ class _ModelPermMixin(PermissionRequiredMixin):
         else:
             action = 'add'
         return (f'{opts.app_label}.{action}_{opts.model_name}',)
+
+
+# Modèles de documents (DocumentBase abstrait → 6 tables concrètes).
+_DOCUMENT_MODELS = (
+    AssetDocument, UnitDocument, SaleDocument,
+    ProgramDocument, ParcelDocument, CustomerDocument,
+)
+
+
+def _document_required_perm(doc):
+    """Permission métier requise pour lire ce document (None = login suffit)."""
+    if isinstance(doc, CustomerDocument) or doc.document_type == "IDENTITY":
+        return "parcelaire.view_patient_data"
+    if isinstance(doc, SaleDocument) or doc.document_type in ("CONTRACT", "PAYMENT_PROOF", "TITLE_DEED"):
+        return "parcelaire.view_financial_data"
+    if doc.is_confidential:
+        return "parcelaire.view_financial_data"
+    return None
+
+
+@login_required
+def serve_document(request, path):
+    """Sert /media/documents/<path> AVEC contrôle d'accès par objet.
+
+    Le serve statique générique livrait ces fichiers (pièces d'identité,
+    contrats, preuves de paiement) à tout compte authentifié par simple
+    devinette de chemin, court-circuitant le masquage PII/financier. Ici on
+    résout le Document, on exige la permission métier (superuser exempté) et on
+    honore `is_confidential`, avant de renvoyer le fichier. Un chemin qui ne
+    correspond à aucun Document renvoie 404 (fail-closed).
+    """
+    rel = f"documents/{path}"
+    doc = None
+    for model in _DOCUMENT_MODELS:
+        doc = model.objects.filter(file=rel).first()
+        if doc is not None:
+            break
+    if doc is None:
+        raise Http404("Document introuvable.")
+    perm = _document_required_perm(doc)
+    if perm and not (request.user.is_superuser or request.user.has_perm(perm)):
+        raise PermissionDenied("Accès non autorisé à ce document.")
+    try:
+        return FileResponse(doc.file.open("rb"))
+    except FileNotFoundError:
+        raise Http404("Fichier absent.")
 
 class HomeView(LoginRequiredMixin, TemplateView):
     template_name = "index.html"

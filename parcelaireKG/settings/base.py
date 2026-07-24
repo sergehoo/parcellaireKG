@@ -93,6 +93,7 @@ INSTALLED_APPS = [
     "csp",
     'drf_spectacular',
     'corsheaders',
+    'axes',
     'accounts',
     'parcelaire',
     'ai_construction'
@@ -101,7 +102,10 @@ INSTALLED_APPS = [
 # Backends d'authentification (audit H8) : allauth n'était pas enregistré,
 # Django retombait sur le seul ModelBackend → intégration allauth (login/e-mail,
 # vérification) non fiable. ModelBackend reste prioritaire (login username inchangé).
+# `AxesStandaloneBackend` DOIT être en TÊTE (anti-bruteforce : verrouille /admin/
+# et tout login après AXES_FAILURE_LIMIT échecs — allauth ne couvre que /accounts/).
 AUTHENTICATION_BACKENDS = [
+    'axes.backends.AxesStandaloneBackend',
     'django.contrib.auth.backends.ModelBackend',
     'allauth.account.auth_backends.AuthenticationBackend',
 ]
@@ -123,7 +127,20 @@ MIDDLEWARE = [
     # CSP : doit être chargé après SecurityMiddleware pour pouvoir injecter
     # les headers Content-Security-Policy.
     "csp.middleware.CSPMiddleware",
+    # AxesMiddleware DOIT être le DERNIER (anti-bruteforce login/admin).
+    "axes.middleware.AxesMiddleware",
 ]
+
+# --- django-axes : anti-bruteforce login (dont /admin/) ---------------
+# Verrouille la paire (username, IP) après AXES_FAILURE_LIMIT échecs, puis
+# refroidissement AXES_COOLOFF_TIME. Verrou sur la combinaison → ni lock-out
+# global, ni DoS ciblé sur un compte. Handler DB par défaut (aucune dépendance
+# cache). Derrière Traefik, l'IP réelle vient de X-Forwarded-For.
+AXES_FAILURE_LIMIT = 5
+AXES_COOLOFF_TIME = 1  # heure
+AXES_RESET_ON_SUCCESS = True
+AXES_LOCKOUT_PARAMETERS = [["username", "ip_address"]]
+AXES_IPWARE_META_PRECEDENCE_ORDER = ["HTTP_X_FORWARDED_FOR", "REMOTE_ADDR"]
 
 # WhiteNoise : compression (gzip + brotli) et cache busting (manifest).
 # Le manifest est plus strict, on l'active seulement quand on n'est PAS en

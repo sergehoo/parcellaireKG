@@ -29,8 +29,13 @@ class ProfileTests(TestCase):
             "allauth.account.auth_backends.AuthenticationBackend",
             settings.AUTHENTICATION_BACKENDS,
         )
-        # ModelBackend reste présent et prioritaire (login username inchangé).
+        # AxesStandaloneBackend DOIT être en tête (anti-bruteforce), suivi de
+        # ModelBackend (login username inchangé), puis allauth.
         self.assertEqual(
             settings.AUTHENTICATION_BACKENDS[0],
+            "axes.backends.AxesStandaloneBackend",
+        )
+        self.assertIn(
             "django.contrib.auth.backends.ModelBackend",
+            settings.AUTHENTICATION_BACKENDS,
         )
