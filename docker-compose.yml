@@ -128,7 +128,11 @@ services:
     expose:
       - "80"
     networks:
+      # `default` : pour joindre parcelaireweb:8000 (proxy backend).
+      # `dokploy-network` : réseau du Traefik de Dokploy — SANS lui, l'edge ne
+      # peut pas atteindre ce conteneur → 502 Bad Gateway sur le domaine.
       - default
+      - dokploy-network
     restart: unless-stopped
 
   parcelairecelery:
@@ -340,3 +344,10 @@ volumes:
   static_volume:
   media_data:
   parcelaire_orthos3_data:
+
+networks:
+  # Réseau partagé du reverse-proxy Traefik géré par Dokploy. Doit exister sur
+  # l'hôte (créé par l'installation Dokploy). Vérifier le nom exact avec :
+  #   docker network ls | grep dokploy
+  dokploy-network:
+    external: true
