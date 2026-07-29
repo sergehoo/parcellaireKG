@@ -140,6 +140,42 @@ class ExecutorTests(CopilotBaseTestCase):
         self.assertTrue(any("Koné" in lbl for lbl in labels), labels)
 
 
+class BusinessQueryTests(CopilotBaseTestCase):
+    def test_count_parcels_by_status_unknown(self):
+        res = executor.run_tool(self.user, "count_parcels_by_status", {"status": "flottant"}, {})
+        self.assertIn("error", res.content)
+
+    def test_count_parcels_by_status_normalizes_alias(self):
+        res = executor.run_tool(self.user, "count_parcels_by_status", {"status": "disponibles"}, {})
+        self.assertEqual(res.content["status"], "AVAILABLE")
+        self.assertIn("count", res.content)
+
+    def test_programs_without_orthophoto_lists_callisto(self):
+        res = executor.run_tool(self.user, "list_programs_without_orthophoto", {}, {})
+        self.assertIn("Callisto", res.content["programs"])
+
+    def test_sales_this_month_count_and_financial_masking(self):
+        from django.utils import timezone
+
+        from parcelaire.models import SaleFile
+        SaleFile.objects.create(sale_number="V-COP-1", program=self.program,
+                                customer=self.customer, agreed_price=1000000,
+                                net_price=1000000, sale_date=timezone.now().date())
+        res = executor.run_tool(self.user, "sales_this_month", {}, {})
+        self.assertGreaterEqual(res.content["count"], 1)
+        self.assertEqual(res.content["total_net"], registry.MASKED)  # sans droit financier
+        res_fin = executor.run_tool(self.finuser, "sales_this_month", {}, {})
+        self.assertNotEqual(res_fin.content["total_net"], registry.MASKED)
+
+    def test_customers_by_payment_ratio_gated_by_financial_permission(self):
+        denied = executor.run_tool(self.user, "customers_by_payment_ratio",
+                                   {"min_percent": 50}, {})
+        self.assertIn("error", denied.content)  # permission refusée (pas de droit financier)
+        ok = executor.run_tool(self.finuser, "customers_by_payment_ratio",
+                               {"min_percent": 50}, {})
+        self.assertIn("count", ok.content)
+
+
 class AgentLoopTests(CopilotBaseTestCase):
     @override_settings(DEEPSEEK_API_KEY="test-key")
     def test_tool_call_then_final_answer(self):

@@ -299,6 +299,96 @@ def _tool_generate_dashboard_report(user, args, context):
                 "filename": "rapport-pilotage-kaydan.pdf"})
 
 
+# =====================================================================
+# Cluster B — requêtes métier (outils EXPLICITES, masqués ; pas de SQL libre)
+# =====================================================================
+_PARCEL_STATUS_ALIASES = {
+    "disponible": "AVAILABLE", "disponibles": "AVAILABLE", "libre": "AVAILABLE",
+    "libres": "AVAILABLE", "available": "AVAILABLE",
+    "reserve": "RESERVED", "réservé": "RESERVED", "reserves": "RESERVED",
+    "réservés": "RESERVED", "réservées": "RESERVED", "reserved": "RESERVED",
+    "vendu": "SOLD", "vendus": "SOLD", "vendues": "SOLD", "sold": "SOLD",
+    "litige": "LITIGATION", "litiges": "LITIGATION", "litigation": "LITIGATION",
+    "conflit": "LITIGATION",
+}
+
+
+def _tool_count_parcels_by_status(user, args, context):
+    from parcelaire.models import Parcel
+    raw = (args.get("status") or "").strip().lower()
+    status = _PARCEL_STATUS_ALIASES.get(raw)
+    if status is None:
+        return ToolResult(content={
+            "error": f"Statut inconnu : « {raw} ». Choix : disponible, réservé, vendu, litige."})
+    qs = Parcel.objects.filter(is_active=True, commercial_status=status)
+    sample = [{"id": p.id, "label": p.lot_number or p.parcel_code or f"#{p.id}"}
+              for p in qs.order_by("id")[:15]]
+    return ToolResult(content={"status": status, "count": qs.count(), "sample": sample})
+
+
+def _tool_list_parcels_without_geometry(user, args, context):
+    from parcelaire.models import Parcel
+    qs = Parcel.objects.filter(is_active=True, geometry__isnull=True)
+    sample = [{"id": p.id, "label": p.lot_number or p.parcel_code or f"#{p.id}"}
+              for p in qs.order_by("id")[:15]]
+    return ToolResult(content={"count": qs.count(), "sample": sample})
+
+
+def _tool_list_programs_without_orthophoto(user, args, context):
+    from parcelaire.models import ProgramOrthophoto, RealEstateProgram
+    with_ortho = set(ProgramOrthophoto.objects.filter(status="DONE")
+                     .values_list("program_id", flat=True))
+    qs = RealEstateProgram.objects.filter(is_active=True).exclude(pk__in=with_ortho)
+    names = list(qs.order_by("name").values_list("name", flat=True)[:30])
+    return ToolResult(content={"count": qs.count(), "programs": names})
+
+
+def _tool_sales_this_month(user, args, context):
+    from decimal import Decimal
+
+    from django.db.models import Sum
+    from django.utils import timezone
+
+    from parcelaire.models import SaleFile
+    now = timezone.now()
+    qs = SaleFile.objects.filter(is_active=True,
+                                 sale_date__year=now.year, sale_date__month=now.month)
+    total = qs.aggregate(s=Sum("net_price"))["s"] or Decimal("0")
+    return ToolResult(content={
+        "month": f"{now.year}-{now.month:02d}", "count": qs.count(),
+        "total_net": float(total) if user_can_view_financial_data(user) else MASKED})
+
+
+def _tool_customers_by_payment_ratio(user, args, context):
+    from django.db.models import Sum
+
+    from parcelaire.models import Customer, Payment, SaleFile
+    try:
+        min_pct = float(args.get("min_percent") or 70)
+    except (TypeError, ValueError):
+        min_pct = 70.0
+    sales = (SaleFile.objects.filter(is_active=True)
+             .values("customer").annotate(total=Sum("net_price")))
+    paid = (Payment.objects.filter(is_active=True, status="CONFIRMED")
+            .values("sale_file__customer").annotate(paid=Sum("amount")))
+    paid_map = {r["sale_file__customer"]: (r["paid"] or 0) for r in paid}
+    rows = []
+    for r in sales:
+        cid, total = r["customer"], float(r["total"] or 0)
+        if cid is None or total <= 0:
+            continue
+        ratio = round(float(paid_map.get(cid, 0)) / total * 100, 1)
+        if ratio >= min_pct:
+            rows.append((cid, ratio))
+    rows.sort(key=lambda x: -x[1])
+    rows = rows[:20]
+    can_pii = user_can_view_patient_data(user)
+    cust = {c.id: c for c in Customer.objects.filter(id__in=[cid for cid, _ in rows])}
+    results = [{"customer": (str(cust[cid]) if can_pii and cid in cust else f"Client #{cid}"),
+                "paid_percent": ratio} for cid, ratio in rows]
+    return ToolResult(content={"min_percent": min_pct, "count": len(results), "results": results})
+
+
 def register_builtins():
     register(ToolSpec(
         name="search_entities",
@@ -364,6 +454,49 @@ def register_builtins():
             },
         },
         handler=_tool_buffer_around_program,
+    ))
+    register(ToolSpec(
+        name="count_parcels_by_status",
+        description="Compte les parcelles/lots par statut commercial (disponible, "
+                    "réservé, vendu, litige) + échantillon.",
+        parameters={
+            "type": "object",
+            "properties": {"status": {"type": "string",
+                           "description": "disponible | réservé | vendu | litige"}},
+            "required": ["status"],
+        },
+        handler=_tool_count_parcels_by_status,
+    ))
+    register(ToolSpec(
+        name="list_parcels_without_geometry",
+        description="Liste les parcelles sans géométrie (à géoréférencer).",
+        parameters={"type": "object", "properties": {}},
+        handler=_tool_list_parcels_without_geometry,
+    ))
+    register(ToolSpec(
+        name="list_programs_without_orthophoto",
+        description="Liste les programmes sans orthophoto publiée.",
+        parameters={"type": "object", "properties": {}},
+        handler=_tool_list_programs_without_orthophoto,
+    ))
+    register(ToolSpec(
+        name="sales_this_month",
+        description="Ventes du mois en cours (nombre + montant total ; montant "
+                    "masqué sans droit financier).",
+        parameters={"type": "object", "properties": {}},
+        handler=_tool_sales_this_month,
+    ))
+    register(ToolSpec(
+        name="customers_by_payment_ratio",
+        description="Clients ayant payé au moins X % de leurs ventes. Ex. « clients "
+                    "ayant payé plus de 70 % ». Réservé au droit financier.",
+        parameters={
+            "type": "object",
+            "properties": {"min_percent": {"type": "number",
+                           "description": "Seuil de paiement en % (défaut 70)."}},
+        },
+        permission="parcelaire.view_financial_data",
+        handler=_tool_customers_by_payment_ratio,
     ))
     register(ToolSpec(
         name="set_map_basemap",
