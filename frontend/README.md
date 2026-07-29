@@ -39,10 +39,15 @@ Composants (`src/components/map/`) :
 > interne ne charge de façon fiable que les tuiles OSM ; satellite/relief/
 > sombre se valident dans un vrai navigateur.*
 >
+> **Assistant IA (Copilote)** : LIVRÉ (branche `feat/ai-copilot`) — panneau ✨
+> multi-moteurs (DeepSeek/ChatGPT/Claude), pilotage carte, requêtes métier +
+> agent SQL borné, reporting, actions à confirmation. Activation : voir
+> `DEPLOYMENT.md §8` (au moins une clé LLM requise).
+>
 > **Différé** (nécessite données/services externes non présents, non simulés) :
 > vue 3D immersive (Cesium/MapLibre/deck.gl), météo temps réel, couche
-> chantier live (grues/ouvriers/VRD/stocks), assistant IA type LLM, timeline.
-> La recherche intelligente inclut déjà un interpréteur de **commandes** léger
+> chantier live (grues/ouvriers/VRD/stocks), timeline.
+> La recherche intelligente inclut aussi un interpréteur de **commandes** léger
 > (rule-based, pas un LLM) qui applique des filtres à partir de mots-clés.
 
 > Les anciennes routes Django `/map/` et `/map_commercial` **redirigent** vers

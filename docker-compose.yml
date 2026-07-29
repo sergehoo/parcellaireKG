@@ -93,6 +93,14 @@ services:
       - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS}
       - SITE_ID=${SITE_ID:-1}
       - TIME_ZONE=${TIME_ZONE:-Africa/Abidjan}
+
+      # Copilote IA (multi-moteurs). Fournir AU MOINS une clé pour l'activer ;
+      # sinon /api/copilot/chat/ renvoie 503 et le reste de l'app est intact.
+      # (Déjà injectées par env_file ; listées ici pour visibilité.)
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - COPILOT_PROVIDER_PRIORITY=${COPILOT_PROVIDER_PRIORITY:-deepseek,openai,anthropic}
     env_file:
       - .env
     depends_on:
