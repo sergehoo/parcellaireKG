@@ -33,6 +33,9 @@ class ToolSpec:
     handler: Callable
     permission: Optional[str] = None   # None = tout compte authentifié
     side_effecting: bool = False
+    # Résumé lisible (user, args)->str affiché sur la carte de confirmation
+    # (consentement éclairé : on nomme la cible plutôt qu'un id brut).
+    confirm_summary: Optional[Callable] = None
 
     def schema(self) -> dict:
         """Définition au format function-calling OpenAI/DeepSeek."""
@@ -257,15 +260,11 @@ def _tool_show_program_orthophoto(user, args, context):
                 "center": _program_center(program)})
 
 
-def _tool_geocode_place(user, args, context):
-    """Recherche géographique (Nominatim/OSM) : ville, commune, quartier, POI…
-    Renvoie le centre → action map.focus (réutilise le pilotage carte existant)."""
+def _geocode(place):
+    """Géocode un lieu via Nominatim/OSM. Renvoie ([lat, lng], label) ou
+    (None, message d'erreur)."""
     import requests
     from django.conf import settings
-
-    place = (args.get("place") or "").strip()
-    if not place:
-        return ToolResult(content={"error": "Lieu non précisé."})
     try:
         resp = requests.get(
             "https://nominatim.openstreetmap.org/search",
@@ -275,19 +274,57 @@ def _tool_geocode_place(user, args, context):
             timeout=8)
         data = resp.json() if resp.status_code == 200 else []
     except Exception as exc:  # noqa: BLE001 - réseau / parsing
-        return ToolResult(content={"error": f"Géocodage indisponible : {exc}"})
+        return None, f"Géocodage indisponible : {exc}"
     if not data:
-        return ToolResult(content={"error": f"Lieu introuvable : {place}"})
-
+        return None, f"Lieu introuvable : {place}"
     top = data[0]
     try:
-        center = [float(top["lat"]), float(top["lon"])]
+        return [float(top["lat"]), float(top["lon"])], top.get("display_name", place)
     except (KeyError, TypeError, ValueError):
-        return ToolResult(content={"error": "Réponse de géocodage invalide."})
-    label = top.get("display_name", place)
+        return None, "Réponse de géocodage invalide."
+
+
+def _tool_geocode_place(user, args, context):
+    """Recherche géographique (ville, commune, quartier, POI) → centre la carte."""
+    place = (args.get("place") or "").strip()
+    if not place:
+        return ToolResult(content={"error": "Lieu non précisé."})
+    center, label = _geocode(place)
+    if center is None:
+        return ToolResult(content={"error": label})
     return ToolResult(
         content={"place": label, "center": center},
         action={"type": "map.focus", "name": label, "center": center, "zoom": 13})
+
+
+def _tool_programs_near_place(user, args, context):
+    """Urbanisme : programmes à moins de N km d'un lieu (école, hôpital, voie…).
+    Géocode le lieu puis mesure la distance aux centroïdes des programmes."""
+    from parcelaire.models import RealEstateProgram
+    place = (args.get("place") or "").strip()
+    if not place:
+        return ToolResult(content={"error": "Lieu non précisé."})
+    try:
+        radius = float(args.get("radius_km") or 2)
+    except (TypeError, ValueError):
+        radius = 2.0
+    radius = max(0.1, min(radius, 200))
+    center, label = _geocode(place)
+    if center is None:
+        return ToolResult(content={"error": label})
+    near = []
+    for p in RealEstateProgram.objects.filter(is_active=True):
+        c = _program_center(p)
+        if c is None:
+            continue
+        d = _haversine_km(c, center)
+        if d <= radius:
+            near.append({"program": p.name, "distance_km": d})
+    near.sort(key=lambda x: x["distance_km"])
+    return ToolResult(
+        content={"place": label, "radius_km": radius, "count": len(near), "programs": near},
+        action={"type": "map.circle", "center": center, "radius_m": radius * 1000,
+                "name": f"{label} — rayon {radius} km"})
 
 
 def _tool_get_analytics_digest(user, args, context):
@@ -500,6 +537,62 @@ def _tool_sql_query(user, args, context):
     return ToolResult(content={"columns": cols, "row_count": len(data), "rows": data})
 
 
+def _find_orthophoto(args):
+    """Résout l'orthophoto ciblée par un appel d'action (par id, sinon dernière
+    en échec / la plus récente du programme). Partagé par le handler et le résumé
+    de confirmation pour garantir qu'ils désignent la MÊME cible."""
+    from parcelaire.models import ProgramOrthophoto
+    oid = args.get("orthophoto_id")
+    if oid:
+        return ProgramOrthophoto.objects.filter(pk=oid).first()
+    program = _resolve_program(args.get("program_id"),
+                               (args.get("program_name") or "").strip())
+    if program is not None:
+        return (program.orthophotos.filter(status="FAILED").order_by("-updated_at").first()
+                or program.orthophotos.order_by("-updated_at").first())
+    return None
+
+
+def _retry_orthophoto_summary(user, args):
+    ortho = _find_orthophoto(args)
+    if ortho is None:
+        return "Relancer le traitement d'une orthophoto (cible introuvable)."
+    prog = getattr(ortho.program, "name", "?")
+    return (f"Relancer le traitement (pipeline GDAL) de l'orthophoto "
+            f"« {ortho.name or ortho.pk} » — programme {prog}.")
+
+
+def _tool_retry_orthophoto(user, args, context):
+    """ACTION à effet de bord : relance le pipeline GDAL d'une orthophoto.
+    Réinitialise le statut à PENDING puis déclenche la tâche Celery — reprend
+    exactement la logique de OrthophotoRetryAPIView (mêmes champs, même task)."""
+    ortho = _find_orthophoto(args)
+    if ortho is None:
+        return ToolResult(content={"error": "Orthophoto introuvable."})
+
+    ortho.status = "PENDING"
+    ortho.progress_percent = 0
+    ortho.current_step = "Relance demandée (Copilote)"
+    ortho.error_message = None
+    ortho.processed_at = None
+    ortho.save(update_fields=["status", "progress_percent", "current_step",
+                              "error_message", "processed_at", "updated_at"])
+    celery_ok = True
+    try:
+        from parcelaire.tasks import process_orthophoto
+        process_orthophoto.delay(ortho.pk)
+    except Exception:  # noqa: BLE001 - broker injoignable : orthophoto déjà réinitialisée
+        celery_ok = False
+    label = ortho.name or f"#{ortho.pk}"
+    msg = (f"Traitement de l'orthophoto « {label} » relancé."
+           if celery_ok else
+           f"Orthophoto « {label} » réinitialisée, mais la file de traitement est injoignable.")
+    return ToolResult(
+        content={"orthophoto_id": ortho.pk, "status": ortho.status,
+                 "celery_queued": celery_ok, "message": msg},
+        action={"type": "navigate", "to": f"/orthophotos/{ortho.pk}"})
+
+
 def register_builtins():
     register(ToolSpec(
         name="search_entities",
@@ -662,6 +755,22 @@ def register_builtins():
         handler=_tool_geocode_place,
     ))
     register(ToolSpec(
+        name="programs_near_place",
+        description="Urbanisme : liste les programmes situés à moins de N km d'un lieu "
+                    "(école, hôpital, aéroport, voie principale…). Géocode le lieu puis "
+                    "mesure la distance à vol d'oiseau et trace le rayon sur la carte. "
+                    "Ex. « Quels programmes à moins de 3 km du CHU de Cocody ? ».",
+        parameters={
+            "type": "object",
+            "properties": {
+                "place": {"type": "string", "description": "Lieu de référence à localiser."},
+                "radius_km": {"type": "number", "description": "Rayon en km (défaut 2)."},
+            },
+            "required": ["place"],
+        },
+        handler=_tool_programs_near_place,
+    ))
+    register(ToolSpec(
         name="get_analytics_digest",
         description="Synthèse décisionnelle du tableau de bord (KPIs, santé des "
                     "programmes, alertes métier, top clients à risque) pour produire "
@@ -682,6 +791,25 @@ def register_builtins():
             },
         },
         handler=_tool_generate_report,
+    ))
+    register(ToolSpec(
+        name="retry_orthophoto_processing",
+        description="ACTION : relance le traitement (pipeline GDAL) d'une orthophoto, "
+                    "par id ou par programme (reprend la dernière en échec). Effet de "
+                    "bord → confirmation requise. Ex. « Relance l'orthophoto de Callisto ».",
+        parameters={
+            "type": "object",
+            "properties": {
+                "orthophoto_id": {"type": "integer", "description": "Id de l'orthophoto."},
+                "program_id": {"type": "integer"},
+                "program_name": {"type": "string",
+                                 "description": "Nom du programme (à défaut d'id)."},
+            },
+        },
+        handler=_tool_retry_orthophoto,
+        permission="parcelaire.change_programorthophoto",
+        side_effecting=True,
+        confirm_summary=_retry_orthophoto_summary,
     ))
 
 

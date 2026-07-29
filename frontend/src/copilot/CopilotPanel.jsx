@@ -58,8 +58,22 @@ function runActions(actions, navigate) {
       if (!onMapRoute()) navigate('/carte')
       requestMapCommand({ type: 'ortho', program_id: action.program_id, on: action.on, center: action.center })
     }
-    // action.type === 'confirm' → Phase 3 (actions à effet de bord)
+    // action.type === 'confirm' : traité séparément (carte de confirmation),
+    // jamais exécuté automatiquement — c'est le garde-fou effet de bord.
   }
+}
+
+// Libellés lisibles pour les actions à effet de bord soumises à confirmation.
+const CONFIRM_LABELS = {
+  retry_orthophoto_processing: "Relancer le traitement d'une orthophoto",
+}
+
+function describeConfirm(a) {
+  const base = CONFIRM_LABELS[a.tool] || `Exécuter l'action « ${a.tool} »`
+  const args = a.arguments && Object.keys(a.arguments).length
+    ? ' — ' + Object.entries(a.arguments).map(([k, v]) => `${k}: ${v}`).join(', ')
+    : ''
+  return base + args
 }
 
 export default function CopilotPanel() {
@@ -68,6 +82,7 @@ export default function CopilotPanel() {
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [model, setModel] = useState('auto')
+  const [pendingConfirm, setPendingConfirm] = useState(null)
   const convRef = useRef(null)
   const scrollRef = useRef(null)
   const navigate = useNavigate()
@@ -92,7 +107,13 @@ export default function CopilotPanel() {
       })
       convRef.current = res.conversation_id || convRef.current
       setMessages((m) => [...m, { role: 'assistant', content: res.reply || '(réponse vide)' }])
+      const confirm = (res.actions || []).find((a) => a && a.type === 'confirm')
       runActions(res.actions, navigate)
+      if (confirm && confirm.token) {
+        // On préfère le résumé lisible résolu côté serveur (nom du programme…) ;
+        // l'exécution est liée au jeton signé, pas au libellé affiché.
+        setPendingConfirm({ token: confirm.token, label: confirm.summary || describeConfirm(confirm) })
+      }
     } catch (err) {
       const msg = err?.status === 503
         ? "Le Copilote n'est pas encore configuré (clé DeepSeek manquante côté serveur)."
@@ -101,6 +122,35 @@ export default function CopilotPanel() {
     } finally {
       setBusy(false)
     }
+  }
+
+  async function confirmPending() {
+    const pc = pendingConfirm
+    if (!pc || busy) return
+    setPendingConfirm(null)
+    setMessages((m) => [...m, { role: 'user', content: `✔️ ${pc.label}` }])
+    setBusy(true)
+    try {
+      const res = await sendCopilotMessage({
+        confirmAction: { token: pc.token },
+        conversationId: convRef.current,
+        context: getCopilotContext(),
+      })
+      convRef.current = res.conversation_id || convRef.current
+      setMessages((m) => [...m, { role: 'assistant', content: res.reply || '(réponse vide)' }])
+      runActions(res.actions, navigate)
+    } catch (err) {
+      setMessages((m) => [...m, { role: 'assistant',
+        content: `⚠️ ${err?.message || "Échec de l'action."}`, error: true }])
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function cancelPending() {
+    if (!pendingConfirm) return
+    setPendingConfirm(null)
+    setMessages((m) => [...m, { role: 'assistant', content: 'Action annulée.' }])
   }
 
   return (
@@ -152,6 +202,23 @@ export default function CopilotPanel() {
               </div>
             )}
           </div>
+
+          {pendingConfirm && (
+            <div className="border-t border-amber-200 bg-amber-50 px-4 py-3">
+              <p className="text-sm font-medium text-amber-900">Confirmer cette action ?</p>
+              <p className="mt-0.5 text-xs text-amber-800">{pendingConfirm.label}</p>
+              <div className="mt-2 flex gap-2">
+                <button type="button" onClick={confirmPending} disabled={busy}
+                  className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">
+                  Confirmer
+                </button>
+                <button type="button" onClick={cancelPending} disabled={busy}
+                  className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-800 disabled:opacity-50">
+                  Annuler
+                </button>
+              </div>
+            </div>
+          )}
 
           <form onSubmit={send} className="border-t border-slate-200 p-3">
             <div className="flex items-end gap-2">

@@ -245,6 +245,146 @@ class ReportingTests(CopilotBaseTestCase):
         self.assertIn("spreadsheetml", r["Content-Type"])
 
 
+class UrbanismTests(CopilotBaseTestCase):
+    def _geo(self, lat, lng):
+        fake = mock.Mock(status_code=200)
+        fake.json.return_value = [{"lat": str(lat), "lon": str(lng),
+                                   "display_name": "Point test"}]
+        return fake
+
+    def test_programs_near_place_lists_within_radius(self):
+        with mock.patch("requests.get", return_value=self._geo(5.351, -4.021)):
+            res = executor.run_tool(self.user, "programs_near_place",
+                                    {"place": "CHU de Cocody", "radius_km": 5}, {})
+        self.assertEqual(res.action["type"], "map.circle")
+        self.assertEqual(res.action["radius_m"], 5000)
+        names = [p["program"] for p in res.content["programs"]]
+        self.assertIn("Callisto", names)
+
+    def test_programs_near_place_excludes_far(self):
+        with mock.patch("requests.get", return_value=self._geo(9.0, -5.0)):
+            res = executor.run_tool(self.user, "programs_near_place",
+                                    {"place": "très loin", "radius_km": 1}, {})
+        self.assertEqual(res.content["count"], 0)
+
+    def test_programs_near_place_geocode_error(self):
+        fake = mock.Mock(status_code=200)
+        fake.json.return_value = []
+        with mock.patch("requests.get", return_value=fake):
+            res = executor.run_tool(self.user, "programs_near_place", {"place": "zzz"}, {})
+        self.assertIn("error", res.content)
+        self.assertIsNone(res.action)
+
+
+class SideEffectActionTests(CopilotBaseTestCase):
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        from parcelaire.models import ProgramOrthophoto
+        cls.orthouser = User.objects.create_user("copilot-ortho", password="pwd")
+        cls.orthouser.user_permissions.add(Permission.objects.get(
+            content_type__app_label="parcelaire", codename="change_programorthophoto"))
+        cls.ortho = ProgramOrthophoto.objects.create(
+            program=cls.program, name="Ortho KO", reference_year=2026,
+            reference_month=3, status="FAILED")
+
+    def test_retry_denied_without_permission(self):
+        res = executor.run_tool(self.user, "retry_orthophoto_processing",
+                                {"orthophoto_id": self.ortho.id}, {})
+        self.assertIn("error", res.content)
+        self.assertTrue(CopilotToolCall.objects.filter(
+            tool_name="retry_orthophoto_processing", status="denied").exists())
+
+    def test_retry_requires_confirmation(self):
+        res = executor.run_tool(self.orthouser, "retry_orthophoto_processing",
+                                {"orthophoto_id": self.ortho.id}, {})
+        self.assertEqual(res.action["type"], "confirm")
+        self.assertEqual(res.action["tool"], "retry_orthophoto_processing")
+        self.assertTrue(res.action.get("token"))          # jeton signé émis
+        self.assertIn("Callisto", res.action["summary"])  # résumé lisible (nom programme)
+        self.ortho.refresh_from_db()
+        self.assertEqual(self.ortho.status, "FAILED")  # aucun effet sans confirmation
+        self.assertTrue(CopilotToolCall.objects.filter(
+            tool_name="retry_orthophoto_processing", status="needs_confirmation").exists())
+
+    def test_retry_executes_after_confirmation(self):
+        with mock.patch("parcelaire.tasks.process_orthophoto.delay") as delay:
+            res = executor.run_tool(self.orthouser, "retry_orthophoto_processing",
+                                    {"orthophoto_id": self.ortho.id}, {},
+                                    allow_side_effects=True)
+        self.assertTrue(res.content["celery_queued"])
+        delay.assert_called_once_with(self.ortho.id)
+        self.ortho.refresh_from_db()
+        self.assertEqual(self.ortho.status, "PENDING")
+        self.assertTrue(CopilotToolCall.objects.filter(  # audit : statut dédié
+            tool_name="retry_orthophoto_processing", status="confirmed").exists())
+
+    def test_confirm_path_via_agent(self):
+        from ai_copilot.agent import run_confirmed
+        conv = CopilotConversation.objects.create(user=self.orthouser, title="t")
+        with mock.patch("parcelaire.tasks.process_orthophoto.delay"):
+            out = run_confirmed(self.orthouser, "retry_orthophoto_processing",
+                                {"orthophoto_id": self.ortho.id}, {}, conv)
+        self.assertIn("relancé", out["reply"])
+        self.assertEqual(out["actions"][0]["type"], "navigate")
+
+    def test_confirm_rejects_non_side_effecting_tool(self):
+        from ai_copilot.agent import run_confirmed
+        conv = CopilotConversation.objects.create(user=self.user, title="t")
+        out = run_confirmed(self.user, "get_dashboard_summary", {}, {}, conv)
+        self.assertIn("confirmable", out["reply"])
+
+    def _proposal_token(self, user=None):
+        res = executor.run_tool(user or self.orthouser, "retry_orthophoto_processing",
+                                {"orthophoto_id": self.ortho.id}, {})
+        return res.action["token"]
+
+    def test_view_confirm_action_executes_without_llm(self):
+        # Le chemin de confirmation ne passe PAS par le LLM (pas de clé requise),
+        # mais exige le jeton signé émis lors de la proposition.
+        token = self._proposal_token()
+        self.client.force_login(self.orthouser)
+        with mock.patch("parcelaire.tasks.process_orthophoto.delay"):
+            r = self.client.post("/api/copilot/chat/",
+                                 {"confirm_action": {"token": token}},
+                                 content_type="application/json")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("relancé", r.json()["reply"])
+
+    def test_view_confirm_rejects_forged_token(self):
+        self.client.force_login(self.orthouser)
+        r = self.client.post("/api/copilot/chat/",
+                             {"confirm_action": {"token": "forged.invalid.token"}},
+                             content_type="application/json")
+        self.assertEqual(r.status_code, 400)
+
+    def test_confirm_token_bound_to_issuing_user(self):
+        # Un jeton émis pour un utilisateur ne peut pas être rejoué par un autre,
+        # même détenteur de la permission.
+        token = self._proposal_token(self.orthouser)
+        other = User.objects.create_user("copilot-ortho2", password="pwd")
+        other.user_permissions.add(Permission.objects.get(
+            content_type__app_label="parcelaire", codename="change_programorthophoto"))
+        self.client.force_login(other)
+        r = self.client.post("/api/copilot/chat/",
+                             {"confirm_action": {"token": token}},
+                             content_type="application/json")
+        self.assertEqual(r.status_code, 400)
+
+    def test_view_confirm_without_token_is_not_a_confirmation(self):
+        # Sans jeton : ce n'est pas une confirmation → retombe sur le chemin
+        # message, qui exige la clé LLM (503 ici) — donc aucun effet de bord.
+        self.client.force_login(self.orthouser)
+        with mock.patch("parcelaire.tasks.process_orthophoto.delay") as delay:
+            r = self.client.post(
+                "/api/copilot/chat/",
+                {"confirm_action": {"tool": "retry_orthophoto_processing",
+                                    "arguments": {"orthophoto_id": self.ortho.id}}},
+                content_type="application/json")
+        self.assertEqual(r.status_code, 503)
+        delay.assert_not_called()
+
+
 class AgentLoopTests(CopilotBaseTestCase):
     @override_settings(DEEPSEEK_API_KEY="test-key")
     def test_tool_call_then_final_answer(self):

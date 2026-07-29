@@ -42,6 +42,37 @@ def _history(conversation):
     return [{"role": m.role, "content": m.content} for m in msgs if m.content]
 
 
+def run_confirmed(user, tool, args, client_context, conversation):
+    """Exécute une action à effet de bord APRÈS confirmation humaine explicite.
+
+    Chemin DÉTERMINISTE hors-LLM : l'action et ses arguments ont été proposés
+    par l'IA puis validés par un clic utilisateur ; on les exécute directement
+    (jamais via le LLM), donc aucune injection de prompt ne peut la déclencher.
+    La permission reste vérifiée par l'executor. Seuls les outils `side_effecting`
+    passent par ici.
+    """
+    spec = registry.get(tool)
+    if spec is None or not spec.side_effecting:
+        executor._journal(user, conversation, tool, args, "rejected_confirm")
+        reply = "Cette action n'est pas confirmable."
+        CopilotMessage.objects.create(conversation=conversation, role="assistant",
+                                      content=reply, metadata={"actions": []})
+        return {"reply": reply, "actions": [], "conversation_id": conversation.id}
+
+    result = executor.run_tool(user, tool, args or {}, client_context,
+                               conversation, allow_side_effects=True)
+    actions = [result.action] if result.action else []
+    content = result.content if isinstance(result.content, dict) else {}
+    if content.get("error"):
+        reply = f"❌ {content['error']}"
+    else:
+        reply = content.get("message") or "✅ Action effectuée."
+    CopilotMessage.objects.create(conversation=conversation, role="assistant",
+                                  content=reply,
+                                  metadata={"actions": actions, "confirmed_tool": tool})
+    return {"reply": reply, "actions": actions, "conversation_id": conversation.id}
+
+
 def run_turn(user, message, client_context, conversation, model=None):
     summary = ctx.build_context_summary(user, client_context)
     messages = [{"role": "system", "content": build_system_prompt(user, summary)}]
