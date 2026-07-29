@@ -240,6 +240,36 @@ def xlsx_response(filename, header, rows_iter):
     return resp
 
 
+def docx_response(filename, title, header, rows_iter, intro=None):
+    """Export Word (.docx) via python-docx : titre + paragraphe optionnel +
+    tableau. Le texte des cellules est neutralisé contre l'injection de formules
+    (cohérent avec les exports CSV/XLSX)."""
+    from io import BytesIO
+
+    from docx import Document
+
+    doc = Document()
+    doc.add_heading(str(title), level=1)
+    if intro:
+        doc.add_paragraph(str(intro))
+    table = doc.add_table(rows=1, cols=len(header))
+    table.style = "Light Grid Accent 1"
+    for i, h in enumerate(header):
+        table.rows[0].cells[i].text = str(h)
+    for row in rows_iter:
+        cells = table.add_row().cells
+        for i, c in enumerate(row):
+            text = '' if c is None else str(c)
+            cells[i].text = _csv_safe(text) if isinstance(text, str) else text
+    buf = BytesIO()
+    doc.save(buf)
+    resp = HttpResponse(
+        buf.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+    resp['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return resp
+
+
 def _at_risk_rows(request, can_fin):
     """Lignes IDCP filtrées (level / program / min_idcp) et triées par IDCP
     décroissant. Partagé par la liste paginée et l'export CSV."""
@@ -516,8 +546,15 @@ class AtRiskExportAPIView(APIView):
                     r['site_manager'], r['sales_agent'], r['sale_date'] or '',
                 ]
         # NB : param 'fmt' (pas 'format' — réservé par DRF à la négociation de contenu).
-        if (request.query_params.get('fmt') or 'csv').lower() == 'xlsx':
+        fmt = (request.query_params.get('fmt') or 'csv').lower()
+        if fmt == 'xlsx':
             return xlsx_response('clients-a-risque.xlsx', header, lines())
+        if fmt == 'docx':
+            intro = (f"{len(rows)} client(s) à risque, triés par IDCP décroissant. "
+                     "Montants masqués selon les droits." if not can_fin
+                     else f"{len(rows)} client(s) à risque, triés par IDCP décroissant.")
+            return docx_response('clients-a-risque.docx', 'Clients à risque',
+                                 header, lines(), intro=intro)
         return csv_streaming_response('clients-a-risque.csv', header, lines())
 
 

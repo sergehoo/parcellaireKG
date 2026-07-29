@@ -235,6 +235,12 @@ class ReportingTests(CopilotBaseTestCase):
         self.assertIn("fmt=xlsx", res.action["url"])
         self.assertTrue(res.action["filename"].endswith(".xlsx"))
 
+    def test_generate_report_risques_word(self):
+        res = executor.run_tool(self.user, "generate_report",
+                                {"kind": "risques", "format": "word"}, {})
+        self.assertIn("fmt=docx", res.action["url"])
+        self.assertTrue(res.action["filename"].endswith(".docx"))
+
     def test_generate_report_unknown(self):
         res = executor.run_tool(self.user, "generate_report", {"kind": "martien"}, {})
         self.assertIn("error", res.content)
@@ -244,6 +250,12 @@ class ReportingTests(CopilotBaseTestCase):
         r = self.client.get("/api/analytics/at-risk/export/?fmt=xlsx")
         self.assertEqual(r.status_code, 200)
         self.assertIn("spreadsheetml", r["Content-Type"])
+
+    def test_at_risk_docx_endpoint(self):
+        self.client.force_login(self.user)
+        r = self.client.get("/api/analytics/at-risk/export/?fmt=docx")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("wordprocessingml", r["Content-Type"])
 
 
 class UrbanismTests(CopilotBaseTestCase):

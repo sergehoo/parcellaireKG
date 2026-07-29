@@ -356,13 +356,18 @@ def _tool_generate_report(user, args, context):
         return ToolResult(content={
             "error": f"Rapport inconnu : « {kind} ».",
             "available": sorted(set(_REPORTS))})
-    url, filename = rep["url"], rep["filename"]
-    # Variante CSV possible pour le rapport clients à risque.
-    if kind in ("risques", "clients_a_risque", "commercial") \
-            and (args.get("format") or "").strip().lower() == "csv":
-        url, filename = "/api/analytics/at-risk/export/", filename.replace(".xlsx", ".csv")
+    url, filename, fmt_label = rep["url"], rep["filename"], rep["format"]
+    # Variantes de format pour le rapport clients à risque : csv | docx (Word).
+    if kind in ("risques", "clients_a_risque", "commercial"):
+        want = (args.get("format") or "").strip().lower()
+        if want == "csv":
+            url = "/api/analytics/at-risk/export/"
+            filename, fmt_label = filename.replace(".xlsx", ".csv"), "CSV"
+        elif want in ("docx", "word"):
+            url = "/api/analytics/at-risk/export/?fmt=docx"
+            filename, fmt_label = filename.replace(".xlsx", ".docx"), "Word"
     return ToolResult(
-        content={"report": kind, "note": f"Rapport {rep['format']} prêt au téléchargement."},
+        content={"report": kind, "note": f"Rapport {fmt_label} prêt au téléchargement."},
         action={"type": "download", "url": url, "filename": filename})
 
 
@@ -781,13 +786,13 @@ def register_builtins():
     register(ToolSpec(
         name="generate_report",
         description="Prépare un rapport au téléchargement : « dashboard »/« DG » (PDF), "
-                    "« risques »/« commercial » (Excel .xlsx ; format=csv possible), "
-                    "« alertes » (CSV).",
+                    "« risques »/« commercial » (Excel .xlsx ; format=csv ou docx/word "
+                    "possible), « alertes » (CSV).",
         parameters={
             "type": "object",
             "properties": {
                 "kind": {"type": "string", "description": "dashboard | dg | risques | commercial | alertes"},
-                "format": {"type": "string", "description": "xlsx (défaut risques) ou csv"},
+                "format": {"type": "string", "description": "xlsx (défaut risques), csv, ou docx/word"},
             },
         },
         handler=_tool_generate_report,
