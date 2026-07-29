@@ -327,6 +327,52 @@ def _tool_programs_near_place(user, args, context):
                 "name": f"{label} — rayon {radius} km"})
 
 
+def _tool_parcels_near_place(user, args, context):
+    """Urbanisme fin : parcelles à moins de N km d'un lieu, mesuré au BORD de la
+    parcelle via PostGIS (ST_DWithin sur les géométries réelles, distance en
+    mètres). Plus précis que programs_near_place (centroïdes)."""
+    from django.contrib.gis.db.models.functions import Distance
+    from django.contrib.gis.geos import Point
+    from django.contrib.gis.measure import D
+    from parcelaire.models import Parcel
+
+    place = (args.get("place") or "").strip()
+    if not place:
+        return ToolResult(content={"error": "Lieu non précisé."})
+    try:
+        radius = float(args.get("radius_km") or 1)
+    except (TypeError, ValueError):
+        radius = 1.0
+    radius = max(0.05, min(radius, 50))
+    center, label = _geocode(place)
+    if center is None:
+        return ToolResult(content={"error": label})
+
+    pt = Point(center[1], center[0], srid=4326)  # Point(lng, lat)
+    qs = (Parcel.objects.filter(is_active=True, geometry__isnull=False)
+          .annotate(dist=Distance("geometry", pt))
+          .filter(dist__lte=D(km=radius)))
+    program_name = (args.get("program") or "").strip()
+    if program_name:
+        qs = qs.filter(program__name__icontains=program_name)
+
+    parcels = []
+    for p in qs.order_by("dist")[:50]:
+        parcels.append({
+            "id": p.id,
+            "lot": p.lot_number or p.parcel_code or f"#{p.id}",
+            "program": p.program.name if p.program_id else None,
+            "status": getattr(p, "commercial_status", None),
+            "distance_m": round(p.dist.m, 1) if p.dist is not None else None,
+        })
+    return ToolResult(
+        content={"place": label, "radius_km": radius, "count": len(parcels),
+                 "note": "Distance mesurée au bord de la parcelle (PostGIS ST_DWithin).",
+                 "parcels": parcels},
+        action={"type": "map.circle", "center": center, "radius_m": radius * 1000,
+                "name": f"{label} — parcelles ≤ {radius} km"})
+
+
 def _tool_get_analytics_digest(user, args, context):
     """Synthèse décisionnelle (KPIs, santé programmes, alertes, clients à risque)
     pour que l'IA produise l'« analyse automatique » du tableau de bord.
@@ -790,6 +836,23 @@ def register_builtins():
             "required": ["place"],
         },
         handler=_tool_programs_near_place,
+    ))
+    register(ToolSpec(
+        name="parcels_near_place",
+        description="Urbanisme fin : parcelles/lots à moins de N km d'un lieu, mesuré "
+                    "au BORD de la parcelle (PostGIS ST_DWithin, géométries réelles). "
+                    "Plus précis que programs_near_place. Ex. « Quels lots à moins de "
+                    "800 m de l'école Saint-Jean ? ». Filtre optionnel par programme.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "place": {"type": "string", "description": "Lieu de référence à localiser."},
+                "radius_km": {"type": "number", "description": "Rayon en km (défaut 1)."},
+                "program": {"type": "string", "description": "Restreindre à un programme (nom)."},
+            },
+            "required": ["place"],
+        },
+        handler=_tool_parcels_near_place,
     ))
     register(ToolSpec(
         name="get_analytics_digest",

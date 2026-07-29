@@ -323,6 +323,37 @@ class UrbanismTests(CopilotBaseTestCase):
         self.assertIsNone(res.action)
 
 
+class ParcelProximityTests(CopilotBaseTestCase):
+    def _geo(self, lat, lng):
+        fake = mock.Mock(status_code=200)
+        fake.json.return_value = [{"lat": str(lat), "lon": str(lng), "display_name": "Point"}]
+        return fake
+
+    @staticmethod
+    def _square(lng0, lat0, d=0.0002):
+        from django.contrib.gis.geos import MultiPolygon, Polygon
+        ring = ((lng0 - d, lat0 - d), (lng0 + d, lat0 - d), (lng0 + d, lat0 + d),
+                (lng0 - d, lat0 + d), (lng0 - d, lat0 - d))
+        return MultiPolygon(Polygon(ring), srid=4326)
+
+    def test_parcels_near_place_uses_metric_postgis(self):
+        from parcelaire.models import Parcel, ParcelDataset
+        ds = ParcelDataset.objects.create(name="DS", program=self.program)
+        Parcel.objects.create(dataset=ds, program=self.program, lot_number="NEAR",
+                              geometry=self._square(-4.0005, 5.3505))   # ~80 m du point
+        Parcel.objects.create(dataset=ds, program=self.program, lot_number="FAR",
+                              geometry=self._square(-4.5, 5.5))          # ~70 km
+        with mock.patch("requests.get", return_value=self._geo(5.35, -4.00)):
+            res = executor.run_tool(self.user, "parcels_near_place",
+                                    {"place": "centre", "radius_km": 1}, {})
+        lots = [p["lot"] for p in res.content["parcels"]]
+        self.assertIn("NEAR", lots)         # ~80 m ≤ 1 km
+        self.assertNotIn("FAR", lots)       # ~70 km exclu (⇒ mètres, pas degrés)
+        self.assertEqual(res.action["type"], "map.circle")
+        near = next(p for p in res.content["parcels"] if p["lot"] == "NEAR")
+        self.assertLess(near["distance_m"], 1000)
+
+
 class SideEffectActionTests(CopilotBaseTestCase):
     @classmethod
     def setUpTestData(cls):
