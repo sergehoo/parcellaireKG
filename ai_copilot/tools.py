@@ -330,9 +330,17 @@ def _tool_programs_near_place(user, args, context):
 def _tool_get_analytics_digest(user, args, context):
     """Synthèse décisionnelle (KPIs, santé programmes, alertes, clients à risque)
     pour que l'IA produise l'« analyse automatique » du tableau de bord.
-    Montants masqués sans droit financier (build_dashboard applique le masquage)."""
+    Montants masqués sans droit financier ; noms de clients/commerciaux masqués
+    sans droit PII (les indicateurs de risque restent, eux, exploitables)."""
     from parcelaire.api.analytics import AnalyticsDashboardAPIView, _can_view_financial
     data = AnalyticsDashboardAPIView().build_dashboard(_can_view_financial(user))
+    # Ne JAMAIS envoyer d'identités clients au LLM sans droit « données clients »
+    # (cohérent avec le principe « masquer avant envoi » du Copilote).
+    if not user_can_view_patient_data(user):
+        for r in data.get("clients_at_risk", []) or []:
+            for k in ("customer", "sales_agent", "site_manager"):
+                if r.get(k) not in (None, "—"):
+                    r[k] = MASKED
     return ToolResult(content=data)
 
 
@@ -500,8 +508,16 @@ def _validate_sql(sql, allowed):
         return "Les commentaires SQL sont interdits."
     if _SQL_FORBIDDEN.search(s):
         return "Requête refusée : mot-clé non autorisé (lecture seule uniquement)."
-    refs = set(re.findall(r'(?:from|join)\s+"?([a-zA-Z_][a-zA-Z0-9_]*)"?', low))
-    forbidden = sorted(t for t in refs if t not in allowed)
+    # Défense robuste : TOUTE table réelle de la base citée comme mot dans la
+    # requête doit être autorisée. Contrairement à une extraction FROM/JOIN
+    # naïve (contournable par « FROM ok, auth_user » en virgule), on confronte
+    # chaque identifiant à la liste réelle des tables → couvre jointures en
+    # virgule, sous-requêtes et CTE.
+    from django.db import connection
+    all_tables = {t.lower() for t in connection.introspection.table_names()}
+    words = set(re.findall(r"[a-z_][a-z0-9_]*", low))
+    referenced = words & all_tables
+    forbidden = sorted(t for t in referenced if t not in allowed)
     if forbidden:
         return f"Table(s) non autorisée(s) : {', '.join(forbidden)}."
     return None

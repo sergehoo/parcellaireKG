@@ -218,12 +218,46 @@ class SqlAgentTests(CopilotBaseTestCase):
         self.assertIn("error", res.content)
         self.assertIn("autorisée", res.content["error"])
 
+    def test_rejects_comma_join_bypass(self):
+        # Contournement historique : une table interdite jointe par virgule
+        # n'était pas capturée par l'extraction FROM/JOIN → doit être refusée.
+        res = executor.run_tool(self.sqluser, "sql_query",
+                                {"sql": f"SELECT p.id FROM {self.program_table} p, auth_user u"}, {})
+        self.assertIn("error", res.content)
+        self.assertIn("auth_user", res.content["error"])
+
+    def test_rejects_auth_user_in_subquery(self):
+        res = executor.run_tool(self.sqluser, "sql_query",
+                                {"sql": "SELECT (SELECT password FROM auth_user LIMIT 1)"}, {})
+        self.assertIn("error", res.content)
+
 
 class ReportingTests(CopilotBaseTestCase):
     def test_analytics_digest_masks_finance(self):
         res = executor.run_tool(self.user, "get_analytics_digest", {}, {})
         self.assertIn("kpis", res.content)
         self.assertEqual(res.content["kpis"]["ca_potentiel"], "Masqué")
+
+    def test_analytics_digest_masks_client_pii_without_permission(self):
+        from django.utils import timezone
+
+        from parcelaire.models import Parcel, ParcelDataset, SaleFile
+        ds = ParcelDataset.objects.create(name="DS", program=self.program)
+        parcel = Parcel.objects.create(dataset=ds, program=self.program, lot_number="L1")
+        SaleFile.objects.create(sale_number="V-PII-1", program=self.program,
+                                customer=self.customer, parcel=parcel,
+                                agreed_price=1000000, net_price=1000000,
+                                sales_agent="Jean Commercial",
+                                sale_date=timezone.now().date())
+        # Sans droit PII : aucun nom de client/commercial ne doit fuiter vers le LLM.
+        res = executor.run_tool(self.user, "get_analytics_digest", {}, {})
+        for r in res.content["clients_at_risk"]:
+            self.assertNotIn("Koné", str(r.get("customer")))
+            self.assertNotEqual(r.get("sales_agent"), "Jean Commercial")
+        # Avec droit PII : le nom réel est présent.
+        res_pii = executor.run_tool(self.piiuser, "get_analytics_digest", {}, {})
+        names = [r.get("customer") for r in res_pii.content["clients_at_risk"]]
+        self.assertTrue(any("Koné" in str(n) for n in names), names)
 
     def test_generate_report_dashboard_pdf(self):
         res = executor.run_tool(self.user, "generate_report", {"kind": "dashboard"}, {})
