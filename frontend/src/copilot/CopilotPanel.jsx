@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { sendCopilotMessage } from '../api/copilot'
 import { downloadFile } from '../api/client'
 import { getCopilotContext } from './pageContext'
-import { requestMapFocus } from './mapBus'
+import { requestMapFocus, requestMapDraw } from './mapBus'
 import { miniMarkdown } from './markdown'
 
 const WELCOME = {
@@ -30,6 +30,11 @@ function isSafeInternalPath(u) {
   }
 }
 
+function onMapRoute() {
+  const h = window.location.hash
+  return h.startsWith('#/carte') || h === '#/' || h === ''
+}
+
 function runActions(actions, navigate) {
   for (const action of actions || []) {
     if (!action || !action.type) continue
@@ -38,10 +43,14 @@ function runActions(actions, navigate) {
     } else if (action.type === 'download' && isSafeInternalPath(action.url)) {
       downloadFile(action.url, action.filename || 'export')
     } else if (action.type === 'map.focus') {
-      const onMap = window.location.hash.startsWith('#/carte')
-        || window.location.hash === '#/' || window.location.hash === ''
-      if (!onMap) navigate('/carte')
+      if (!onMapRoute()) navigate('/carte')
       requestMapFocus({ center: action.center, zoom: action.zoom, name: action.name })
+    } else if (action.type === 'map.circle') {
+      if (!onMapRoute()) navigate('/carte')
+      requestMapDraw({ kind: 'circle', center: action.center, radius_m: action.radius_m, label: action.name })
+    } else if (action.type === 'map.line') {
+      if (!onMapRoute()) navigate('/carte')
+      requestMapDraw({ kind: 'line', points: action.points, label: action.label })
     }
     // action.type === 'confirm' → Phase 3 (actions à effet de bord)
   }

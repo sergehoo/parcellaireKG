@@ -90,6 +90,7 @@ export default function MapCanvas({
   const baseRef = useRef(null)
   const featureLayerRef = useRef(null)
   const alertLayerRef = useRef(null)
+  const copilotLayerRef = useRef(null)
   const orthoRef = useRef(null)
   const layerByUidRef = useRef(new Map())
   const lastFitRef = useRef(null)
@@ -123,6 +124,7 @@ export default function MapCanvas({
     map.getPane('alerts').style.zIndex = 650
     map.getPane('alerts').style.pointerEvents = 'none'
     alertLayerRef.current = L.layerGroup().addTo(map)
+    copilotLayerRef.current = L.layerGroup().addTo(map)  // overlays du Copilot IA
     lastFitRef.current = null
 
     const observer = new ResizeObserver(() => map.invalidateSize())
@@ -182,6 +184,29 @@ export default function MapCanvas({
         } catch { /* géométrie invalide : on ignore */ }
       },
       setCursor: (on) => { cursorOnRef.current = on; if (!on) onCursorRef.current?.(null) },
+      // --- Overlays pilotés par le Copilot IA (cercle/ligne) ---
+      clearCopilot: () => copilotLayerRef.current?.clearLayers(),
+      drawCircle: (center, radiusMeters, label) => {
+        if (!Array.isArray(center) || !copilotLayerRef.current) return
+        copilotLayerRef.current.clearLayers()
+        const c = L.circle(center, {
+          radius: radiusMeters || 1000, color: '#ea580c', weight: 2,
+          fillColor: '#ea580c', fillOpacity: 0.12,
+        }).addTo(copilotLayerRef.current)
+        if (label) c.bindPopup(label).openPopup()
+        try { map.flyToBounds(c.getBounds(), { padding: [30, 30], maxZoom: 16, duration: 0.9 }) } catch { /* ignore */ }
+      },
+      drawLine: (points, label) => {
+        if (!Array.isArray(points) || points.length < 2 || !copilotLayerRef.current) return
+        copilotLayerRef.current.clearLayers()
+        const line = L.polyline(points, { color: '#ea580c', weight: 3, dashArray: '6 6' })
+          .addTo(copilotLayerRef.current)
+        points.forEach((p) => L.circleMarker(p, {
+          radius: 5, color: '#ea580c', fillColor: '#fff', fillOpacity: 1, weight: 2,
+        }).addTo(copilotLayerRef.current))
+        if (label) line.bindPopup(label).openPopup()
+        try { map.flyToBounds(line.getBounds(), { padding: [40, 40], maxZoom: 15, duration: 0.9 }) } catch { /* ignore */ }
+      },
     }
     onReady?.(api)
 

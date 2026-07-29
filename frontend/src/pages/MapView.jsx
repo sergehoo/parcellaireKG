@@ -6,7 +6,7 @@ import { getAlertMap } from '../api/analytics'
 import { getTheme } from '../lib/theme'
 import useReferenceData from '../hooks/useReferenceData'
 import MapCanvas from '../components/map/MapCanvas'
-import { takePendingMapFocus } from '../copilot/mapBus'
+import { takePendingMapFocus, takePendingMapDraw } from '../copilot/mapBus'
 import MapToolbar from '../components/map/MapToolbar'
 import MapLegend from '../components/map/MapLegend'
 import ControlRail from '../components/map/ControlRail'
@@ -49,14 +49,24 @@ export default function MapView() {
   // « navigation vers /carte puis focus »), et écoute les focus live.
   useEffect(() => {
     if (!api) return undefined
-    const pending = takePendingMapFocus()
-    if (pending && pending.center) api.flyTo(pending.center, pending.zoom || 15)
-    const onFocus = (e) => {
-      const d = e.detail || {}
-      if (d.center && api) api.flyTo(d.center, d.zoom || 15)
+    const drawShape = (s) => {
+      if (!s) return
+      if (s.kind === 'circle' && s.center) api.drawCircle(s.center, s.radius_m, s.label)
+      else if (s.kind === 'line' && Array.isArray(s.points)) api.drawLine(s.points, s.label)
     }
+    // Cibles en attente (cas « navigation vers /carte puis action »).
+    const pf = takePendingMapFocus()
+    if (pf && pf.center) api.flyTo(pf.center, pf.zoom || 15)
+    drawShape(takePendingMapDraw())
+    // Événements live (quand on est déjà sur la carte).
+    const onFocus = (e) => { const d = e.detail || {}; if (d.center) api.flyTo(d.center, d.zoom || 15) }
+    const onDraw = (e) => drawShape(e.detail)
     window.addEventListener('kg-copilot-map-focus', onFocus)
-    return () => window.removeEventListener('kg-copilot-map-focus', onFocus)
+    window.addEventListener('kg-copilot-map-draw', onDraw)
+    return () => {
+      window.removeEventListener('kg-copilot-map-focus', onFocus)
+      window.removeEventListener('kg-copilot-map-draw', onDraw)
+    }
   }, [api])
 
   const filters = useMemo(() => {

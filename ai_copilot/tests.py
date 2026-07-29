@@ -80,6 +80,24 @@ class ExecutorTests(CopilotBaseTestCase):
         self.assertEqual(res.action["type"], "map.focus")
         self.assertEqual(res.action["center"], [5.35, -4.02])  # [lat, lng]
 
+    def test_buffer_around_program_returns_circle(self):
+        res = executor.run_tool(self.user, "buffer_around_program",
+                                {"program_name": "Callisto", "radius_km": 2}, {})
+        self.assertEqual(res.action["type"], "map.circle")
+        self.assertEqual(res.action["radius_m"], 2000)
+        self.assertEqual(res.action["center"], [5.35, -4.02])
+
+    def test_distance_between_programs(self):
+        RealEstateProgram.objects.create(
+            code="HEL", name="Heliopolis", slug="heliopolis",
+            country=self.country, project=self.project,
+            centroid=Point(-3.96, 5.30, srid=4326))
+        res = executor.run_tool(self.user, "distance_between_programs",
+                                {"program_a": "Callisto", "program_b": "Heliopolis"}, {})
+        self.assertEqual(res.action["type"], "map.line")
+        self.assertEqual(len(res.action["points"]), 2)
+        self.assertGreater(res.content["distance_km"], 0)
+
     def test_customer_search_blocked_without_pii_permission(self):
         res = executor.run_tool(self.user, "search_entities",
                                 {"query": "Koné", "kind": "customer"}, {})

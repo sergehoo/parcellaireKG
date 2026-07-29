@@ -5,7 +5,8 @@ Chaque outil = fonction + schéma JSON + permission Django requise + drapeau
 endpoints rapport…) et appliquent le masquage financier/PII. Les données
 renvoyées à l'IA sont déjà masquées selon les droits de l'utilisateur.
 """
-from dataclasses import dataclass, field
+import math
+from dataclasses import dataclass
 from typing import Callable, Optional
 
 from parcelaire.api.views import (
@@ -138,27 +139,38 @@ def _tool_dashboard_summary(user, args, context):
                                "can_view_financial": can_fin})
 
 
-def _tool_focus_map_on_program(user, args, context):
+def _resolve_program(program_id=None, program_name=None):
     from parcelaire.models import RealEstateProgram
+    if program_id:
+        p = RealEstateProgram.objects.filter(is_active=True, pk=program_id).first()
+        if p:
+            return p
+    if program_name:
+        return (RealEstateProgram.objects.filter(is_active=True, name__icontains=program_name)
+                .order_by("name").first())
+    return None
 
-    program = None
-    pid = args.get("program_id")
-    name = (args.get("program_name") or "").strip()
-    if pid:
-        program = RealEstateProgram.objects.filter(is_active=True, pk=pid).first()
-    if program is None and name:
-        program = RealEstateProgram.objects.filter(
-            is_active=True, name__icontains=name).order_by("name").first()
+
+def _program_center(program):
+    """Centre [lat, lng] du programme (centroïde, sinon centre du périmètre)."""
+    pt = program.centroid or (program.boundary.centroid if program.boundary else None)
+    return [pt.y, pt.x] if pt is not None else None
+
+
+def _haversine_km(a, b):
+    """Distance à vol d'oiseau (km) entre deux points [lat, lng]."""
+    r = 6371.0
+    lat1, lng1, lat2, lng2 = map(math.radians, [a[0], a[1], b[0], b[1]])
+    h = (math.sin((lat2 - lat1) / 2) ** 2
+         + math.cos(lat1) * math.cos(lat2) * math.sin((lng2 - lng1) / 2) ** 2)
+    return round(2 * r * math.asin(math.sqrt(h)), 2)
+
+
+def _tool_focus_map_on_program(user, args, context):
+    program = _resolve_program(args.get("program_id"), (args.get("program_name") or "").strip())
     if program is None:
         return ToolResult(content={"error": "Programme introuvable."})
-
-    center = None
-    pt = program.centroid or (program.boundary.centroid if program.boundary else None)
-    if pt is not None:
-        center = [pt.y, pt.x]  # [lat, lng]
-
-    action = {"type": "map.focus", "program_id": program.id,
-              "name": program.name, "center": center, "zoom": 15}
+    center = _program_center(program)
     if center is None:
         return ToolResult(
             content={"program": program.name,
@@ -167,7 +179,44 @@ def _tool_focus_map_on_program(user, args, context):
     return ToolResult(
         content={"program": program.name, "center": center,
                  "note": "Carte centrée sur le programme."},
-        action=action)
+        action={"type": "map.focus", "program_id": program.id,
+                "name": program.name, "center": center, "zoom": 15})
+
+
+def _tool_distance_between_programs(user, args, context):
+    """Distance à vol d'oiseau entre deux programmes + tracé de la ligne."""
+    a = _resolve_program(args.get("program_a_id"), (args.get("program_a") or "").strip())
+    b = _resolve_program(args.get("program_b_id"), (args.get("program_b") or "").strip())
+    if a is None or b is None:
+        return ToolResult(content={"error": "Un des deux programmes est introuvable."})
+    ca, cb = _program_center(a), _program_center(b)
+    if ca is None or cb is None:
+        return ToolResult(content={"error": "Un des programmes n'a pas de géométrie."})
+    dist = _haversine_km(ca, cb)
+    label = f"{a.name} ↔ {b.name} : {dist} km (à vol d'oiseau)"
+    return ToolResult(
+        content={"from": a.name, "to": b.name, "distance_km": dist,
+                 "note": "Distance à vol d'oiseau (la distance routière nécessite un service de routage)."},
+        action={"type": "map.line", "points": [ca, cb], "label": label})
+
+
+def _tool_buffer_around_program(user, args, context):
+    """Dessine un cercle (rayon en km) autour d'un programme."""
+    program = _resolve_program(args.get("program_id"), (args.get("program_name") or "").strip())
+    if program is None:
+        return ToolResult(content={"error": "Programme introuvable."})
+    center = _program_center(program)
+    if center is None:
+        return ToolResult(content={"error": "Programme sans géométrie : rayon non traçable."})
+    try:
+        radius_km = float(args.get("radius_km") or 2)
+    except (TypeError, ValueError):
+        radius_km = 2.0
+    radius_km = max(0.05, min(radius_km, 100))  # borne raisonnable
+    return ToolResult(
+        content={"program": program.name, "radius_km": radius_km, "center": center},
+        action={"type": "map.circle", "center": center,
+                "radius_m": radius_km * 1000, "name": f"{program.name} — rayon {radius_km} km"})
 
 
 def _tool_geocode_place(user, args, context):
@@ -248,6 +297,35 @@ def register_builtins():
             },
         },
         handler=_tool_focus_map_on_program,
+    ))
+    register(ToolSpec(
+        name="distance_between_programs",
+        description="Calcule la distance à vol d'oiseau entre deux programmes et trace "
+                    "la ligne sur la carte. Ex. « distance entre Callisto et Héliopolis ».",
+        parameters={
+            "type": "object",
+            "properties": {
+                "program_a": {"type": "string", "description": "Nom du 1er programme."},
+                "program_b": {"type": "string", "description": "Nom du 2e programme."},
+                "program_a_id": {"type": "integer"},
+                "program_b_id": {"type": "integer"},
+            },
+        },
+        handler=_tool_distance_between_programs,
+    ))
+    register(ToolSpec(
+        name="buffer_around_program",
+        description="Dessine un cercle (buffer) d'un rayon donné en km autour d'un "
+                    "programme. Ex. « cercle de 2 km autour de Callisto ».",
+        parameters={
+            "type": "object",
+            "properties": {
+                "program_name": {"type": "string"},
+                "program_id": {"type": "integer"},
+                "radius_km": {"type": "number", "description": "Rayon en km (défaut 2)."},
+            },
+        },
+        handler=_tool_buffer_around_program,
     ))
     register(ToolSpec(
         name="geocode_place",

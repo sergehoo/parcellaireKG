@@ -14,3 +14,18 @@ export function takePendingMapFocus() {
   pending = null
   return f
 }
+
+// Dessin d'overlays (cercle / ligne) demandé par le Copilot — même logique de
+// course « naviguer vers /carte puis dessiner ».
+let pendingDraw = null
+
+export function requestMapDraw(shape) {
+  pendingDraw = shape
+  window.dispatchEvent(new CustomEvent('kg-copilot-map-draw', { detail: shape }))
+}
+
+export function takePendingMapDraw() {
+  const s = pendingDraw
+  pendingDraw = null
+  return s
+}
