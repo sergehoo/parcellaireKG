@@ -3,23 +3,43 @@ import { useEffect } from 'react'
 // Contexte de page partagé, lu par le CopilotPanel à chaque message.
 // La route vient toujours du hash ; les pages enrichissent (program_id…).
 let extra = {}
+// Fournisseur dynamique : renvoie des champs LIVE calculés à l'envoi du message
+// (ex. emprise carte courante) sans re-rendre la page à chaque déplacement.
+let dynamicProvider = null
 
 export function setCopilotContext(next) {
   extra = next || {}
 }
 
-export function getCopilotContext() {
-  const route = (window.location.hash || '#/').replace(/^#/, '') || '/'
-  return { route, ...extra }
+export function setCopilotContextProvider(fn) {
+  dynamicProvider = typeof fn === 'function' ? fn : null
 }
 
-// Hook que chaque page appelle pour déclarer son contexte métier.
+export function getCopilotContext() {
+  const route = (window.location.hash || '#/').replace(/^#/, '') || '/'
+  let live = {}
+  try { live = dynamicProvider ? (dynamicProvider() || {}) : {} } catch { live = {} }
+  // On retire les valeurs vides pour ne pas polluer le contexte serveur.
+  const merged = { route, ...extra, ...live }
+  return Object.fromEntries(Object.entries(merged).filter(([, v]) => v != null && v !== ''))
+}
+
+// Hook que chaque page appelle pour déclarer son contexte métier (statique).
 export function useCopilotContext(next) {
   const key = JSON.stringify(next || {})
   useEffect(() => {
     setCopilotContext(next)
     return () => setCopilotContext({})
   }, [key]) // eslint-disable-line react-hooks/exhaustive-deps
+}
+
+// Hook pour un contexte LIVE (recalculé à chaque message). `fn` doit lire des
+// refs/état courants ; on ré-enregistre quand `deps` change (closure fraîche).
+export function useCopilotContextProvider(fn, deps) {
+  useEffect(() => {
+    setCopilotContextProvider(fn)
+    return () => setCopilotContextProvider(null)
+  }, deps) // eslint-disable-line react-hooks/exhaustive-deps
 }
 
 // Suggestions contextuelles selon la page ouverte (amorces cliquables).

@@ -7,6 +7,7 @@ import { getTheme } from '../lib/theme'
 import useReferenceData from '../hooks/useReferenceData'
 import MapCanvas from '../components/map/MapCanvas'
 import { takePendingMapFocus, takePendingMapDraw, takePendingMapCommands } from '../copilot/mapBus'
+import { useCopilotContextProvider } from '../copilot/pageContext'
 import MapToolbar from '../components/map/MapToolbar'
 import MapLegend from '../components/map/MapLegend'
 import ControlRail from '../components/map/ControlRail'
@@ -102,6 +103,21 @@ export default function MapView() {
 
   useEffect(() => load(), [load])
   useEffect(() => { if (api) api.toggleMinimap(minimapOn) }, [api, minimapOn])
+
+  // Contexte LIVE pour le Copilot IA : programme filtré, parcelle sélectionnée,
+  // couches actives et emprise carte courante (recalculés à l'envoi du message).
+  useCopilotContextProvider(() => {
+    const layers = []
+    if (basemap) layers.push(`fond:${basemap}`)
+    if (layerStyle) layers.push(`style:${layerStyle}`)
+    if (showAlerts) layers.push('alertes')
+    if (orthoOn) layers.push('orthophoto')
+    const ctx = { layers }
+    if (filters.program) ctx.program_id = filters.program
+    if (selected?.parcel_id != null) ctx.parcel_id = selected.parcel_id
+    if (api?.bbox) { try { ctx.bbox = api.bbox() } catch { /* carte pas prête */ } }
+    return ctx
+  }, [api, filters.program, selected, basemap, layerStyle, showAlerts, orthoOn])
 
   // Le fond de carte neutre (standard/sombre) suit le thème ; un choix explicite
   // (satellite/relief/clair) est préservé.

@@ -176,6 +176,8 @@ export default function MapCanvas({
       print: () => window.print(),
       invalidate: () => map.invalidateSize(),
       toggleMinimap: (on) => toggleMinimap(on),
+      // Emprise visible [ouest, sud, est, nord] — pour le contexte du Copilot IA.
+      bbox: () => { const b = map.getBounds(); return [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()] },
       flyTo: (latlng, zoom) => { if (Array.isArray(latlng)) map.flyTo(latlng, zoom || 16, { duration: 0.9 }) },
       fitGeoJson: (geojson) => {
         try {

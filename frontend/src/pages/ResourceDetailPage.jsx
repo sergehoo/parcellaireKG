@@ -7,6 +7,7 @@ import ConfirmDialog from '../components/ConfirmDialog'
 import { useToast } from '../components/Toasts'
 import { badgeClass } from '../lib/badges'
 import { formatDate } from '../lib/format'
+import { useCopilotContext } from '../copilot/pageContext'
 
 // Champs techniques jamais affichés (+ codes bruts doublés par une version
 // « display » plus lisible).
@@ -44,6 +45,12 @@ export default function ResourceDetailPage() {
   const [error, setError] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [busy, setBusy] = useState(false)
+
+  // Contexte Copilot : sur une fiche programme/parcelle, l'IA connaît l'entité ouverte.
+  useCopilotContext(
+    resource === 'programs' ? { program_id: id }
+      : resource === 'parcels' ? { parcel_id: id }
+        : {})
 
   const load = useCallback(() => {
     if (!config) return
