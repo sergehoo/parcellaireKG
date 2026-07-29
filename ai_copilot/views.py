@@ -1,6 +1,7 @@
 """API du Copilote IA : POST /api/copilot/chat/."""
 import json
 
+from django.db.models import Count
 from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -85,3 +86,45 @@ class CopilotChatAPIView(APIView):
         except GatewayError as exc:
             return Response({"detail": str(exc)}, status=502)
         return Response(out)
+
+
+@extend_schema_view(get=extend_schema(
+    summary="Copilote IA — historique des conversations",
+    description="Liste les conversations du Copilote de l'utilisateur courant "
+                "(les siennes uniquement), les plus récentes d'abord.",
+    tags=["Copilot"],
+    responses={200: OpenApiResponse(description="Liste des conversations.")},
+))
+class CopilotConversationsAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        qs = (CopilotConversation.objects
+              .filter(user=request.user)
+              .annotate(n=Count("messages"))
+              .order_by("-updated_at")[:50])
+        data = [{"id": c.id, "title": c.title or f"Conversation #{c.id}",
+                 "updated_at": c.updated_at, "message_count": c.n} for c in qs]
+        return Response({"conversations": data})
+
+
+@extend_schema_view(get=extend_schema(
+    summary="Copilote IA — messages d'une conversation",
+    description="Renvoie les messages (utilisateur/assistant) d'une conversation "
+                "appartenant à l'utilisateur courant. 404 si elle ne lui appartient pas.",
+    tags=["Copilot"],
+    responses={200: OpenApiResponse(description="Messages de la conversation."),
+               404: OpenApiResponse(description="Introuvable.")},
+))
+class CopilotConversationDetailAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        conv = CopilotConversation.objects.filter(pk=pk, user=request.user).first()
+        if conv is None:
+            return Response({"detail": "Conversation introuvable."}, status=404)
+        msgs = (conv.messages.filter(role__in=["user", "assistant"])
+                .order_by("created_at", "id"))
+        data = [{"role": m.role, "content": m.content,
+                 "actions": (m.metadata or {}).get("actions", [])} for m in msgs]
+        return Response({"id": conv.id, "title": conv.title, "messages": data})

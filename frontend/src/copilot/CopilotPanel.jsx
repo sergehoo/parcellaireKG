@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { sendCopilotMessage } from '../api/copilot'
+import { sendCopilotMessage, listCopilotConversations, getCopilotConversation } from '../api/copilot'
 import { downloadFile } from '../api/client'
-import { getCopilotContext } from './pageContext'
+import { getCopilotContext, getCopilotSuggestions } from './pageContext'
 import { requestMapFocus, requestMapDraw, requestMapCommand } from './mapBus'
 import { miniMarkdown } from './markdown'
 
@@ -83,6 +83,8 @@ export default function CopilotPanel() {
   const [busy, setBusy] = useState(false)
   const [model, setModel] = useState('auto')
   const [pendingConfirm, setPendingConfirm] = useState(null)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [conversations, setConversations] = useState([])
   const convRef = useRef(null)
   const scrollRef = useRef(null)
   const navigate = useNavigate()
@@ -91,9 +93,13 @@ export default function CopilotPanel() {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
   }, [messages, open])
 
-  async function send(e) {
+  function send(e) {
     e?.preventDefault()
-    const text = input.trim()
+    submitText(input)
+  }
+
+  async function submitText(raw) {
+    const text = (raw || '').trim()
     if (!text || busy) return
     setInput('')
     setMessages((m) => [...m, { role: 'user', content: text }])
@@ -153,6 +159,43 @@ export default function CopilotPanel() {
     setMessages((m) => [...m, { role: 'assistant', content: 'Action annulée.' }])
   }
 
+  function newConversation() {
+    convRef.current = null
+    setPendingConfirm(null)
+    setMessages([WELCOME])
+    setHistoryOpen(false)
+  }
+
+  async function toggleHistory() {
+    const next = !historyOpen
+    setHistoryOpen(next)
+    if (next) {
+      try {
+        const res = await listCopilotConversations()
+        setConversations(res.conversations || [])
+      } catch {
+        setConversations([])
+      }
+    }
+  }
+
+  async function openConversation(id) {
+    setHistoryOpen(false)
+    setBusy(true)
+    try {
+      const res = await getCopilotConversation(id)
+      convRef.current = res.id
+      setPendingConfirm(null)
+      const loaded = (res.messages || []).map((m) => ({ role: m.role, content: m.content }))
+      setMessages(loaded.length ? loaded : [WELCOME])
+    } catch {
+      setMessages((m) => [...m, { role: 'assistant',
+        content: '⚠️ Impossible de charger cette conversation.', error: true }])
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <>
       {/* Bouton flottant — présent sur toutes les pages */}
@@ -172,7 +215,13 @@ export default function CopilotPanel() {
                 style={{ background: 'var(--kaydan, #ea580c)' }}>✨</span>
               <span className="text-sm font-semibold text-slate-800">Copilote KAYDAN</span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              <button type="button" onClick={newConversation} title="Nouvelle conversation"
+                className="rounded-md px-1.5 py-1 text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                aria-label="Nouvelle conversation">✚</button>
+              <button type="button" onClick={toggleHistory} title="Historique"
+                className={`rounded-md px-1.5 py-1 text-sm hover:bg-slate-100 hover:text-slate-800 ${historyOpen ? 'text-orange-600' : 'text-slate-500'}`}
+                aria-label="Historique">🕘</button>
               <select value={model} onChange={(e) => setModel(e.target.value)}
                 className="rounded-md border border-slate-300 bg-white px-1.5 py-1 text-xs text-slate-600">
                 {MODELS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
@@ -181,6 +230,24 @@ export default function CopilotPanel() {
                 className="text-slate-400 hover:text-slate-700" aria-label="Fermer">×</button>
             </div>
           </div>
+
+          {historyOpen && (
+            <div className="border-b border-slate-200 bg-slate-50 px-3 py-2">
+              <p className="mb-1 px-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Conversations</p>
+              <div className="max-h-48 space-y-1 overflow-y-auto">
+                {conversations.length === 0 && (
+                  <p className="px-1 py-2 text-xs text-slate-400">Aucune conversation.</p>
+                )}
+                {conversations.map((c) => (
+                  <button key={c.id} type="button" onClick={() => openConversation(c.id)}
+                    className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-white">
+                    <span className="truncate">{c.title}</span>
+                    <span className="shrink-0 text-slate-400">{c.message_count} msg</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-3">
             {messages.map((m, i) => (
@@ -199,6 +266,16 @@ export default function CopilotPanel() {
             {busy && (
               <div className="flex justify-start">
                 <div className="rounded-2xl bg-slate-100 px-3 py-2 text-sm text-slate-500">…</div>
+              </div>
+            )}
+            {messages.length <= 1 && !busy && (
+              <div className="flex flex-wrap gap-2 pt-1">
+                {getCopilotSuggestions().map((s) => (
+                  <button key={s} type="button" onClick={() => submitText(s)}
+                    className="rounded-full border border-orange-200 bg-orange-50 px-3 py-1.5 text-xs text-orange-700 hover:bg-orange-100">
+                    {s}
+                  </button>
+                ))}
               </div>
             )}
           </div>

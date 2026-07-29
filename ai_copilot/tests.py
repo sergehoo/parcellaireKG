@@ -437,3 +437,39 @@ class CopilotViewTests(CopilotBaseTestCase):
         r = self.client.post("/api/copilot/chat/", {"message": "   "},
                              content_type="application/json")
         self.assertEqual(r.status_code, 400)
+
+
+class ConversationHistoryTests(CopilotBaseTestCase):
+    def test_lists_only_own_conversations(self):
+        from ai_copilot.models import CopilotMessage
+        mine = CopilotConversation.objects.create(user=self.user, title="Ma conv")
+        CopilotMessage.objects.create(conversation=mine, role="user", content="salut")
+        CopilotConversation.objects.create(user=self.finuser, title="Autre")  # d'un autre user
+        self.client.force_login(self.user)
+        r = self.client.get("/api/copilot/conversations/")
+        self.assertEqual(r.status_code, 200)
+        titles = [c["title"] for c in r.json()["conversations"]]
+        self.assertIn("Ma conv", titles)
+        self.assertNotIn("Autre", titles)
+
+    def test_detail_returns_messages_for_owner(self):
+        from ai_copilot.models import CopilotMessage
+        conv = CopilotConversation.objects.create(user=self.user, title="C")
+        CopilotMessage.objects.create(conversation=conv, role="user", content="Q ?")
+        CopilotMessage.objects.create(conversation=conv, role="assistant", content="R.")
+        CopilotMessage.objects.create(conversation=conv, role="tool", content="",
+                                      metadata={"tool": "x"})
+        self.client.force_login(self.user)
+        r = self.client.get(f"/api/copilot/conversations/{conv.id}/")
+        self.assertEqual(r.status_code, 200)
+        roles = [m["role"] for m in r.json()["messages"]]
+        self.assertEqual(roles, ["user", "assistant"])  # lignes 'tool' exclues
+
+    def test_detail_404_for_other_users_conversation(self):
+        conv = CopilotConversation.objects.create(user=self.finuser, title="Privé")
+        self.client.force_login(self.user)
+        r = self.client.get(f"/api/copilot/conversations/{conv.id}/")
+        self.assertEqual(r.status_code, 404)
+
+    def test_history_requires_authentication(self):
+        self.assertEqual(self.client.get("/api/copilot/conversations/").status_code, 403)

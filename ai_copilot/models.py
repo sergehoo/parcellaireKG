@@ -44,6 +44,8 @@ class CopilotToolCall(models.Model):
     STATUS_CHOICES = [
         ("ok", "OK"), ("denied", "Refusé (permission)"),
         ("needs_confirmation", "Confirmation requise"),
+        ("confirmed", "Confirmée (effet de bord exécuté)"),
+        ("rejected_confirm", "Confirmation refusée (outil non confirmable)"),
         ("unknown", "Outil inconnu"), ("error", "Erreur"),
     ]
 

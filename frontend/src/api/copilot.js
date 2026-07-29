@@ -16,3 +16,12 @@ export function sendCopilotMessage({ message, conversationId, context, model, co
     },
   })
 }
+
+// Historique : conversations de l'utilisateur courant (les siennes uniquement).
+export function listCopilotConversations() {
+  return request('/api/copilot/conversations/', { method: 'GET' })
+}
+
+export function getCopilotConversation(id) {
+  return request(`/api/copilot/conversations/${id}/`, { method: 'GET' })
+}
