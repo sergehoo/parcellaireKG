@@ -56,6 +56,23 @@ class ExecutorTests(CopilotBaseTestCase):
         res = executor.run_tool(self.finuser, "get_dashboard_summary", {}, {})
         self.assertNotEqual(res.content["finance"]["ca_total"], registry.MASKED)
 
+    def test_geocode_place_returns_map_focus(self):
+        fake = mock.Mock(status_code=200)
+        fake.json.return_value = [{"lat": "5.35", "lon": "-4.00",
+                                   "display_name": "Cocody, Abidjan"}]
+        with mock.patch("requests.get", return_value=fake):
+            res = executor.run_tool(self.user, "geocode_place", {"place": "Cocody"}, {})
+        self.assertEqual(res.action["type"], "map.focus")
+        self.assertEqual(res.action["center"], [5.35, -4.00])
+
+    def test_geocode_place_not_found(self):
+        fake = mock.Mock(status_code=200)
+        fake.json.return_value = []
+        with mock.patch("requests.get", return_value=fake):
+            res = executor.run_tool(self.user, "geocode_place", {"place": "zzz"}, {})
+        self.assertIn("error", res.content)
+        self.assertIsNone(res.action)
+
     def test_focus_map_returns_action_with_center(self):
         res = executor.run_tool(self.user, "focus_map_on_program",
                                 {"program_name": "Callisto"}, {})

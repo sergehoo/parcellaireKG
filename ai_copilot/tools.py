@@ -170,6 +170,39 @@ def _tool_focus_map_on_program(user, args, context):
         action=action)
 
 
+def _tool_geocode_place(user, args, context):
+    """Recherche géographique (Nominatim/OSM) : ville, commune, quartier, POI…
+    Renvoie le centre → action map.focus (réutilise le pilotage carte existant)."""
+    import requests
+    from django.conf import settings
+
+    place = (args.get("place") or "").strip()
+    if not place:
+        return ToolResult(content={"error": "Lieu non précisé."})
+    try:
+        resp = requests.get(
+            "https://nominatim.openstreetmap.org/search",
+            params={"q": place, "format": "json", "limit": 1,
+                    "countrycodes": settings.COPILOT_GEOCODE_COUNTRY},
+            headers={"User-Agent": "parcelaireKG-copilot/1.0"},
+            timeout=8)
+        data = resp.json() if resp.status_code == 200 else []
+    except Exception as exc:  # noqa: BLE001 - réseau / parsing
+        return ToolResult(content={"error": f"Géocodage indisponible : {exc}"})
+    if not data:
+        return ToolResult(content={"error": f"Lieu introuvable : {place}"})
+
+    top = data[0]
+    try:
+        center = [float(top["lat"]), float(top["lon"])]
+    except (KeyError, TypeError, ValueError):
+        return ToolResult(content={"error": "Réponse de géocodage invalide."})
+    label = top.get("display_name", place)
+    return ToolResult(
+        content={"place": label, "center": center},
+        action={"type": "map.focus", "name": label, "center": center, "zoom": 13})
+
+
 def _tool_generate_dashboard_report(user, args, context):
     # Réutilise l'endpoint rapport protégé existant ; le navigateur le télécharge
     # avec la session authentifiée (aucun PDF généré dans la requête de chat).
@@ -215,6 +248,19 @@ def register_builtins():
             },
         },
         handler=_tool_focus_map_on_program,
+    ))
+    register(ToolSpec(
+        name="geocode_place",
+        description="Localise un lieu (ville, commune, quartier, route, POI : aéroport, "
+                    "hôpital, école…) et centre la carte dessus. Ex. « Va à Cocody ».",
+        parameters={
+            "type": "object",
+            "properties": {
+                "place": {"type": "string", "description": "Lieu à localiser."},
+            },
+            "required": ["place"],
+        },
+        handler=_tool_geocode_place,
     ))
     register(ToolSpec(
         name="generate_dashboard_report",

@@ -405,6 +405,8 @@ DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 DEEPSEEK_API_URL = os.environ.get("DEEPSEEK_API_URL", "https://api.deepseek.com")
 DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
 COPILOT_MAX_TOKENS = int(os.environ.get("COPILOT_MAX_TOKENS", "1500"))
+# Recherche géographique (Nominatim/OSM, sans clé). Biais pays par défaut : CI.
+COPILOT_GEOCODE_COUNTRY = os.environ.get("COPILOT_GEOCODE_COUNTRY", "ci")
 
 # Documentation OpenAPI (drf-spectacular). Le schéma et les UIs Swagger/ReDoc
 # héritent du défaut IsAuthenticated (non public). SERVE_INCLUDE_SCHEMA=False :
