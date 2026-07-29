@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { getAlertSummary } from '../api/analytics'
-import { getMe, logout } from '../api/auth'
-import { redirectToLogin } from '../api/client'
+import { useAuth } from '../auth/AuthContext'
 import { getTheme, setTheme } from '../lib/theme'
 
 // Navigation groupée : la carte en accès direct, le reste réparti en menus
@@ -119,7 +118,7 @@ function NavGroup({ group, open, onToggle, onClose, criticalCount }) {
   )
 }
 
-function UserMenu({ me, open, onToggle, onClose }) {
+function UserMenu({ me, open, onToggle, onClose, onSignOut }) {
   const ref = useDismiss(open, onClose)
   return (
     <div className="relative" ref={ref}>
@@ -139,13 +138,16 @@ function UserMenu({ me, open, onToggle, onClose }) {
             <div className="truncate text-xs text-slate-500">{me?.email || me?.username || ''}</div>
           </div>
           <NavLink to="/profile" onClick={onClose} className={itemClass}><span>Mon profil</span></NavLink>
-          <a href="/accounts/password/change/" className="block px-3.5 py-2 text-sm text-slate-700 hover:bg-slate-50">
-            Changer le mot de passe
-          </a>
+          <NavLink to="/profile" onClick={onClose} className={itemClass}>
+            <span>Changer le mot de passe</span>
+          </NavLink>
           {me?.is_staff && (
-            <a href="/admin/" className="block px-3.5 py-2 text-sm text-slate-700 hover:bg-slate-50">Administration</a>
+            <a href="/admin/" target="_blank" rel="noopener noreferrer"
+              className="block px-3.5 py-2 text-sm text-slate-700 hover:bg-slate-50">
+              Administration Django
+            </a>
           )}
-          <button type="button" onClick={logout}
+          <button type="button" onClick={() => { onClose?.(); onSignOut?.() }}
             className="block w-full border-t border-slate-100 px-3.5 py-2 text-left text-sm font-medium text-rose-600 hover:bg-rose-50">
             Déconnexion
           </button>
@@ -177,22 +179,9 @@ function ThemeToggle({ theme, onToggle }) {
 
 export default function Layout() {
   const criticalCount = useCriticalCount()
+  const { me, signOut } = useAuth()
   const [openMenu, setOpenMenu] = useState(null)
-  const [me, setMe] = useState(null)
   const [theme, setThemeState] = useState(getTheme())
-
-  useEffect(() => {
-    const c = new AbortController()
-    getMe({ signal: c.signal })
-      .then(setMe)
-      .catch((err) => {
-        // Le frontend est maintenant servi directement par Nginx : il n'est
-        // plus enveloppé par login_required côté Django. L'appel d'identité
-        // devient donc le garde d'authentification initial du SPA.
-        if (err.status === 401 || err.status === 403) redirectToLogin()
-      })
-    return () => c.abort()
-  }, [])
 
   function toggleTheme() {
     const next = theme === 'dark' ? 'light' : 'dark'
@@ -227,7 +216,7 @@ export default function Layout() {
 
           <div className="ml-auto flex shrink-0 items-center gap-1">
             <ThemeToggle theme={theme} onToggle={toggleTheme} />
-            <UserMenu me={me}
+            <UserMenu me={me} onSignOut={signOut}
               open={openMenu === '__user__'}
               onToggle={() => setOpenMenu((cur) => (cur === '__user__' ? null : '__user__'))}
               onClose={() => setOpenMenu(null)} />

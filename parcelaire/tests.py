@@ -1397,3 +1397,65 @@ class MediaDocumentAccessTests(TestCase):
         resp = self.client.get("/media/" + doc.file.name)
         self.assertEqual(resp.status_code, 302)
         self.assertIn("/accounts/login/", resp["Location"])
+
+
+# =====================================================================
+# Auth API 100 % React (login / logout / password) — remplace allauth HTML
+# =====================================================================
+from django.test import Client as _Client  # noqa: E402
+
+
+class AuthApiTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user("agent", password="Motdepasse!2026")
+
+    def test_login_ok_puis_me(self):
+        r = self.client.post('/api/auth/login/',
+                             {'username': 'agent', 'password': 'Motdepasse!2026'},
+                             content_type='application/json')
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()['username'], 'agent')
+        self.assertEqual(self.client.get('/api/auth/me/').status_code, 200)
+
+    def test_login_mauvais_identifiants(self):
+        r = self.client.post('/api/auth/login/',
+                             {'username': 'agent', 'password': 'faux'},
+                             content_type='application/json')
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(self.client.get('/api/auth/me/').status_code, 403)
+
+    def test_login_champs_manquants(self):
+        r = self.client.post('/api/auth/login/', {'username': 'agent'},
+                             content_type='application/json')
+        self.assertEqual(r.status_code, 400)
+
+    def test_login_exige_csrf(self):
+        # Client avec vérification CSRF active : POST sans token → 403.
+        c = _Client(enforce_csrf_checks=True)
+        r = c.post('/api/auth/login/',
+                   {'username': 'agent', 'password': 'Motdepasse!2026'},
+                   content_type='application/json')
+        self.assertEqual(r.status_code, 403)
+
+    def test_logout(self):
+        self.client.force_login(self.user)
+        self.assertEqual(self.client.get('/api/auth/me/').status_code, 200)
+        self.assertEqual(self.client.post('/api/auth/logout/').status_code, 204)
+        self.assertEqual(self.client.get('/api/auth/me/').status_code, 403)
+
+    def test_password_change(self):
+        self.client.force_login(self.user)
+        bad = self.client.post('/api/auth/password/',
+                               {'current_password': 'faux', 'new_password': 'Nouveau!2026x'},
+                               content_type='application/json')
+        self.assertEqual(bad.status_code, 400)
+        ok = self.client.post('/api/auth/password/',
+                              {'current_password': 'Motdepasse!2026', 'new_password': 'Nouveau!2026x'},
+                              content_type='application/json')
+        self.assertEqual(ok.status_code, 204)
+        self.client.logout()
+        r = self.client.post('/api/auth/login/',
+                             {'username': 'agent', 'password': 'Nouveau!2026x'},
+                             content_type='application/json')
+        self.assertEqual(r.status_code, 200)

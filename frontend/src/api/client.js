@@ -4,9 +4,9 @@
  * - Authentification par session (mêmes cookies que le site Django).
  * - CSRF : le cookie `csrftoken` est posé par GET /api/orthophotos/csrf/
  *   puis renvoyé dans l'en-tête X-CSRFToken sur chaque requête non-GET.
- * - Si la session a expiré, Django renvoie 401/403 (DRF) ou redirige
- *   vers /accounts/login/ : dans les deux cas on renvoie l'utilisateur
- *   sur la page de login avec ?next= pour revenir ici après.
+ * - Session expirée (401) → on notifie le garde d'authentification React
+ *   (AuthProvider), qui réaffiche la page de connexion React. Plus aucune
+ *   redirection vers une page HTML Django.
  */
 
 export function getCookie(name) {
@@ -24,9 +24,14 @@ export function ensureCsrf() {
   return csrfReady
 }
 
-export function redirectToLogin() {
-  const next = encodeURIComponent(window.location.pathname + window.location.hash)
-  window.location.href = `/accounts/login/?next=${next}`
+// Le garde d'authentification (AuthProvider) enregistre ici son gestionnaire
+// pour repasser le SPA en état « non authentifié » (page de login React).
+let unauthorizedHandler = null
+export function setUnauthorizedHandler(fn) {
+  unauthorizedHandler = fn
+}
+export function handleUnauthorized() {
+  if (unauthorizedHandler) unauthorizedHandler()
 }
 
 export class ApiError extends Error {
@@ -53,18 +58,12 @@ export async function request(url, { method = 'GET', json, signal } = {}) {
 
   const response = await fetch(url, options)
 
-  // LoginRequiredMixin redirige vers la page HTML de login.
-  if (response.redirected && response.url.includes('/accounts/login/')) {
-    redirectToLogin()
-    throw new ApiError('Session expirée', { status: 401 })
-  }
-  // 401 = pas authentifié → login. On NE redirige PAS sur 403 : DRF
-  // renvoie 403 aussi bien pour une permission métier manquante que
-  // pour une session expirée, et rediriger sur un refus de permission
-  // créerait une boucle login → 403 → login. On remonte donc le 403
-  // comme une erreur normale (message affiché en toast par l'appelant).
+  // 401 = pas authentifié → réafficher la connexion React. On NE bascule PAS
+  // sur 403 : DRF renvoie 403 aussi bien pour une permission métier manquante
+  // que pour une session expirée, et cela créerait une boucle. Le 403 remonte
+  // donc comme une erreur normale (toast affiché par l'appelant).
   if (response.status === 401) {
-    redirectToLogin()
+    handleUnauthorized()
     throw new ApiError('Session expirée', { status: 401 })
   }
 
@@ -89,7 +88,7 @@ export async function request(url, { method = 'GET', json, signal } = {}) {
 export async function downloadFile(url, fallbackName = 'export.csv') {
   const response = await fetch(url, { credentials: 'same-origin' })
   if (response.status === 401) {
-    redirectToLogin()
+    handleUnauthorized()
     throw new ApiError('Session expirée', { status: 401 })
   }
   if (!response.ok) {

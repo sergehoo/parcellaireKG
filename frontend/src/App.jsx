@@ -1,6 +1,7 @@
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
 import { ToastProvider } from './components/Toasts'
+import { AuthProvider } from './auth/AuthContext'
 import MapView from './pages/MapView'
 import Dashboard from './pages/Dashboard'
 import AtRiskPage from './pages/AtRiskPage'
@@ -25,6 +26,7 @@ initTheme()
 export default function App() {
   return (
     <ToastProvider>
+      <AuthProvider>
       <HashRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
           <Route element={<Layout />}>
@@ -51,6 +53,7 @@ export default function App() {
           </Route>
         </Routes>
       </HashRouter>
+      </AuthProvider>
     </ToastProvider>
   )
 }

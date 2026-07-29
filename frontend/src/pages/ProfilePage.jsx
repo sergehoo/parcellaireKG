@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
-import { getMe } from '../api/auth'
+import { useState } from 'react'
+import { changePassword } from '../api/auth'
+import { useAuth } from '../auth/AuthContext'
 
 function Row({ label, value }) {
   return (
@@ -10,17 +11,69 @@ function Row({ label, value }) {
   )
 }
 
+function PasswordForm() {
+  const [current, setCurrent] = useState('')
+  const [next, setNext] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [msg, setMsg] = useState(null) // {type:'ok'|'err', text}
+  const [busy, setBusy] = useState(false)
+
+  async function submit(e) {
+    e.preventDefault()
+    setMsg(null)
+    if (next !== confirm) {
+      setMsg({ type: 'err', text: 'Les deux nouveaux mots de passe ne correspondent pas.' })
+      return
+    }
+    setBusy(true)
+    try {
+      await changePassword(current, next)
+      setMsg({ type: 'ok', text: 'Mot de passe modifié.' })
+      setCurrent(''); setNext(''); setConfirm('')
+    } catch (err) {
+      setMsg({ type: 'err', text: err?.data?.detail || err?.message || 'Échec du changement.' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const input = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500'
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <h2 className="mb-4 text-lg font-semibold text-slate-900">Changer le mot de passe</h2>
+      <form onSubmit={submit} className="space-y-3">
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Mot de passe actuel</label>
+          <input type="password" autoComplete="current-password" required value={current}
+            onChange={(e) => setCurrent(e.target.value)} className={input} />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Nouveau mot de passe</label>
+          <input type="password" autoComplete="new-password" required value={next}
+            onChange={(e) => setNext(e.target.value)} className={input} />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Confirmer le nouveau mot de passe</label>
+          <input type="password" autoComplete="new-password" required value={confirm}
+            onChange={(e) => setConfirm(e.target.value)} className={input} />
+        </div>
+        {msg && (
+          <p className={`rounded-lg px-3 py-2 text-sm ${msg.type === 'ok' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
+            {msg.text}
+          </p>
+        )}
+        <button type="submit" disabled={busy}
+          className="rounded-lg px-4 py-2 text-sm font-semibold text-white shadow disabled:opacity-60"
+          style={{ background: 'var(--kaydan, #ea580c)' }}>
+          {busy ? 'Enregistrement…' : 'Mettre à jour'}
+        </button>
+      </form>
+    </div>
+  )
+}
+
 export default function ProfilePage() {
-  const [me, setMe] = useState(null)
-  const [error, setError] = useState(null)
-
-  useEffect(() => {
-    const c = new AbortController()
-    getMe({ signal: c.signal }).then(setMe).catch((e) => { if (e.name !== 'AbortError') setError(e) })
-    return () => c.abort()
-  }, [])
-
-  if (error) return <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-6 text-rose-700">{error.message}</div>
+  const { me } = useAuth()
   if (!me) return <div className="py-20 text-center text-slate-500">Chargement…</div>
 
   const p = me.profile || {}
@@ -55,16 +108,7 @@ export default function ProfilePage() {
         </dl>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <a href="/accounts/password/change/"
-          className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50">
-          Changer le mot de passe
-        </a>
-        <a href="/accounts/email/"
-          className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50">
-          Gérer mes adresses e-mail
-        </a>
-      </div>
+      <PasswordForm />
     </div>
   )
 }

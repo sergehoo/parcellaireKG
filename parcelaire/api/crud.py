@@ -13,12 +13,17 @@ qui héritent de SoftDeleteModel.
 """
 from decimal import Decimal
 
+from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_protect
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
 from rest_framework import serializers, viewsets
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import BasePermission, IsAuthenticated, SAFE_METHODS
+from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated, SAFE_METHODS
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -564,6 +569,31 @@ def _choices(model, field):
     return [{"value": v, "label": lbl} for v, lbl in model._meta.get_field(field).choices]
 
 
+def _me_payload(u):
+    """Charge utile identité (partagée par /api/auth/me/ et /api/auth/login/)."""
+    full = u.get_full_name()
+    initials = ((u.first_name[:1] + u.last_name[:1]).strip()
+                or u.get_username()[:2]).upper()
+    prof = getattr(u, "profile", None)
+    return {
+        "username": u.get_username(),
+        "full_name": full or u.get_username(),
+        "email": u.email or "",
+        "initials": initials,
+        "is_staff": u.is_staff,
+        "is_superuser": u.is_superuser,
+        "profile": None if prof is None else {
+            "phone": prof.phone, "job_title": prof.job_title,
+            "organization": prof.organization, "department": prof.department,
+            "language": prof.language, "timezone": prof.timezone,
+        },
+        "permissions": {
+            "financial": user_can_view_financial_data(u),
+            "patient": user_can_view_patient_data(u),
+        },
+    }
+
+
 @extend_schema_view(get=extend_schema(
     summary="Utilisateur courant",
     description="Identité de l'utilisateur connecté (nom, e-mail, initiales), ses "
@@ -577,28 +607,65 @@ class MeAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        u = request.user
-        full = u.get_full_name()
-        initials = ((u.first_name[:1] + u.last_name[:1]).strip()
-                    or u.get_username()[:2]).upper()
-        prof = getattr(u, "profile", None)
-        return Response({
-            "username": u.get_username(),
-            "full_name": full or u.get_username(),
-            "email": u.email or "",
-            "initials": initials,
-            "is_staff": u.is_staff,
-            "is_superuser": u.is_superuser,
-            "profile": None if prof is None else {
-                "phone": prof.phone, "job_title": prof.job_title,
-                "organization": prof.organization, "department": prof.department,
-                "language": prof.language, "timezone": prof.timezone,
-            },
-            "permissions": {
-                "financial": user_can_view_financial_data(u),
-                "patient": user_can_view_patient_data(u),
-            },
-        })
+        return Response(_me_payload(request.user))
+
+
+@method_decorator(csrf_protect, name="dispatch")
+class LoginAPIView(APIView):
+    """POST /api/auth/login/ — connexion par session, 100 % API (remplace la
+    page HTML allauth). {username, password} → session + identité. CSRF exigé
+    (le SPA envoie X-CSRFToken). django-axes protège du bruteforce."""
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        username = (request.data.get("username") or "").strip()
+        password = request.data.get("password") or ""
+        if not username or not password:
+            return Response(
+                {"detail": "Nom d'utilisateur et mot de passe requis."}, status=400)
+        # `request._request` : django-axes attend le HttpRequest Django (IP,
+        # verrouillage). Un compte verrouillé/identifiants faux → user None.
+        user = authenticate(request._request, username=username, password=password)
+        if user is None:
+            return Response(
+                {"detail": "Identifiants invalides ou compte temporairement "
+                           "verrouillé après trop de tentatives."},
+                status=400)
+        login(request._request, user)
+        return Response(_me_payload(user))
+
+
+class LogoutAPIView(APIView):
+    """POST /api/auth/logout/ — ferme la session (SessionAuthentication → CSRF
+    déjà exigé par DRF pour un utilisateur authentifié)."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        logout(request._request)
+        return Response(status=204)
+
+
+class PasswordChangeAPIView(APIView):
+    """POST /api/auth/password/ — changement de mot de passe côté React (plus
+    d'écran allauth). {current_password, new_password}. La session est
+    préservée (update_session_auth_hash)."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        current = request.data.get("current_password") or ""
+        new = request.data.get("new_password") or ""
+        if not user.check_password(current):
+            return Response({"detail": "Mot de passe actuel incorrect."}, status=400)
+        try:
+            validate_password(new, user=user)
+        except DjangoValidationError as exc:
+            return Response({"detail": " ".join(exc.messages)}, status=400)
+        user.set_password(new)
+        user.save(update_fields=["password"])
+        update_session_auth_hash(request._request, user)
+        return Response(status=204)
 
 
 @extend_schema_view(get=extend_schema(
