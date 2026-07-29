@@ -97,7 +97,8 @@ INSTALLED_APPS = [
     'axes',
     'accounts',
     'parcelaire',
-    'ai_construction'
+    'ai_construction',
+    'ai_copilot',
 ]
 
 # Backends d'authentification (audit H8) : allauth n'était pas enregistré,
@@ -390,8 +391,20 @@ REST_FRAMEWORK = {
         'export': '30/hour',
         'report': '20/hour',
         'regenerate': '12/hour',
+        # Copilote IA : chaque message déclenche des appels LLM payants → plafond
+        # par utilisateur pour maîtriser le coût.
+        'copilot': '120/hour',
     },
 }
+
+# ---------------------------------------------------------------------
+# Copilote IA (ai_copilot) — MVP DeepSeek. La clé vient de l'environnement ;
+# sans clé, l'API /api/copilot/chat/ renvoie 503 (le Copilote est désactivé).
+# ---------------------------------------------------------------------
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
+DEEPSEEK_API_URL = os.environ.get("DEEPSEEK_API_URL", "https://api.deepseek.com")
+DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
+COPILOT_MAX_TOKENS = int(os.environ.get("COPILOT_MAX_TOKENS", "1500"))
 
 # Documentation OpenAPI (drf-spectacular). Le schéma et les UIs Swagger/ReDoc
 # héritent du défaut IsAuthenticated (non public). SERVE_INCLUDE_SCHEMA=False :

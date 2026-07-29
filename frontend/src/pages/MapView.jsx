@@ -6,6 +6,7 @@ import { getAlertMap } from '../api/analytics'
 import { getTheme } from '../lib/theme'
 import useReferenceData from '../hooks/useReferenceData'
 import MapCanvas from '../components/map/MapCanvas'
+import { takePendingMapFocus } from '../copilot/mapBus'
 import MapToolbar from '../components/map/MapToolbar'
 import MapLegend from '../components/map/MapLegend'
 import ControlRail from '../components/map/ControlRail'
@@ -42,6 +43,21 @@ export default function MapView() {
   const [railCollapsed, setRailCollapsed] = useState(false)
   const [cursorOn, setCursorOn] = useState(false)
   const [cursor, setCursor] = useState(null)
+
+  // Copilote IA : centre la carte quand l'IA le demande (action map.focus).
+  // Consomme une cible en attente dès que l'api Leaflet est prête (cas
+  // « navigation vers /carte puis focus »), et écoute les focus live.
+  useEffect(() => {
+    if (!api) return undefined
+    const pending = takePendingMapFocus()
+    if (pending && pending.center) api.flyTo(pending.center, pending.zoom || 15)
+    const onFocus = (e) => {
+      const d = e.detail || {}
+      if (d.center && api) api.flyTo(d.center, d.zoom || 15)
+    }
+    window.addEventListener('kg-copilot-map-focus', onFocus)
+    return () => window.removeEventListener('kg-copilot-map-focus', onFocus)
+  }, [api])
 
   const filters = useMemo(() => {
     const r = {}
