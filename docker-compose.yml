@@ -315,7 +315,13 @@ services:
       - "9000"
       - "9001"
     networks:
+      # `default` : accès interne Django/Celery (http://parcelaire-orthos3:9000).
+      # `dokploy-network` : réseau du Traefik de Dokploy — INDISPENSABLE pour que
+      # le domaine public S3 (s3-parcelaire.$DOMAIN → port 9000) atteigne CE MinIO.
+      # Sans lui, l'upload presigné du navigateur ne tombe pas sur le MinIO où le
+      # multipart a été initié → NoSuchUpload sur les parts.
       - default
+      - dokploy-network
 
   # Bootstrap : crée le bucket et configure la policy au premier démarrage.
   parcelaire-orthos3-init:
