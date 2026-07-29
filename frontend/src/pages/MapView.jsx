@@ -6,7 +6,7 @@ import { getAlertMap } from '../api/analytics'
 import { getTheme } from '../lib/theme'
 import useReferenceData from '../hooks/useReferenceData'
 import MapCanvas from '../components/map/MapCanvas'
-import { takePendingMapFocus, takePendingMapDraw } from '../copilot/mapBus'
+import { takePendingMapFocus, takePendingMapDraw, takePendingMapCommands } from '../copilot/mapBus'
 import MapToolbar from '../components/map/MapToolbar'
 import MapLegend from '../components/map/MapLegend'
 import ControlRail from '../components/map/ControlRail'
@@ -54,18 +54,31 @@ export default function MapView() {
       if (s.kind === 'circle' && s.center) api.drawCircle(s.center, s.radius_m, s.label)
       else if (s.kind === 'line' && Array.isArray(s.points)) api.drawLine(s.points, s.label)
     }
+    const applyCmd = (c) => {
+      if (!c) return
+      if (c.type === 'basemap' && c.value) setBasemap(c.value)
+      else if (c.type === 'ortho') {
+        setOrthoProgramId(c.program_id || '')
+        setOrthoOn(!!c.on)
+        if (c.center) api.flyTo(c.center, 15)
+      }
+    }
     // Cibles en attente (cas « navigation vers /carte puis action »).
     const pf = takePendingMapFocus()
     if (pf && pf.center) api.flyTo(pf.center, pf.zoom || 15)
     drawShape(takePendingMapDraw())
+    takePendingMapCommands().forEach(applyCmd)
     // Événements live (quand on est déjà sur la carte).
     const onFocus = (e) => { const d = e.detail || {}; if (d.center) api.flyTo(d.center, d.zoom || 15) }
     const onDraw = (e) => drawShape(e.detail)
+    const onCmd = (e) => applyCmd(e.detail)
     window.addEventListener('kg-copilot-map-focus', onFocus)
     window.addEventListener('kg-copilot-map-draw', onDraw)
+    window.addEventListener('kg-copilot-map-cmd', onCmd)
     return () => {
       window.removeEventListener('kg-copilot-map-focus', onFocus)
       window.removeEventListener('kg-copilot-map-draw', onDraw)
+      window.removeEventListener('kg-copilot-map-cmd', onCmd)
     }
   }, [api])
 

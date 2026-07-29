@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { sendCopilotMessage } from '../api/copilot'
 import { downloadFile } from '../api/client'
 import { getCopilotContext } from './pageContext'
-import { requestMapFocus, requestMapDraw } from './mapBus'
+import { requestMapFocus, requestMapDraw, requestMapCommand } from './mapBus'
 import { miniMarkdown } from './markdown'
 
 const WELCOME = {
@@ -51,6 +51,12 @@ function runActions(actions, navigate) {
     } else if (action.type === 'map.line') {
       if (!onMapRoute()) navigate('/carte')
       requestMapDraw({ kind: 'line', points: action.points, label: action.label })
+    } else if (action.type === 'map.basemap') {
+      if (!onMapRoute()) navigate('/carte')
+      requestMapCommand({ type: 'basemap', value: action.basemap })
+    } else if (action.type === 'map.ortho') {
+      if (!onMapRoute()) navigate('/carte')
+      requestMapCommand({ type: 'ortho', program_id: action.program_id, on: action.on, center: action.center })
     }
     // action.type === 'confirm' → Phase 3 (actions à effet de bord)
   }

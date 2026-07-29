@@ -98,6 +98,31 @@ class ExecutorTests(CopilotBaseTestCase):
         self.assertEqual(len(res.action["points"]), 2)
         self.assertGreater(res.content["distance_km"], 0)
 
+    def test_set_map_basemap_satellite(self):
+        res = executor.run_tool(self.user, "set_map_basemap", {"style": "satellite"}, {})
+        self.assertEqual(res.action, {"type": "map.basemap", "basemap": "satellite"})
+
+    def test_set_map_basemap_unknown(self):
+        res = executor.run_tool(self.user, "set_map_basemap", {"style": "hologramme"}, {})
+        self.assertIn("error", res.content)
+        self.assertIsNone(res.action)
+
+    def test_show_orthophoto_none_published(self):
+        res = executor.run_tool(self.user, "show_program_orthophoto",
+                                {"program_name": "Callisto"}, {})
+        self.assertIsNone(res.action)  # pas d'ortho publiée
+        self.assertIn("note", res.content)
+
+    def test_show_orthophoto_published(self):
+        from parcelaire.models import ProgramOrthophoto
+        ProgramOrthophoto.objects.create(
+            program=self.program, name="Ortho", reference_year=2026,
+            reference_month=3, status="DONE")
+        res = executor.run_tool(self.user, "show_program_orthophoto",
+                                {"program_name": "Callisto"}, {})
+        self.assertEqual(res.action["type"], "map.ortho")
+        self.assertEqual(res.action["program_id"], self.program.id)
+
     def test_customer_search_blocked_without_pii_permission(self):
         res = executor.run_tool(self.user, "search_entities",
                                 {"query": "Koné", "kind": "customer"}, {})

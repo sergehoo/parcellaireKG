@@ -29,3 +29,18 @@ export function takePendingMapDraw() {
   pendingDraw = null
   return s
 }
+
+// Commandes carte génériques (basemap, orthophoto…) — file consommée par
+// MapView (gère la course navigation→commande).
+let pendingCmds = []
+
+export function requestMapCommand(cmd) {
+  pendingCmds.push(cmd)
+  window.dispatchEvent(new CustomEvent('kg-copilot-map-cmd', { detail: cmd }))
+}
+
+export function takePendingMapCommands() {
+  const c = pendingCmds
+  pendingCmds = []
+  return c
+}

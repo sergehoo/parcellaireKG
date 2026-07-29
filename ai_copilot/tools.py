@@ -219,6 +219,44 @@ def _tool_buffer_around_program(user, args, context):
                 "radius_m": radius_km * 1000, "name": f"{program.name} — rayon {radius_km} km"})
 
 
+_BASEMAP_ALIASES = {
+    "satellite": "satellite", "sat": "satellite", "imagery": "satellite",
+    "aerien": "satellite", "aérien": "satellite", "aerienne": "satellite",
+    "relief": "relief", "topo": "relief", "topographique": "relief", "terrain": "relief",
+    "osm": "standard", "standard": "standard", "plan": "standard", "rue": "standard",
+    "carte": "standard", "openstreetmap": "standard",
+    "sombre": "sombre", "dark": "sombre", "nuit": "sombre", "noir": "sombre",
+    "clair": "clair", "light": "clair", "blanc": "clair",
+}
+
+
+def _tool_set_map_basemap(user, args, context):
+    """Change le fond de carte (satellite / relief / standard OSM / sombre / clair)."""
+    req = (args.get("style") or "").strip().lower()
+    key = _BASEMAP_ALIASES.get(req)
+    if key is None:
+        return ToolResult(content={
+            "error": f"Fond inconnu : « {req} ». Choix : satellite, relief, standard, sombre, clair."})
+    return ToolResult(content={"basemap": key, "note": f"Fond de carte : {key}."},
+                      action={"type": "map.basemap", "basemap": key})
+
+
+def _tool_show_program_orthophoto(user, args, context):
+    """Affiche l'orthophoto (si publiée) d'un programme sur la carte."""
+    from parcelaire.models import ProgramOrthophoto
+
+    program = _resolve_program(args.get("program_id"), (args.get("program_name") or "").strip())
+    if program is None:
+        return ToolResult(content={"error": "Programme introuvable."})
+    if not ProgramOrthophoto.objects.filter(program=program, status="DONE").exists():
+        return ToolResult(content={"program": program.name,
+                                   "note": "Aucune orthophoto publiée pour ce programme."})
+    return ToolResult(
+        content={"program": program.name, "note": "Affichage de l'orthophoto sur la carte."},
+        action={"type": "map.ortho", "program_id": program.id, "on": True,
+                "center": _program_center(program)})
+
+
 def _tool_geocode_place(user, args, context):
     """Recherche géographique (Nominatim/OSM) : ville, commune, quartier, POI…
     Renvoie le centre → action map.focus (réutilise le pilotage carte existant)."""
@@ -326,6 +364,30 @@ def register_builtins():
             },
         },
         handler=_tool_buffer_around_program,
+    ))
+    register(ToolSpec(
+        name="set_map_basemap",
+        description="Change le fond de carte : satellite, relief, standard (OSM), "
+                    "sombre ou clair. Ex. « affiche le satellite ».",
+        parameters={
+            "type": "object",
+            "properties": {"style": {"type": "string",
+                           "description": "satellite | relief | standard | sombre | clair"}},
+            "required": ["style"],
+        },
+        handler=_tool_set_map_basemap,
+    ))
+    register(ToolSpec(
+        name="show_program_orthophoto",
+        description="Affiche l'orthophoto d'un programme sur la carte (si publiée).",
+        parameters={
+            "type": "object",
+            "properties": {
+                "program_name": {"type": "string"},
+                "program_id": {"type": "integer"},
+            },
+        },
+        handler=_tool_show_program_orthophoto,
     ))
     register(ToolSpec(
         name="geocode_place",
