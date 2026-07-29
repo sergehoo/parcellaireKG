@@ -176,6 +176,48 @@ class BusinessQueryTests(CopilotBaseTestCase):
         self.assertIn("count", ok.content)
 
 
+class SqlAgentTests(CopilotBaseTestCase):
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        # Utilisateur habilité SQL mais SANS droit financier/PII.
+        cls.sqluser = User.objects.create_user("copilot-sql", password="pwd")
+        cls.sqluser.user_permissions.add(
+            Permission.objects.get(content_type__app_label="ai_copilot",
+                                    codename="use_sql_agent"))
+        cls.program_table = RealEstateProgram._meta.db_table
+
+    def test_denied_without_permission(self):
+        res = executor.run_tool(self.user, "sql_query",
+                                {"sql": f"SELECT id FROM {self.program_table}"}, {})
+        self.assertIn("error", res.content)
+        self.assertIsNone(res.action)
+
+    def test_select_allowed_table_returns_rows(self):
+        res = executor.run_tool(self.sqluser, "sql_query",
+                                {"sql": f"SELECT id, name FROM {self.program_table}"}, {})
+        self.assertIn("rows", res.content)
+        names = [r.get("name") for r in res.content["rows"]]
+        self.assertIn("Callisto", names)
+
+    def test_rejects_non_select(self):
+        res = executor.run_tool(self.sqluser, "sql_query",
+                                {"sql": f"DELETE FROM {self.program_table}"}, {})
+        self.assertIn("error", res.content)
+
+    def test_rejects_multiple_statements(self):
+        res = executor.run_tool(self.sqluser, "sql_query",
+                                {"sql": f"SELECT id FROM {self.program_table}; DROP TABLE x"}, {})
+        self.assertIn("error", res.content)
+
+    def test_rejects_sensitive_table_without_perms(self):
+        from parcelaire.models import Customer
+        res = executor.run_tool(self.sqluser, "sql_query",
+                                {"sql": f"SELECT * FROM {Customer._meta.db_table}"}, {})
+        self.assertIn("error", res.content)
+        self.assertIn("autorisée", res.content["error"])
+
+
 class AgentLoopTests(CopilotBaseTestCase):
     @override_settings(DEEPSEEK_API_KEY="test-key")
     def test_tool_call_then_final_answer(self):

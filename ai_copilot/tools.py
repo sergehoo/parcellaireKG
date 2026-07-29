@@ -389,6 +389,87 @@ def _tool_customers_by_payment_ratio(user, args, context):
     return ToolResult(content={"min_percent": min_pct, "count": len(results), "results": results})
 
 
+# =====================================================================
+# Cluster B (2/2) — Agent SQL/PostGIS LECTURE SEULE, whitelisté, gated
+# =====================================================================
+import re  # noqa: E402
+
+_SQL_FORBIDDEN = re.compile(
+    r"\b(insert|update|delete|drop|alter|create|truncate|grant|revoke|copy|merge|"
+    r"call|do|vacuum|analyze|reindex|cluster|comment|lock|into|"
+    r"pg_read_file|pg_ls_dir|lo_import|lo_export|dblink|pg_sleep|set_config|"
+    r"current_setting|pg_catalog|information_schema)\b", re.I)
+
+
+def _sql_allowed_tables(user):
+    """Tables interrogeables. Les tables sensibles (client/vente/paiement) ne
+    sont ouvertes qu'aux utilisateurs ayant à la fois les droits financier ET PII."""
+    from parcelaire.models import (
+        Parcel, ParcelDataset, ProgramBlock, ProgramOrthophoto, ProgramPhase,
+        ProjetImmobilier, RealEstateProgram,
+    )
+    base = [RealEstateProgram, ProjetImmobilier, Parcel, ProgramPhase,
+            ParcelDataset, ProgramBlock, ProgramOrthophoto]
+    tables = {m._meta.db_table for m in base}
+    if user_can_view_financial_data(user) and user_can_view_patient_data(user):
+        from parcelaire.models import Customer, Payment, Reservation, SaleFile
+        tables |= {m._meta.db_table for m in [Customer, SaleFile, Payment, Reservation]}
+    return tables
+
+
+def _validate_sql(sql, allowed):
+    s = sql.strip().rstrip(";").strip()
+    if ";" in s:
+        return "Une seule requête est autorisée (pas de « ; »)."
+    low = s.lower()
+    if not (low.startswith("select") or low.startswith("with")):
+        return "Seules les requêtes SELECT (lecture) sont autorisées."
+    if "--" in s or "/*" in s:
+        return "Les commentaires SQL sont interdits."
+    if _SQL_FORBIDDEN.search(s):
+        return "Requête refusée : mot-clé non autorisé (lecture seule uniquement)."
+    refs = set(re.findall(r'(?:from|join)\s+"?([a-zA-Z_][a-zA-Z0-9_]*)"?', low))
+    forbidden = sorted(t for t in refs if t not in allowed)
+    if forbidden:
+        return f"Table(s) non autorisée(s) : {', '.join(forbidden)}."
+    return None
+
+
+def _tool_sql_query(user, args, context):
+    from django.db import connection, transaction
+
+    sql = (args.get("sql") or "").strip()
+    if not sql:
+        return ToolResult(content={"error": "Requête vide."})
+    allowed = _sql_allowed_tables(user)
+    err = _validate_sql(sql, allowed)
+    if err:
+        return ToolResult(content={"error": err, "allowed_tables": sorted(allowed)})
+
+    limit = 100
+    s = sql.rstrip(";").strip()
+    if not re.search(r"\blimit\s+\d+\s*$", s, re.I):
+        s = f"{s} LIMIT {limit}"
+
+    try:
+        with transaction.atomic():
+            with connection.cursor() as cur:
+                try:
+                    cur.execute("SET TRANSACTION READ ONLY")
+                except Exception:  # noqa: BLE001 - sous-transaction (tests) : la validation garde
+                    pass
+                cur.execute(s)
+                cols = [c[0] for c in cur.description] if cur.description else []
+                rows = cur.fetchmany(limit)
+            transaction.set_rollback(True)  # ne jamais persister, quoi qu'il arrive
+    except Exception as exc:  # noqa: BLE001
+        return ToolResult(content={"error": f"Erreur SQL : {str(exc)[:300]}"})
+
+    data = [dict(zip(cols, [str(v) if not isinstance(v, (int, float, bool, type(None))) else v
+                            for v in r])) for r in rows]
+    return ToolResult(content={"columns": cols, "row_count": len(data), "rows": data})
+
+
 def register_builtins():
     register(ToolSpec(
         name="search_entities",
@@ -454,6 +535,21 @@ def register_builtins():
             },
         },
         handler=_tool_buffer_around_program,
+    ))
+    register(ToolSpec(
+        name="sql_query",
+        description="Exécute une requête SQL SELECT en LECTURE SEULE sur les tables "
+                    "autorisées (programmes, projets, parcelles, phases, îlots, datasets, "
+                    "orthophotos ; + client/vente/paiement seulement avec les droits). "
+                    "Réservé aux comptes habilités. Renvoie colonnes + lignes (max 100).",
+        parameters={
+            "type": "object",
+            "properties": {"sql": {"type": "string",
+                           "description": "Requête SELECT PostgreSQL/PostGIS unique."}},
+            "required": ["sql"],
+        },
+        permission="ai_copilot.use_sql_agent",
+        handler=_tool_sql_query,
     ))
     register(ToolSpec(
         name="count_parcels_by_status",

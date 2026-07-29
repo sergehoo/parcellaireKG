@@ -14,6 +14,11 @@ class CopilotConversation(models.Model):
 
     class Meta:
         ordering = ["-updated_at"]
+        permissions = [
+            # Droit dédié pour l'agent SQL du Copilote (lecture seule).
+            # Par défaut : superusers uniquement (à attribuer explicitement).
+            ("use_sql_agent", "Peut utiliser l'agent SQL du Copilote (lecture seule)"),
+        ]
 
     def __str__(self):
         return f"Conversation #{self.pk} ({self.user_id})"
