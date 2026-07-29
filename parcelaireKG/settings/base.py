@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 import os
+from datetime import timedelta
 from pathlib import Path
 
 from celery.schedules import crontab
@@ -136,11 +137,13 @@ MIDDLEWARE = [
 # refroidissement AXES_COOLOFF_TIME. Verrou sur la combinaison → ni lock-out
 # global, ni DoS ciblé sur un compte. Handler DB par défaut (aucune dépendance
 # cache). Derrière Traefik, l'IP réelle vient de X-Forwarded-For.
-AXES_FAILURE_LIMIT = 5
-AXES_COOLOFF_TIME = 1  # heure
+AXES_FAILURE_LIMIT = 8
+AXES_COOLOFF_TIME = timedelta(minutes=15)  # verrou auto-levé après 15 min
 AXES_RESET_ON_SUCCESS = True
 AXES_LOCKOUT_PARAMETERS = [["username", "ip_address"]]
 AXES_IPWARE_META_PRECEDENCE_ORDER = ["HTTP_X_FORWARDED_FOR", "REMOTE_ADDR"]
+# Configurable via l'env si besoin d'ajuster sans rebuild d'image.
+AXES_FAILURE_LIMIT = int(os.environ.get("AXES_FAILURE_LIMIT", AXES_FAILURE_LIMIT))
 
 # WhiteNoise : compression (gzip + brotli) et cache busting (manifest).
 # Le manifest est plus strict, on l'active seulement quand on n'est PAS en
