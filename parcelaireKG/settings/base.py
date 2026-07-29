@@ -320,15 +320,13 @@ USE_TZ = True
 SITE_ID = int(os.environ.get("SITE_ID", "1"))
 
 # --- Redirections d'authentification ---------------------------------
-# Sans réglage explicite, Django/allauth renvoie après login vers
-# /accounts/profile/ (URL inexistante → 404 générique en prod) dès qu'il
-# n'y a pas de paramètre ?next (login direct, fin d'inscription…). On
-# pointe donc sur la coquille SPA, frontend principal de l'application.
-LOGIN_URL = "/accounts/login/"
-# Le domaine public sert désormais directement le frontend React à la racine
-# via Nginx. Django ne fournit plus la page principale.
+# Authentification 100 % React (SPA à la racine + API /api/auth/*). Les pages
+# HTML allauth ne sont plus exposées par Nginx : toute redirection serveur
+# (login_required sur /media/, etc.) pointe donc sur le SPA, où le garde
+# d'authentification React affiche la page de connexion.
+LOGIN_URL = "/"
 LOGIN_REDIRECT_URL = "/"
-ACCOUNT_LOGOUT_REDIRECT_URL = "/accounts/login/"
+ACCOUNT_LOGOUT_REDIRECT_URL = "/"
 
 # Auto-inscription publique désactivée : comptes provisionnés par un admin.
 # Ferme /accounts/signup/ qui donnait une session authentifiée à tout anonyme.

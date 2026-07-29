@@ -1393,10 +1393,12 @@ class MediaDocumentAccessTests(TestCase):
             self.client.get("/media/documents/2000/01/inexistant.pdf").status_code, 404)
 
     def test_anonyme_redirige_login(self):
+        # login_required redirige vers LOGIN_URL="/" (le SPA React, qui affiche
+        # la connexion) — plus vers une page HTML allauth.
         doc = self._make_doc()
         resp = self.client.get("/media/" + doc.file.name)
         self.assertEqual(resp.status_code, 302)
-        self.assertIn("/accounts/login/", resp["Location"])
+        self.assertTrue(resp["Location"].startswith("/?"), resp["Location"])
 
 
 # =====================================================================
