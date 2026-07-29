@@ -217,6 +217,29 @@ def csv_streaming_response(filename, header, rows_iter):
     return resp
 
 
+def xlsx_response(filename, header, rows_iter):
+    """Export Excel (.xlsx) via openpyxl. Cellules neutralisées contre
+    l'injection de formules (préfixe apostrophe si la valeur commence par =,+,-,@)."""
+    from io import BytesIO
+
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Export"
+    ws.append([str(h) for h in header])
+    for row in rows_iter:
+        ws.append([_csv_safe(c) if isinstance(c, str) else ('' if c is None else c)
+                   for c in row])
+    buf = BytesIO()
+    wb.save(buf)
+    resp = HttpResponse(
+        buf.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    resp['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return resp
+
+
 def _at_risk_rows(request, can_fin):
     """Lignes IDCP filtrées (level / program / min_idcp) et triées par IDCP
     décroissant. Partagé par la liste paginée et l'export CSV."""
@@ -492,6 +515,9 @@ class AtRiskExportAPIView(APIView):
                     r['construction_pct'], r['idcp'], r['level'], r['reason'],
                     r['site_manager'], r['sales_agent'], r['sale_date'] or '',
                 ]
+        # NB : param 'fmt' (pas 'format' — réservé par DRF à la négociation de contenu).
+        if (request.query_params.get('fmt') or 'csv').lower() == 'xlsx':
+            return xlsx_response('clients-a-risque.xlsx', header, lines())
         return csv_streaming_response('clients-a-risque.csv', header, lines())
 
 

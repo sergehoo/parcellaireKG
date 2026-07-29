@@ -36,7 +36,7 @@ class ToolRegistryTests(CopilotBaseTestCase):
     def test_schemas_exposes_mvp_tools(self):
         names = {s["function"]["name"] for s in registry.schemas_for(self.user)}
         self.assertTrue({"search_entities", "get_dashboard_summary",
-                         "focus_map_on_program", "generate_dashboard_report"} <= names)
+                         "focus_map_on_program", "generate_report"} <= names)
 
 
 class ExecutorTests(CopilotBaseTestCase):
@@ -216,6 +216,33 @@ class SqlAgentTests(CopilotBaseTestCase):
                                 {"sql": f"SELECT * FROM {Customer._meta.db_table}"}, {})
         self.assertIn("error", res.content)
         self.assertIn("autorisée", res.content["error"])
+
+
+class ReportingTests(CopilotBaseTestCase):
+    def test_analytics_digest_masks_finance(self):
+        res = executor.run_tool(self.user, "get_analytics_digest", {}, {})
+        self.assertIn("kpis", res.content)
+        self.assertEqual(res.content["kpis"]["ca_potentiel"], "Masqué")
+
+    def test_generate_report_dashboard_pdf(self):
+        res = executor.run_tool(self.user, "generate_report", {"kind": "dashboard"}, {})
+        self.assertEqual(res.action["type"], "download")
+        self.assertTrue(res.action["url"].endswith("/dashboard/report/"))
+
+    def test_generate_report_risques_xlsx(self):
+        res = executor.run_tool(self.user, "generate_report", {"kind": "risques"}, {})
+        self.assertIn("fmt=xlsx", res.action["url"])
+        self.assertTrue(res.action["filename"].endswith(".xlsx"))
+
+    def test_generate_report_unknown(self):
+        res = executor.run_tool(self.user, "generate_report", {"kind": "martien"}, {})
+        self.assertIn("error", res.content)
+
+    def test_at_risk_xlsx_endpoint(self):
+        self.client.force_login(self.user)
+        r = self.client.get("/api/analytics/at-risk/export/?fmt=xlsx")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("spreadsheetml", r["Content-Type"])
 
 
 class AgentLoopTests(CopilotBaseTestCase):

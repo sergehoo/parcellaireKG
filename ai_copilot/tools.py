@@ -290,13 +290,43 @@ def _tool_geocode_place(user, args, context):
         action={"type": "map.focus", "name": label, "center": center, "zoom": 13})
 
 
-def _tool_generate_dashboard_report(user, args, context):
-    # Réutilise l'endpoint rapport protégé existant ; le navigateur le télécharge
-    # avec la session authentifiée (aucun PDF généré dans la requête de chat).
+def _tool_get_analytics_digest(user, args, context):
+    """Synthèse décisionnelle (KPIs, santé programmes, alertes, clients à risque)
+    pour que l'IA produise l'« analyse automatique » du tableau de bord.
+    Montants masqués sans droit financier (build_dashboard applique le masquage)."""
+    from parcelaire.api.analytics import AnalyticsDashboardAPIView, _can_view_financial
+    data = AnalyticsDashboardAPIView().build_dashboard(_can_view_financial(user))
+    return ToolResult(content=data)
+
+
+# Rapports = actions de téléchargement vers des endpoints protégés EXISTANTS
+# (session authentifiée). PDF = pilotage ; xlsx/csv = clients à risque ; csv = alertes.
+_REPORTS = {
+    "dashboard": {"url": "/api/analytics/dashboard/report/", "filename": "rapport-pilotage.pdf", "format": "PDF"},
+    "dg": {"url": "/api/analytics/dashboard/report/", "filename": "rapport-dg.pdf", "format": "PDF"},
+    "pilotage": {"url": "/api/analytics/dashboard/report/", "filename": "rapport-pilotage.pdf", "format": "PDF"},
+    "risques": {"url": "/api/analytics/at-risk/export/?fmt=xlsx", "filename": "clients-a-risque.xlsx", "format": "Excel"},
+    "clients_a_risque": {"url": "/api/analytics/at-risk/export/?fmt=xlsx", "filename": "clients-a-risque.xlsx", "format": "Excel"},
+    "commercial": {"url": "/api/analytics/at-risk/export/?fmt=xlsx", "filename": "rapport-commercial.xlsx", "format": "Excel"},
+    "alertes": {"url": "/api/alerts/export/", "filename": "alertes.csv", "format": "CSV"},
+}
+
+
+def _tool_generate_report(user, args, context):
+    kind = (args.get("kind") or "dashboard").strip().lower().replace(" ", "_")
+    rep = _REPORTS.get(kind)
+    if rep is None:
+        return ToolResult(content={
+            "error": f"Rapport inconnu : « {kind} ».",
+            "available": sorted(set(_REPORTS))})
+    url, filename = rep["url"], rep["filename"]
+    # Variante CSV possible pour le rapport clients à risque.
+    if kind in ("risques", "clients_a_risque", "commercial") \
+            and (args.get("format") or "").strip().lower() == "csv":
+        url, filename = "/api/analytics/at-risk/export/", filename.replace(".xlsx", ".csv")
     return ToolResult(
-        content={"status": "ready", "note": "Rapport de pilotage prêt au téléchargement."},
-        action={"type": "download", "url": "/api/analytics/dashboard/report/",
-                "filename": "rapport-pilotage-kaydan.pdf"})
+        content={"report": kind, "note": f"Rapport {rep['format']} prêt au téléchargement."},
+        action={"type": "download", "url": url, "filename": filename})
 
 
 # =====================================================================
@@ -632,10 +662,26 @@ def register_builtins():
         handler=_tool_geocode_place,
     ))
     register(ToolSpec(
-        name="generate_dashboard_report",
-        description="Prépare le rapport de pilotage (PDF) au téléchargement.",
+        name="get_analytics_digest",
+        description="Synthèse décisionnelle du tableau de bord (KPIs, santé des "
+                    "programmes, alertes métier, top clients à risque) pour produire "
+                    "une analyse automatique. Montants masqués sans droit financier.",
         parameters={"type": "object", "properties": {}},
-        handler=_tool_generate_dashboard_report,
+        handler=_tool_get_analytics_digest,
+    ))
+    register(ToolSpec(
+        name="generate_report",
+        description="Prépare un rapport au téléchargement : « dashboard »/« DG » (PDF), "
+                    "« risques »/« commercial » (Excel .xlsx ; format=csv possible), "
+                    "« alertes » (CSV).",
+        parameters={
+            "type": "object",
+            "properties": {
+                "kind": {"type": "string", "description": "dashboard | dg | risques | commercial | alertes"},
+                "format": {"type": "string", "description": "xlsx (défaut risques) ou csv"},
+            },
+        },
+        handler=_tool_generate_report,
     ))
 
 
