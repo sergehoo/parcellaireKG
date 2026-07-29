@@ -59,7 +59,7 @@ def run_turn(user, message, client_context, conversation, model=None):
         msg = choice.get("message") or {}
         tool_calls = msg.get("tool_calls")
 
-        if not tool_calls:
+        if not tool_calls or not isinstance(tool_calls, list):
             reply = msg.get("content") or ""
             CopilotMessage.objects.create(conversation=conversation, role="assistant",
                                           content=reply, metadata={"actions": actions})
@@ -68,6 +68,8 @@ def run_turn(user, message, client_context, conversation, model=None):
         messages.append({"role": "assistant", "content": msg.get("content") or "",
                          "tool_calls": tool_calls})
         for tc in tool_calls:
+            if not isinstance(tc, dict):
+                continue
             fn = tc.get("function") or {}
             name = fn.get("name") or ""
             try:

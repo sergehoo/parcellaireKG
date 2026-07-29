@@ -1,4 +1,6 @@
 """API du Copilote IA : POST /api/copilot/chat/."""
+import json
+
 from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -36,6 +38,15 @@ class CopilotChatAPIView(APIView):
             return Response({"detail": "Message trop long (max 4000 caractères)."}, status=400)
 
         client_context = request.data.get("context") or {}
+        if not isinstance(client_context, dict):
+            client_context = {}
+        # Whitelist des clés + borne de taille (anti-amplification de tokens/coût).
+        client_context = {k: client_context[k] for k in
+                          ("route", "program_id", "parcel_id", "bbox", "layers")
+                          if k in client_context}
+        if len(json.dumps(client_context, default=str)) > 4000:
+            client_context = {"route": str(client_context.get("route", ""))[:200]}
+
         model = request.data.get("model") or None  # Phase 2 : routage multi-modèles
 
         conv = None

@@ -18,12 +18,24 @@ const MODELS = [
   { value: 'deepseek', label: 'DeepSeek' },
 ]
 
+// Défense en profondeur : n'autorise que des chemins relatifs same-origin
+// (les actions proviennent déjà du backend, mais on ne suit jamais une URL
+// absolue/externe — anti open-redirect / exfiltration).
+function isSafeInternalPath(u) {
+  if (typeof u !== 'string' || !u.startsWith('/') || u.startsWith('//')) return false
+  try {
+    return new URL(u, window.location.origin).origin === window.location.origin
+  } catch {
+    return false
+  }
+}
+
 function runActions(actions, navigate) {
   for (const action of actions || []) {
     if (!action || !action.type) continue
-    if (action.type === 'navigate' && action.to) {
+    if (action.type === 'navigate' && isSafeInternalPath(action.to)) {
       navigate(action.to)
-    } else if (action.type === 'download' && action.url) {
+    } else if (action.type === 'download' && isSafeInternalPath(action.url)) {
       downloadFile(action.url, action.filename || 'export')
     } else if (action.type === 'map.focus') {
       const onMap = window.location.hash.startsWith('#/carte')

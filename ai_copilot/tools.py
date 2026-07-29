@@ -98,16 +98,14 @@ def _tool_search_entities(user, args, context):
             })
 
     if kind in ("all", "customer", "client", "clients"):
-        can_pii = user_can_view_patient_data(user)
-        qs = Customer.objects.filter(is_active=True)
-        if q and can_pii:
-            qs = qs.filter(last_name__icontains=q) | qs.filter(company_name__icontains=q)
-        elif q and not can_pii:
-            qs = qs.none()  # pas de recherche nominative sans droit PII
-        for c in qs.order_by("id")[:8]:
-            label = (c.get_display_name() if can_pii and hasattr(c, "get_display_name")
-                     else f"Client #{c.id}")
-            results.append({"kind": "customer", "id": c.id, "label": label})
+        # Aucun client renvoyé sans droit PII — y compris requête vide
+        # (sinon l'IA énumérait les IDs/compte des clients actifs).
+        if user_can_view_patient_data(user):
+            qs = Customer.objects.filter(is_active=True)
+            if q:
+                qs = qs.filter(last_name__icontains=q) | qs.filter(company_name__icontains=q)
+            for c in qs.order_by("id")[:8]:
+                results.append({"kind": "customer", "id": c.id, "label": str(c)})
 
     return ToolResult(content={"count": len(results), "results": results})
 
@@ -130,7 +128,8 @@ def _tool_dashboard_summary(user, args, context):
         "reservations": Reservation.objects.filter(is_active=True).count(),
     }
     ca = SaleFile.objects.filter(is_active=True).aggregate(s=Sum("net_price"))["s"] or Decimal("0")
-    paid = Payment.objects.filter(status="CONFIRMED").aggregate(s=Sum("amount"))["s"] or Decimal("0")
+    paid = (Payment.objects.filter(is_active=True, status="CONFIRMED")
+            .aggregate(s=Sum("amount"))["s"] or Decimal("0"))
     finance = {
         "ca_total": float(ca) if can_fin else MASKED,
         "paid_total": float(paid) if can_fin else MASKED,
@@ -154,7 +153,7 @@ def _tool_focus_map_on_program(user, args, context):
         return ToolResult(content={"error": "Programme introuvable."})
 
     center = None
-    pt = program.centroid or (program.geometry.centroid if program.geometry else None)
+    pt = program.centroid or (program.boundary.centroid if program.boundary else None)
     if pt is not None:
         center = [pt.y, pt.x]  # [lat, lng]
 

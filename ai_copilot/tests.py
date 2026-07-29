@@ -9,7 +9,7 @@ from ai_copilot import executor
 from ai_copilot import tools as registry
 from ai_copilot.agent import run_turn
 from ai_copilot.models import CopilotConversation, CopilotToolCall
-from parcelaire.models import Country, ProjetImmobilier, RealEstateProgram
+from parcelaire.models import Country, Customer, ProjetImmobilier, RealEstateProgram
 
 
 class CopilotBaseTestCase(TestCase):
@@ -19,6 +19,11 @@ class CopilotBaseTestCase(TestCase):
         cls.finuser = User.objects.create_user("copilot-fin", password="pwd")
         cls.finuser.user_permissions.add(Permission.objects.get(
             content_type__app_label="parcelaire", codename="view_financial_data"))
+        cls.piiuser = User.objects.create_user("copilot-pii", password="pwd")
+        cls.piiuser.user_permissions.add(Permission.objects.get(
+            content_type__app_label="parcelaire", codename="view_patient_data"))
+        cls.customer = Customer.objects.create(
+            customer_type="INDIVIDUAL", first_name="Awa", last_name="Koné")
         cls.country = Country.objects.create(nom="Côte d'Ivoire", code="CI")
         cls.project = ProjetImmobilier.objects.create(code="P1", nom="Projet 1", country=cls.country)
         cls.program = RealEstateProgram.objects.create(
@@ -62,6 +67,17 @@ class ExecutorTests(CopilotBaseTestCase):
         res = executor.run_tool(self.user, "search_entities",
                                 {"query": "Koné", "kind": "customer"}, {})
         self.assertEqual(res.content["count"], 0)  # pas de recherche nominative sans droit
+
+    def test_customer_search_empty_query_blocked_without_pii(self):
+        # Requête vide : ne doit RIEN divulguer (ni IDs ni compte) sans droit PII.
+        res = executor.run_tool(self.user, "search_entities", {"kind": "customer"}, {})
+        self.assertEqual(res.content["count"], 0)
+
+    def test_customer_search_shows_name_with_pii(self):
+        res = executor.run_tool(self.piiuser, "search_entities",
+                                {"query": "Koné", "kind": "customer"}, {})
+        labels = [r["label"] for r in res.content["results"]]
+        self.assertTrue(any("Koné" in lbl for lbl in labels), labels)
 
 
 class AgentLoopTests(CopilotBaseTestCase):
