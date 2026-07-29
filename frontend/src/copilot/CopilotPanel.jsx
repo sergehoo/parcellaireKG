@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { sendCopilotMessage, listCopilotConversations, getCopilotConversation } from '../api/copilot'
+import { sendCopilotMessage, listCopilotEngines, listCopilotConversations, getCopilotConversation } from '../api/copilot'
 import { downloadFile } from '../api/client'
 import { getCopilotContext, getCopilotSuggestions } from './pageContext'
 import { requestMapFocus, requestMapDraw, requestMapCommand } from './mapBus'
@@ -13,10 +13,8 @@ const WELCOME = {
     + "centrer la carte sur un programme, préparer un rapport. Que puis-je faire ?",
 }
 
-const MODELS = [
-  { value: 'auto', label: 'Auto' },
-  { value: 'deepseek', label: 'DeepSeek' },
-]
+// Moteurs par défaut avant chargement de la liste réelle depuis le serveur.
+const DEFAULT_ENGINES = [{ value: 'auto', label: 'Auto' }]
 
 // Défense en profondeur : n'autorise que des chemins relatifs same-origin
 // (les actions proviennent déjà du backend, mais on ne suit jamais une URL
@@ -85,6 +83,7 @@ export default function CopilotPanel() {
   const [pendingConfirm, setPendingConfirm] = useState(null)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [conversations, setConversations] = useState([])
+  const [engines, setEngines] = useState(DEFAULT_ENGINES)
   const convRef = useRef(null)
   const scrollRef = useRef(null)
   const navigate = useNavigate()
@@ -92,6 +91,16 @@ export default function CopilotPanel() {
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
   }, [messages, open])
+
+  // Charge les moteurs réellement configurés à la 1re ouverture du panneau.
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    listCopilotEngines()
+      .then((res) => { if (!cancelled && res.engines?.length) setEngines(res.engines) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [open])
 
   function send(e) {
     e?.preventDefault()
@@ -222,10 +231,13 @@ export default function CopilotPanel() {
               <button type="button" onClick={toggleHistory} title="Historique"
                 className={`rounded-md px-1.5 py-1 text-sm hover:bg-slate-100 hover:text-slate-800 ${historyOpen ? 'text-orange-600' : 'text-slate-500'}`}
                 aria-label="Historique">🕘</button>
-              <select value={model} onChange={(e) => setModel(e.target.value)}
-                className="rounded-md border border-slate-300 bg-white px-1.5 py-1 text-xs text-slate-600">
-                {MODELS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
-              </select>
+              {engines.length > 1 && (
+                <select value={model} onChange={(e) => setModel(e.target.value)}
+                  title="Moteur IA"
+                  className="rounded-md border border-slate-300 bg-white px-1.5 py-1 text-xs text-slate-600">
+                  {engines.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                </select>
+              )}
               <button type="button" onClick={() => setOpen(false)}
                 className="text-slate-400 hover:text-slate-700" aria-label="Fermer">×</button>
             </div>

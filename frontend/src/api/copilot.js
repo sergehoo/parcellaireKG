@@ -17,6 +17,11 @@ export function sendCopilotMessage({ message, conversationId, context, model, co
   })
 }
 
+// Moteurs LLM réellement configurés côté serveur ('Auto' + fournisseurs).
+export function listCopilotEngines() {
+  return request('/api/copilot/engines/', { method: 'GET' })
+}
+
 // Historique : conversations de l'utilisateur courant (les siennes uniquement).
 export function listCopilotConversations() {
   return request('/api/copilot/conversations/', { method: 'GET' })

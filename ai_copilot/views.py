@@ -9,7 +9,7 @@ from rest_framework.views import APIView
 
 from .agent import run_confirmed, run_turn
 from .executor import read_confirm_token
-from .gateway import GatewayError, is_configured
+from .gateway import GatewayError, available_engines, is_configured
 from .models import CopilotConversation
 
 
@@ -86,6 +86,20 @@ class CopilotChatAPIView(APIView):
         except GatewayError as exc:
             return Response({"detail": str(exc)}, status=502)
         return Response(out)
+
+
+@extend_schema_view(get=extend_schema(
+    summary="Copilote IA — moteurs disponibles",
+    description="Liste les moteurs LLM réellement configurés (clé présente) : "
+                "'Auto' + chaque fournisseur. Vide si le Copilote est désactivé.",
+    tags=["Copilot"],
+    responses={200: OpenApiResponse(description="Moteurs disponibles.")},
+))
+class CopilotEnginesAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response({"engines": available_engines(), "configured": is_configured()})
 
 
 @extend_schema_view(get=extend_schema(

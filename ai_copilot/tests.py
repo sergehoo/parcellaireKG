@@ -6,6 +6,7 @@ from django.contrib.gis.geos import Point
 from django.test import TestCase, override_settings
 
 from ai_copilot import executor
+from ai_copilot import gateway
 from ai_copilot import tools as registry
 from ai_copilot.agent import run_turn
 from ai_copilot.models import CopilotConversation, CopilotToolCall
@@ -405,6 +406,96 @@ class AgentLoopTests(CopilotBaseTestCase):
         self.assertTrue(conv.messages.filter(role="assistant").exists())
         self.assertTrue(CopilotToolCall.objects.filter(
             tool_name="focus_map_on_program", status="ok").exists())
+
+
+@override_settings(COPILOT_PROVIDER_PRIORITY=["deepseek", "openai", "anthropic"])
+class GatewayRoutingTests(TestCase):
+    @override_settings(DEEPSEEK_API_KEY="", OPENAI_API_KEY="", ANTHROPIC_API_KEY="")
+    def test_no_provider_means_not_configured(self):
+        self.assertFalse(gateway.is_configured())
+        self.assertEqual(gateway.available_engines(), [])
+
+    @override_settings(DEEPSEEK_API_KEY="", OPENAI_API_KEY="k", ANTHROPIC_API_KEY="k")
+    def test_auto_resolves_first_configured_by_priority(self):
+        self.assertEqual(gateway._resolve("auto"), "openai")
+
+    @override_settings(DEEPSEEK_API_KEY="k", OPENAI_API_KEY="k", ANTHROPIC_API_KEY="")
+    def test_engines_prepend_auto_when_multiple(self):
+        vals = [e["value"] for e in gateway.available_engines()]
+        self.assertEqual(vals[0], "auto")
+        self.assertIn("openai", vals)
+        self.assertNotIn("anthropic", vals)  # non configuré → absent
+
+    @override_settings(DEEPSEEK_API_KEY="k", OPENAI_API_KEY="", ANTHROPIC_API_KEY="")
+    def test_selecting_unconfigured_engine_errors(self):
+        with self.assertRaises(gateway.GatewayError):
+            gateway.chat_completion([{"role": "user", "content": "hi"}], None, model="claude")
+
+    @override_settings(DEEPSEEK_API_KEY="k")
+    def test_openai_compatible_hits_chat_completions(self):
+        canned = {"choices": [{"message": {"content": "ok"}}]}
+        fake = mock.Mock(status_code=200)
+        fake.json.return_value = canned
+        with mock.patch("requests.post", return_value=fake) as post:
+            out = gateway.chat_completion([{"role": "user", "content": "hi"}],
+                                          None, model="deepseek")
+        self.assertEqual(out, canned)
+        self.assertIn("/chat/completions", post.call_args[0][0])
+
+    @override_settings(DEEPSEEK_API_KEY="", OPENAI_API_KEY="", ANTHROPIC_API_KEY="k")
+    def test_anthropic_translated_to_openai_shape(self):
+        anthropic_resp = {"content": [
+            {"type": "text", "text": "Je regarde."},
+            {"type": "tool_use", "id": "tu_1", "name": "focus_map_on_program",
+             "input": {"program_name": "Callisto"}},
+        ]}
+        fake = mock.Mock(status_code=200)
+        fake.json.return_value = anthropic_resp
+        msgs = [{"role": "system", "content": "sys"},
+                {"role": "user", "content": "va sur Callisto"}]
+        tools = [{"type": "function", "function": {
+            "name": "focus_map_on_program", "description": "d",
+            "parameters": {"type": "object", "properties": {}}}}]
+        with mock.patch("requests.post", return_value=fake) as post:
+            out = gateway.chat_completion(msgs, tools, model="claude")
+        msg = out["choices"][0]["message"]
+        self.assertEqual(msg["content"], "Je regarde.")
+        self.assertEqual(msg["tool_calls"][0]["function"]["name"], "focus_map_on_program")
+        sent = post.call_args.kwargs["json"]
+        self.assertEqual(sent["system"], "sys")
+        self.assertEqual(sent["tools"][0]["name"], "focus_map_on_program")
+        self.assertIn("input_schema", sent["tools"][0])
+        self.assertTrue(post.call_args[0][0].endswith("/v1/messages"))
+
+    def test_to_anthropic_maps_tool_call_and_result(self):
+        msgs = [
+            {"role": "assistant", "content": "", "tool_calls": [
+                {"id": "c1", "type": "function",
+                 "function": {"name": "foo", "arguments": '{"x": 1}'}}]},
+            {"role": "tool", "tool_call_id": "c1", "content": '{"ok": true}'},
+        ]
+        _system, conv, _tools = gateway._to_anthropic(msgs, None)
+        self.assertEqual(conv[0]["role"], "assistant")
+        self.assertEqual(conv[0]["content"][0]["type"], "tool_use")
+        self.assertEqual(conv[0]["content"][0]["input"], {"x": 1})
+        self.assertEqual(conv[1]["content"][0]["type"], "tool_result")
+        self.assertEqual(conv[1]["content"][0]["tool_use_id"], "c1")
+
+
+class CopilotEnginesViewTests(CopilotBaseTestCase):
+    @override_settings(DEEPSEEK_API_KEY="k", OPENAI_API_KEY="k", ANTHROPIC_API_KEY="")
+    def test_engines_endpoint_lists_configured(self):
+        self.client.force_login(self.user)
+        r = self.client.get("/api/copilot/engines/")
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertTrue(body["configured"])
+        vals = [e["value"] for e in body["engines"]]
+        self.assertIn("auto", vals)
+        self.assertIn("openai", vals)
+
+    def test_engines_endpoint_requires_auth(self):
+        self.assertEqual(self.client.get("/api/copilot/engines/").status_code, 403)
 
 
 class CopilotViewTests(CopilotBaseTestCase):

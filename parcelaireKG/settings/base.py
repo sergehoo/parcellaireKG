@@ -404,6 +404,19 @@ REST_FRAMEWORK = {
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 DEEPSEEK_API_URL = os.environ.get("DEEPSEEK_API_URL", "https://api.deepseek.com")
 DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
+# Moteurs additionnels (multi-LLM). Chacun activé UNIQUEMENT si sa clé est
+# fournie. OpenAI = API compatible ; Anthropic = API Messages (traduite).
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+OPENAI_API_URL = os.environ.get("OPENAI_API_URL", "https://api.openai.com/v1")
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+ANTHROPIC_API_URL = os.environ.get("ANTHROPIC_API_URL", "https://api.anthropic.com")
+ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-3-5-sonnet-latest")
+ANTHROPIC_VERSION = os.environ.get("ANTHROPIC_VERSION", "2023-06-01")
+# Ordre de préférence du mode « Auto » (premier fournisseur configuré gagne).
+COPILOT_PROVIDER_PRIORITY = [
+    p.strip() for p in os.environ.get(
+        "COPILOT_PROVIDER_PRIORITY", "deepseek,openai,anthropic").split(",") if p.strip()]
 COPILOT_MAX_TOKENS = int(os.environ.get("COPILOT_MAX_TOKENS", "1500"))
 # Recherche géographique (Nominatim/OSM, sans clé). Biais pays par défaut : CI.
 COPILOT_GEOCODE_COUNTRY = os.environ.get("COPILOT_GEOCODE_COUNTRY", "ci")
