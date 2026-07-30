@@ -217,6 +217,59 @@ def csv_streaming_response(filename, header, rows_iter):
     return resp
 
 
+def xlsx_response(filename, header, rows_iter):
+    """Export Excel (.xlsx) via openpyxl. Cellules neutralisées contre
+    l'injection de formules (préfixe apostrophe si la valeur commence par =,+,-,@)."""
+    from io import BytesIO
+
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Export"
+    ws.append([str(h) for h in header])
+    for row in rows_iter:
+        ws.append([_csv_safe(c) if isinstance(c, str) else ('' if c is None else c)
+                   for c in row])
+    buf = BytesIO()
+    wb.save(buf)
+    resp = HttpResponse(
+        buf.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    resp['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return resp
+
+
+def docx_response(filename, title, header, rows_iter, intro=None):
+    """Export Word (.docx) via python-docx : titre + paragraphe optionnel +
+    tableau. Le texte des cellules est neutralisé contre l'injection de formules
+    (cohérent avec les exports CSV/XLSX)."""
+    from io import BytesIO
+
+    from docx import Document
+
+    doc = Document()
+    doc.add_heading(str(title), level=1)
+    if intro:
+        doc.add_paragraph(str(intro))
+    table = doc.add_table(rows=1, cols=len(header))
+    table.style = "Light Grid Accent 1"
+    for i, h in enumerate(header):
+        table.rows[0].cells[i].text = str(h)
+    for row in rows_iter:
+        cells = table.add_row().cells
+        for i, c in enumerate(row):
+            text = '' if c is None else str(c)
+            cells[i].text = _csv_safe(text) if isinstance(text, str) else text
+    buf = BytesIO()
+    doc.save(buf)
+    resp = HttpResponse(
+        buf.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+    resp['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return resp
+
+
 def _at_risk_rows(request, can_fin):
     """Lignes IDCP filtrées (level / program / min_idcp) et triées par IDCP
     décroissant. Partagé par la liste paginée et l'export CSV."""
@@ -492,6 +545,16 @@ class AtRiskExportAPIView(APIView):
                     r['construction_pct'], r['idcp'], r['level'], r['reason'],
                     r['site_manager'], r['sales_agent'], r['sale_date'] or '',
                 ]
+        # NB : param 'fmt' (pas 'format' — réservé par DRF à la négociation de contenu).
+        fmt = (request.query_params.get('fmt') or 'csv').lower()
+        if fmt == 'xlsx':
+            return xlsx_response('clients-a-risque.xlsx', header, lines())
+        if fmt == 'docx':
+            intro = (f"{len(rows)} client(s) à risque, triés par IDCP décroissant. "
+                     "Montants masqués selon les droits." if not can_fin
+                     else f"{len(rows)} client(s) à risque, triés par IDCP décroissant.")
+            return docx_response('clients-a-risque.docx', 'Clients à risque',
+                                 header, lines(), intro=intro)
         return csv_streaming_response('clients-a-risque.csv', header, lines())
 
 

@@ -6,6 +6,8 @@ import { getAlertMap } from '../api/analytics'
 import { getTheme } from '../lib/theme'
 import useReferenceData from '../hooks/useReferenceData'
 import MapCanvas from '../components/map/MapCanvas'
+import { takePendingMapFocus, takePendingMapDraw, takePendingMapCommands } from '../copilot/mapBus'
+import { useCopilotContextProvider } from '../copilot/pageContext'
 import MapToolbar from '../components/map/MapToolbar'
 import MapLegend from '../components/map/MapLegend'
 import ControlRail from '../components/map/ControlRail'
@@ -43,6 +45,44 @@ export default function MapView() {
   const [cursorOn, setCursorOn] = useState(false)
   const [cursor, setCursor] = useState(null)
 
+  // Copilote IA : centre la carte quand l'IA le demande (action map.focus).
+  // Consomme une cible en attente dès que l'api Leaflet est prête (cas
+  // « navigation vers /carte puis focus »), et écoute les focus live.
+  useEffect(() => {
+    if (!api) return undefined
+    const drawShape = (s) => {
+      if (!s) return
+      if (s.kind === 'circle' && s.center) api.drawCircle(s.center, s.radius_m, s.label)
+      else if (s.kind === 'line' && Array.isArray(s.points)) api.drawLine(s.points, s.label)
+    }
+    const applyCmd = (c) => {
+      if (!c) return
+      if (c.type === 'basemap' && c.value) setBasemap(c.value)
+      else if (c.type === 'ortho') {
+        setOrthoProgramId(c.program_id || '')
+        setOrthoOn(!!c.on)
+        if (c.center) api.flyTo(c.center, 15)
+      }
+    }
+    // Cibles en attente (cas « navigation vers /carte puis action »).
+    const pf = takePendingMapFocus()
+    if (pf && pf.center) api.flyTo(pf.center, pf.zoom || 15)
+    drawShape(takePendingMapDraw())
+    takePendingMapCommands().forEach(applyCmd)
+    // Événements live (quand on est déjà sur la carte).
+    const onFocus = (e) => { const d = e.detail || {}; if (d.center) api.flyTo(d.center, d.zoom || 15) }
+    const onDraw = (e) => drawShape(e.detail)
+    const onCmd = (e) => applyCmd(e.detail)
+    window.addEventListener('kg-copilot-map-focus', onFocus)
+    window.addEventListener('kg-copilot-map-draw', onDraw)
+    window.addEventListener('kg-copilot-map-cmd', onCmd)
+    return () => {
+      window.removeEventListener('kg-copilot-map-focus', onFocus)
+      window.removeEventListener('kg-copilot-map-draw', onDraw)
+      window.removeEventListener('kg-copilot-map-cmd', onCmd)
+    }
+  }, [api])
+
   const filters = useMemo(() => {
     const r = {}
     FILTER_KEYS.forEach((k) => { r[k] = searchParams.get(k) || '' })
@@ -63,6 +103,21 @@ export default function MapView() {
 
   useEffect(() => load(), [load])
   useEffect(() => { if (api) api.toggleMinimap(minimapOn) }, [api, minimapOn])
+
+  // Contexte LIVE pour le Copilot IA : programme filtré, parcelle sélectionnée,
+  // couches actives et emprise carte courante (recalculés à l'envoi du message).
+  useCopilotContextProvider(() => {
+    const layers = []
+    if (basemap) layers.push(`fond:${basemap}`)
+    if (layerStyle) layers.push(`style:${layerStyle}`)
+    if (showAlerts) layers.push('alertes')
+    if (orthoOn) layers.push('orthophoto')
+    const ctx = { layers }
+    if (filters.program) ctx.program_id = filters.program
+    if (selected?.parcel_id != null) ctx.parcel_id = selected.parcel_id
+    if (api?.bbox) { try { ctx.bbox = api.bbox() } catch { /* carte pas prête */ } }
+    return ctx
+  }, [api, filters.program, selected, basemap, layerStyle, showAlerts, orthoOn])
 
   // Le fond de carte neutre (standard/sombre) suit le thème ; un choix explicite
   // (satellite/relief/clair) est préservé.

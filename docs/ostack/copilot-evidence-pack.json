@@ -1,0 +1,217 @@
+{
+  "evidencePack": {
+    "schemaVersion": 1,
+    "taskId": "OST-2026-COPILOT",
+    "feature": "Copilote IA multi-LLM géospatial (ai_copilot)",
+    "intentId": "ai-copilot",
+    "generatedFrom": {
+      "request": "Copilote conversationnel qui connaît la page, pilote la carte, interroge les données métier (masquées), fait du reporting et exécute des actions avec confirmation humaine ; multi-moteurs DeepSeek/ChatGPT/Claude.",
+      "specificationCoverage": 90,
+      "assumptions": [
+        "Au moins une clé LLM est fournie en environnement (sinon 503, Copilote désactivé)",
+        "PostgreSQL/PostGIS disponible (tests exécutés sur une vraie base PostGIS)",
+        "Les appels LLM sont mockés en test (aucune clé requise en CI)"
+      ],
+      "acceptanceCriteria": [
+        "Aucune donnée PII/financière n'est envoyée au LLM sans le droit correspondant",
+        "L'agent SQL ne peut ni écrire ni lire une table hors whitelist",
+        "Une action à effet de bord n'est jamais exécutée par le LLM sans confirmation humaine (jeton signé)",
+        "L'IA agit strictement avec les permissions de l'utilisateur courant (pas d'élévation)",
+        "Chaque appel d'outil est journalisé (audit)",
+        "Sans clé LLM, l'endpoint renvoie 503 et le reste de l'app est intact"
+      ],
+      "plan": "Gateway multi-fournisseurs (forme OpenAI normalisée) ; Tool Registry (permission + side_effecting) ; Context Engine (ré-résolution serveur) ; Executor (perm + audit + confirmation à jeton signé) ; panneau React sur toutes les pages."
+    },
+    "changedFiles": [
+      "ai_copilot/gateway.py",
+      "ai_copilot/tools.py",
+      "ai_copilot/executor.py",
+      "ai_copilot/agent.py",
+      "ai_copilot/context.py",
+      "ai_copilot/views.py",
+      "ai_copilot/models.py",
+      "parcelaire/api/analytics.py",
+      "frontend/src/copilot/CopilotPanel.jsx",
+      "frontend/src/copilot/pageContext.js",
+      "frontend/src/copilot/markdown.js"
+    ],
+    "diffRef": "git:feat/ai-copilot",
+    "architectureDecisions": [
+      "Le LLM ne PROPOSE que des actions ; l'exécution d'un effet de bord est un chemin déterministe hors-LLM déclenché par un clic humain + jeton signé lié à l'utilisateur",
+      "Le masquage PII/financier s'applique en amont (outils/executor), quel que soit le fournisseur",
+      "L'agent SQL confronte chaque identifiant à la liste réelle des tables (pas d'extraction FROM/JOIN naïve)"
+    ],
+    "migrations": [
+      {
+        "id": "0001_initial",
+        "reversible": true,
+        "backupTaken": false
+      },
+      {
+        "id": "0002_use_sql_agent_permission",
+        "reversible": true,
+        "backupTaken": false
+      },
+      {
+        "id": "0003_alter_copilottoolcall_status",
+        "reversible": true,
+        "backupTaken": false
+      }
+    ],
+    "tests": {
+      "unit": {
+        "passed": 120,
+        "failed": 0
+      },
+      "integration": {
+        "passed": 52,
+        "failed": 0
+      },
+      "functional": {
+        "passed": 3,
+        "failed": 0
+      },
+      "e2e": {
+        "passed": 0,
+        "failed": 0
+      },
+      "permission": {
+        "passed": 12,
+        "failed": 0
+      }
+    },
+    "security": {
+      "critical": 0,
+      "high": 0,
+      "medium": 2,
+      "threatModelUpdated": true
+    },
+    "performance": [],
+    "permissionMatrixVerified": true,
+    "rollback": {
+      "defined": true,
+      "tested": false
+    },
+    "humanApprovals": [],
+    "residualRisks": [
+      {
+        "severity": "high",
+        "description": "Secrets réels extractibles de l'historique git (SECRET_KEY, DB_PASSWORD, EXTERNAL_LOTS_API_*)",
+        "mitigation": "Action opérateur : rotation + git filter-repo + force-push (hors périmètre assistant)"
+      },
+      {
+        "severity": "medium",
+        "description": "Egress de PII/financier réels vers un LLM tiers pour un utilisateur habilité (agent SQL)",
+        "mitigation": "Décision de gouvernance : base légale + fournisseur zero-retention"
+      },
+      {
+        "severity": "low",
+        "description": "Couverture de code, score de mutation et p95 non mesurés",
+        "mitigation": "Ajouter coverage.py + mutation + baseline perf"
+      },
+      {
+        "severity": "low",
+        "description": "Aucun test front-end (garde-fous XSS/open-redirect non couverts par un runner)",
+        "mitigation": "Ajouter Vitest sur markdown/isSafeInternalPath/runActions"
+      }
+    ],
+    "deploymentProcedure": "Fournir >=1 clé LLM, pip install -r requirements.txt, migrate ai_copilot, attribuer use_sql_agent (cf DEPLOYMENT.md §8).",
+    "rollbackProcedure": "Ne pas merger la branche, ou revert du merge ; l'app fonctionne sans le Copilote (503 sans clé).",
+    "budget": {
+      "withinBudget": true,
+      "breaches": [],
+      "blockingBreaches": [],
+      "activeDerogations": [],
+      "expiredDerogations": []
+    },
+    "confidence": {
+      "dimensions": [
+        {
+          "dimension": "requirements_understanding",
+          "claimed": 88,
+          "effective": 88,
+          "supported": true,
+          "supportingEvidence": [
+            "invariant-confirm"
+          ]
+        },
+        {
+          "dimension": "implementation_correctness",
+          "claimed": 88,
+          "effective": 88,
+          "supported": true,
+          "supportingEvidence": [
+            "build",
+            "django-check",
+            "postgis"
+          ]
+        },
+        {
+          "dimension": "test_strength",
+          "claimed": 82,
+          "effective": 82,
+          "supported": true,
+          "supportingEvidence": [
+            "suite"
+          ]
+        },
+        {
+          "dimension": "security_assurance",
+          "claimed": 80,
+          "effective": 80,
+          "supported": true,
+          "supportingEvidence": [
+            "perm-sql",
+            "perm-pii",
+            "adversarial"
+          ]
+        },
+        {
+          "dimension": "performance_assurance",
+          "claimed": 45,
+          "effective": 45,
+          "supported": false,
+          "supportingEvidence": []
+        },
+        {
+          "dimension": "documentation_consistency",
+          "claimed": 92,
+          "effective": 92,
+          "supported": true,
+          "supportingEvidence": [
+            "docs"
+          ]
+        },
+        {
+          "dimension": "rollback_readiness",
+          "claimed": 70,
+          "effective": 50,
+          "supported": false,
+          "supportingEvidence": [],
+          "note": "1 failing evidence item(s) cap this dimension at 50"
+        }
+      ],
+      "overall": 69,
+      "uncertainty": [
+        "rollback_readiness: Aucune approbation humaine de release à ce stade — merge en attente"
+      ]
+    },
+    "definitionOfDone": {
+      "status": "DRAFT",
+      "unmet": [
+        "typecheck_passed",
+        "e2e_tests_passed",
+        "human_approved"
+      ],
+      "rejected": false,
+      "rejectionReasons": []
+    },
+    "releaseRecommendation": "BLOCK",
+    "verified": false,
+    "blockingReasons": [
+      "unmitigated high risk: Secrets réels extractibles de l'historique git (SECRET_KEY, DB_PASSWORD, EXTERNAL_LOTS_API_*)"
+    ],
+    "contentHash": "9684703c9442a2e6ef6166a62a3a3575073a669bd57f4a2a57aefd9d30670ba6"
+  },
+  "savedTo": ".ostack/evidence/OST-2026-COPILOT-9684703c9442.json"
+}

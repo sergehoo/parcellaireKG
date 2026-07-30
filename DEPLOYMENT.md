@@ -136,7 +136,7 @@ npm run dev
 # Aucune alerte de sécurité attendue (hors W009 si SECRET_KEY factice)
 docker compose exec parcelaireweb python manage.py check --deploy
 
-# Suite de tests (114 tests)
+# Suite de tests complète
 docker compose exec parcelaireweb python manage.py test
 ```
 
@@ -218,3 +218,55 @@ docker compose up -d
 
 Conservez toujours une sauvegarde base + MinIO **avant** chaque déploiement pour
 permettre un retour arrière complet.
+
+---
+
+## 8. Copilote IA (`ai_copilot`) — activation
+
+> Livré sur la branche `feat/ai-copilot`. **Ne pas activer en prod sans revue.**
+> Sans aucune clé LLM, `/api/copilot/chat/` renvoie **503** et le reste de
+> l'application fonctionne normalement.
+
+**8.1 Fournir au moins une clé LLM** (dans `.env`, cf. `.env.example`) :
+
+```bash
+DEEPSEEK_API_KEY=sk-...          # moteur par défaut
+# facultatifs (activent ChatGPT / Claude dans le sélecteur du panneau) :
+OPENAI_API_KEY=
+ANTHROPIC_API_KEY=
+COPILOT_PROVIDER_PRIORITY=deepseek,openai,anthropic   # ordre du mode « Auto »
+```
+
+**8.2 Dépendances & migrations** (automatiques au déploiement, sinon manuel) :
+
+```bash
+docker compose exec parcelaireweb pip install -r requirements.txt   # openpyxl, python-docx, lxml
+docker compose exec parcelaireweb python manage.py migrate ai_copilot   # 0001 → 0003
+```
+
+**8.3 Agent SQL (lecture seule)** — désactivé par défaut (superusers uniquement).
+Pour habiliter un profil, attribuer la permission `ai_copilot.use_sql_agent`
+(admin Django → Utilisateurs/Groupes, ou shell). L'accès aux tables
+client/vente/paiement exige **en plus** `view_financial_data` **et**
+`view_patient_data`.
+
+**8.4 Confidentialité** — les données PII/financières sont **masquées avant
+envoi** au LLM selon les droits de l'utilisateur. ⚠️ Pour un utilisateur
+**habilité**, l'agent SQL peut renvoyer des lignes réelles à un LLM **tiers**
+(DeepSeek par défaut) : valider la base légale et privilégier un fournisseur
+sans rétention/entraînement (décision opérateur).
+
+**8.5 Smoke test** :
+
+- [ ] `GET /api/copilot/engines/` (connecté) liste ≥ 1 moteur ; `[]` ⇒ aucune clé.
+- [ ] Un message simple renvoie une réponse ; le panneau ✨ apparaît sur toutes les pages.
+- [ ] Un compte **sans** `view_patient_data` ne voit **aucun nom de client** dans une analyse du tableau de bord.
+- [ ] Une action « relance orthophoto » demande une **confirmation** avant exécution.
+
+**8.6 Diagnostic « Copilote muet »** :
+
+| Symptôme | Cause probable |
+|----------|----------------|
+| HTTP **503** | Aucune clé LLM configurée (`engines/` renvoie `[]`). |
+| HTTP **502** | Fournisseur LLM injoignable / clé invalide / quota fournisseur. |
+| HTTP **429** | Débit dépassé (throttle `copilot` = 120/h par utilisateur). |

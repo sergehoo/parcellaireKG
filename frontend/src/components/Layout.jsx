@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { getAlertSummary } from '../api/analytics'
 import { useAuth } from '../auth/AuthContext'
 import { getTheme, setTheme } from '../lib/theme'
+import CopilotPanel from '../copilot/CopilotPanel'
 
 // Navigation groupée : la carte en accès direct, le reste réparti en menus
 // déroulants thématiques.
@@ -230,6 +231,8 @@ export default function Layout() {
       <main className="mx-auto w-full max-w-[1600px] flex-1 px-4 py-6 sm:px-6">
         <Outlet />
       </main>
+      {/* Copilote IA : flottant, présent sur toutes les pages authentifiées. */}
+      <CopilotPanel />
     </div>
   )
 }

@@ -1,0 +1,99 @@
+{
+  "$schema": "https://ostack.dev/schemas/evidence-input.schema.json",
+  "taskId": "OST-2026-COPILOT",
+  "feature": "Copilote IA multi-LLM géospatial (ai_copilot)",
+  "intentId": "ai-copilot",
+  "request": "Copilote conversationnel qui connaît la page, pilote la carte, interroge les données métier (masquées), fait du reporting et exécute des actions avec confirmation humaine ; multi-moteurs DeepSeek/ChatGPT/Claude.",
+  "specification": {
+    "summary": "Architecture 4 couches (Gateway/Registry/Context/Executor). Les données PII/financières sont masquées avant envoi au LLM selon les droits ; l'agent SQL est en lecture seule, whitelisté et gated ; les actions à effet de bord exigent une confirmation humaine liée à un jeton signé ; toute action est journalisée ; aucune élévation de privilège.",
+    "coverage": 90
+  },
+  "assumptions": [
+    "Au moins une clé LLM est fournie en environnement (sinon 503, Copilote désactivé)",
+    "PostgreSQL/PostGIS disponible (tests exécutés sur une vraie base PostGIS)",
+    "Les appels LLM sont mockés en test (aucune clé requise en CI)"
+  ],
+  "acceptanceCriteria": [
+    "Aucune donnée PII/financière n'est envoyée au LLM sans le droit correspondant",
+    "L'agent SQL ne peut ni écrire ni lire une table hors whitelist",
+    "Une action à effet de bord n'est jamais exécutée par le LLM sans confirmation humaine (jeton signé)",
+    "L'IA agit strictement avec les permissions de l'utilisateur courant (pas d'élévation)",
+    "Chaque appel d'outil est journalisé (audit)",
+    "Sans clé LLM, l'endpoint renvoie 503 et le reste de l'app est intact"
+  ],
+  "plan": "Gateway multi-fournisseurs (forme OpenAI normalisée) ; Tool Registry (permission + side_effecting) ; Context Engine (ré-résolution serveur) ; Executor (perm + audit + confirmation à jeton signé) ; panneau React sur toutes les pages.",
+  "changedFiles": [
+    "ai_copilot/gateway.py",
+    "ai_copilot/tools.py",
+    "ai_copilot/executor.py",
+    "ai_copilot/agent.py",
+    "ai_copilot/context.py",
+    "ai_copilot/views.py",
+    "ai_copilot/models.py",
+    "parcelaire/api/analytics.py",
+    "frontend/src/copilot/CopilotPanel.jsx",
+    "frontend/src/copilot/pageContext.js",
+    "frontend/src/copilot/markdown.js"
+  ],
+  "diffRef": "git:feat/ai-copilot",
+  "architectureDecisions": [
+    "Le LLM ne PROPOSE que des actions ; l'exécution d'un effet de bord est un chemin déterministe hors-LLM déclenché par un clic humain + jeton signé lié à l'utilisateur",
+    "Le masquage PII/financier s'applique en amont (outils/executor), quel que soit le fournisseur",
+    "L'agent SQL confronte chaque identifiant à la liste réelle des tables (pas d'extraction FROM/JOIN naïve)"
+  ],
+  "migrations": [
+    { "id": "0001_initial", "reversible": true, "backupTaken": false },
+    { "id": "0002_use_sql_agent_permission", "reversible": true, "backupTaken": false },
+    { "id": "0003_alter_copilottoolcall_status", "reversible": true, "backupTaken": false }
+  ],
+  "tests": {
+    "unit": { "passed": 120, "failed": 0 },
+    "integration": { "passed": 52, "failed": 0 },
+    "functional": { "passed": 3, "failed": 0 },
+    "e2e": { "passed": 0, "failed": 0 },
+    "permission": { "passed": 12, "failed": 0 }
+  },
+  "security": { "critical": 0, "high": 0, "medium": 2, "threatModelUpdated": true },
+  "metrics": { "documentationDrift": 0 },
+  "permissionMatrixVerified": true,
+  "rollback": { "defined": true, "tested": false },
+  "humanApprovals": [],
+  "residualRisks": [
+    { "severity": "high", "description": "Secrets réels extractibles de l'historique git (SECRET_KEY, DB_PASSWORD, EXTERNAL_LOTS_API_*)", "mitigation": "Action opérateur : rotation + git filter-repo + force-push (hors périmètre assistant)" },
+    { "severity": "medium", "description": "Egress de PII/financier réels vers un LLM tiers pour un utilisateur habilité (agent SQL)", "mitigation": "Décision de gouvernance : base légale + fournisseur zero-retention" },
+    { "severity": "low", "description": "Couverture de code, score de mutation et p95 non mesurés", "mitigation": "Ajouter coverage.py + mutation + baseline perf" },
+    { "severity": "low", "description": "Aucun test front-end (garde-fous XSS/open-redirect non couverts par un runner)", "mitigation": "Ajouter Vitest sur markdown/isSafeInternalPath/runActions" }
+  ],
+  "deploymentProcedure": "Fournir >=1 clé LLM, pip install -r requirements.txt, migrate ai_copilot, attribuer use_sql_agent (cf DEPLOYMENT.md §8).",
+  "rollbackProcedure": "Ne pas merger la branche, ou revert du merge ; l'app fonctionne sans le Copilote (503 sans clé).",
+  "confidence": [
+    { "dimension": "requirements_understanding", "score": 88 },
+    { "dimension": "implementation_correctness", "score": 88 },
+    { "dimension": "test_strength", "score": 82 },
+    { "dimension": "security_assurance", "score": 80 },
+    { "dimension": "performance_assurance", "score": 45 },
+    { "dimension": "documentation_consistency", "score": 92 },
+    { "dimension": "rollback_readiness", "score": 70 }
+  ],
+  "evidenceItems": [
+    { "id": "suite", "kind": "unit_test", "dimension": "test_strength", "status": "passed", "summary": "187 tests exécutés, 0 échec (dont 67 ai_copilot) — moteur Django + PostGIS réel" },
+    { "id": "build", "kind": "build", "dimension": "implementation_correctness", "status": "passed", "summary": "Build front Vite réussi" },
+    { "id": "django-check", "kind": "lint", "dimension": "implementation_correctness", "status": "passed", "summary": "manage.py check : 0 problème" },
+    { "id": "perm-sql", "kind": "permission_test", "dimension": "security_assurance", "status": "passed", "summary": "Agent SQL : DELETE/DDL, tables hors whitelist, jointure virgule et sous-requête auth_user refusés" },
+    { "id": "perm-pii", "kind": "permission_test", "dimension": "security_assurance", "status": "passed", "summary": "PII masquée sans droit (recherche client, digest analytics)" },
+    { "id": "invariant-confirm", "kind": "functional_test", "dimension": "requirements_understanding", "status": "passed", "summary": "Action à effet de bord : jeton signé exigé, forgé/lié-utilisateur refusés, exécution hors-LLM" },
+    { "id": "postgis", "kind": "functional_test", "dimension": "implementation_correctness", "status": "passed", "summary": "parcels_near_place : sémantique métrique ST_DWithin vérifiée (~80 m in, ~70 km out)" },
+    { "id": "adversarial", "kind": "security_scan", "dimension": "security_assurance", "status": "observed", "summary": "Revues adversariales : 0 critique/haut ; 2 findings hauts détectés à l'audit puis CORRIGÉS (fuite PII digest, bypass whitelist SQL)" },
+    { "id": "docs", "kind": "trace", "dimension": "documentation_consistency", "status": "observed", "summary": "DEPLOYMENT.md §8, .env.example, README front mis à jour" },
+    { "id": "human-approval", "kind": "human_review", "dimension": "rollback_readiness", "status": "failed", "summary": "Aucune approbation humaine de release à ce stade — merge en attente" }
+  ],
+  "budget": {
+    "criticalSecurityFindings": 0,
+    "highSecurityFindings": 0,
+    "permissionTestsRequired": true,
+    "rollbackRequired": true,
+    "documentationDriftMaximum": 0
+  },
+  "derogations": [],
+  "released": false
+}
