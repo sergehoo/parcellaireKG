@@ -1653,3 +1653,55 @@ class ParcelSummaryAPITestCase(TestCase):
         self.assertIn("Koné", d["customer"]["display_name"])
         self.assertNotEqual(d["sale"]["paid"], "Masqué")
         self.assertEqual(d["customer"]["phone"], "0102030405")
+
+
+class ProgramSummaryAPITestCase(TestCase):
+    """Vue détail programme : /api/crud/programs/<id>/summary/ (grille lots + stats)."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from parcelaire.models import (
+            Customer, Parcel, ParcelDataset, Reservation, SaleFile,
+        )
+        cls.viewer = User.objects.create_user("gviewer", password="pwd")
+        cls.fin = User.objects.create_user("gfin", password="pwd")
+        cls.fin.user_permissions.add(Permission.objects.get(
+            content_type__app_label="parcelaire", codename="view_financial_data"))
+        cls.country = Country.objects.create(nom="Côte d'Ivoire", code="CI")
+        cls.project = ProjetImmobilier.objects.create(code="PG", nom="Kaydan", country=cls.country)
+        cls.program = RealEstateProgram.objects.create(
+            code="KAY001", name="Callisto", slug="callisto", country=cls.country,
+            project=cls.project, total_area_m2=191339, estimated_lot_count=589)
+        cls.ds = ParcelDataset.objects.create(name="DS", program=cls.program)
+        # 4 lots : 1 vendu, 1 réservé, 2 disponibles.
+        cls.lots = [Parcel.objects.create(program=cls.program, dataset=cls.ds,
+                                          lot_number=str(i), official_area_m2=400) for i in range(1, 5)]
+        cls.customer = Customer.objects.create(customer_type="INDIVIDUAL", last_name="Koné")
+        SaleFile.objects.create(sale_number="V-G-1", program=cls.program, customer=cls.customer,
+                                parcel=cls.lots[0], agreed_price=50_000_000, net_price=50_000_000)
+        Reservation.objects.create(reservation_number="R-G-1", program=cls.program,
+                                   customer=cls.customer, parcel=cls.lots[1],
+                                   reservation_date=date(2026, 1, 5), reserved_price=50_000_000)
+        cls.url = f"/api/crud/programs/{cls.program.id}/summary/"
+
+    def test_requires_auth(self):
+        self.assertEqual(self.client.get(self.url).status_code, 403)
+
+    def test_grid_and_effective_status(self):
+        self.client.force_login(self.viewer)
+        d = self.client.get(self.url).json()
+        self.assertEqual(d["program"]["code"], "KAY001")
+        self.assertEqual(d["stats"]["total_parcels"], 4)
+        self.assertEqual(d["stats"]["sold"], 1)        # déduit de la vente
+        self.assertEqual(d["stats"]["reserved"], 1)    # déduit de la réservation
+        self.assertEqual(d["stats"]["available"], 2)
+        self.assertEqual(len(d["lots"]), 4)
+        statuses = {lot["lot"]: lot["status"] for lot in d["lots"]}
+        self.assertEqual(statuses["1"], "SOLD")
+        self.assertEqual(statuses["2"], "RESERVED")
+        self.assertEqual(d["stats"]["ca_total"], "Masqué")  # sans droit financier
+
+    def test_financial_user_sees_ca(self):
+        self.client.force_login(self.fin)
+        d = self.client.get(self.url).json()
+        self.assertNotEqual(d["stats"]["ca_total"], "Masqué")

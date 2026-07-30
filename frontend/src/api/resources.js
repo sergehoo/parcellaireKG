@@ -46,6 +46,11 @@ export function getParcelSummary(id, { signal } = {}) {
   return request(`${BASE}/parcels/${id}/summary/`, { signal })
 }
 
+// Vue détail d'un programme : stats commerciales + grille des lots.
+export function getProgramSummary(id, { signal } = {}) {
+  return request(`${BASE}/programs/${id}/summary/`, { signal })
+}
+
 export function getDashboard({ signal } = {}) {
   return request('/api/dashboard/', { signal })
 }
