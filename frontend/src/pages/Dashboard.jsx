@@ -161,6 +161,11 @@ export default function Dashboard() {
           <div>
             <h2 className="font-semibold text-slate-900">Clients à risque — Indice de Déséquilibre Construction / Paiement</h2>
             <p className="text-xs text-slate-500">Paiement en avance sur l'avancement des travaux — {data.at_risk_total} dossier(s) critiques ou élevés</p>
+            {(data.data_quality_count > 0 || data.untracked_count > 0) && (
+              <p className="mt-0.5 text-xs text-slate-400">
+                Exclus du risque : {data.data_quality_count || 0} à vérifier (paiement &gt; prix net) · {data.untracked_count || 0} chantier(s) non suivi(s)
+              </p>
+            )}
           </div>
           <Link to="/pilotage/risques" className="shrink-0 text-sm font-medium text-orange-600 hover:underline">Tout voir →</Link>
         </div>

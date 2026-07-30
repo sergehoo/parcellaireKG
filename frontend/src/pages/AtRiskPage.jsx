@@ -13,6 +13,8 @@ const LEVEL_OPTS = [
   { value: 'MOYEN', label: 'Moyen' },
   { value: 'FAIBLE', label: 'Conforme' },
   { value: 'INFO', label: 'Construction en avance' },
+  { value: 'A_VERIFIER', label: 'À vérifier (données)' },
+  { value: 'NON_SUIVI', label: 'Chantier non suivi' },
 ]
 
 export default function AtRiskPage() {
