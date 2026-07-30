@@ -9,6 +9,7 @@ import NotificationCenter from './pages/NotificationCenter'
 import ResourceListPage from './pages/ResourceListPage'
 import ResourceDetailPage from './pages/ResourceDetailPage'
 import CustomerDetailPage from './pages/CustomerDetailPage'
+import ParcelDetailPage from './pages/ParcelDetailPage'
 import ResourceFormPage from './pages/ResourceFormPage'
 import OrthophotoList from './pages/OrthophotoList'
 import OrthophotoUpload from './pages/OrthophotoUpload'
@@ -42,6 +43,7 @@ export default function App() {
             <Route path="/r/:resource" element={<ResourceListPage />} />
             <Route path="/r/:resource/new" element={<ResourceFormPage />} />
             <Route path="/r/customers/:id" element={<CustomerDetailPage />} />
+            <Route path="/r/parcels/:id" element={<ParcelDetailPage />} />
             <Route path="/r/:resource/:id" element={<ResourceDetailPage />} />
             <Route path="/r/:resource/:id/edit" element={<ResourceFormPage />} />
 

@@ -357,6 +357,104 @@ class ParcelViewSet(BaseReadViewSet):
     ordering_fields = ["lot_number", "created_at"]
     ordering = ["lot_number", "id"]
 
+    @action(detail=True, methods=["get"])
+    def summary(self, request, pk=None):
+        """Vue détaillée d'une parcelle : client rattaché (via la vente),
+        infos de paiement (payé/%/IDCP), historique, réservation, construction.
+        Montants masqués sans `view_financial_data` ; PII sans `view_patient_data`."""
+        from decimal import Decimal
+
+        from django.db.models import Q, Sum
+        from django.db.models.functions import Coalesce
+
+        from parcelaire.api.analytics import classify_row, pct
+        from parcelaire.models import Payment
+
+        parcel = self.get_object()
+        user = request.user
+        can_fin = user_can_view_financial_data(user)
+        can_pii = user_can_view_patient_data(user)
+
+        def money(v):
+            return fmt_money(v) if can_fin else MASKED
+
+        def geom_present():
+            return getattr(parcel, "geometry", None) is not None
+
+        # Avancement construction (max des chantiers de la parcelle).
+        con_projects = list(parcel.construction_projects.all())
+        construction_tracked = len(con_projects) > 0
+        con_pct = round(max([float(c.progress_percent or 0) for c in con_projects], default=0.0), 1)
+
+        # Vente active = le « client rattaché ».
+        sale = (parcel.sales.filter(is_active=True).select_related("customer")
+                .annotate(paid=Coalesce(Sum("payments__amount",
+                                            filter=Q(payments__status="CONFIRMED")), Decimal("0")))
+                .order_by("-sale_date", "-id").first())
+
+        customer_block = sale_block = idcp_block = None
+        payment_rows = []
+        if sale is not None:
+            net = float(sale.net_price or 0)
+            paid = float(sale.paid or 0)
+            pay_pct = pct(paid, net)
+            overpaid = net > 0 and paid > net
+            idcp = round(pay_pct - con_pct, 1)
+            level, reason = classify_row(idcp, net, overpaid, construction_tracked)
+            sale_block = {
+                "id": sale.id, "sale_number": sale.sale_number,
+                "status": getattr(sale, "status", None),
+                "agreed_price": money(sale.agreed_price), "net_price": money(sale.net_price),
+                "paid": money(sale.paid), "payment_pct": pay_pct, "overpaid": overpaid,
+                "sales_agent": sale.sales_agent or None,
+                "sale_date": sale.sale_date.isoformat() if sale.sale_date else None,
+            }
+            idcp_block = {"payment_pct": pay_pct, "construction_pct": con_pct, "idcp": idcp,
+                          "level": level, "reason": reason,
+                          "construction_tracked": construction_tracked, "overpaid": overpaid}
+            if sale.customer_id:
+                cu = sale.customer
+                customer_block = {
+                    "id": cu.id,
+                    "display_name": str(cu) if can_pii else f"Client #{cu.id}",
+                    "customer_type": cu.get_customer_type_display(),
+                    "phone": (cu.phone if can_pii else MASKED) if cu.phone else None,
+                    "email": (cu.email if can_pii else MASKED) if cu.email else None,
+                }
+            payments = (Payment.objects.filter(sale_file=sale, is_active=True)
+                        .order_by("-payment_date", "-id")[:50])
+            payment_rows = [{
+                "id": p.id, "date": p.payment_date.isoformat() if p.payment_date else None,
+                "amount": money(p.amount), "method": p.get_payment_method_display(),
+                "status": p.status,
+            } for p in payments]
+
+        res = (parcel.reservations.filter(is_active=True).select_related("customer")
+               .order_by("-reservation_date", "-id").first())
+        reservation_block = None
+        if res is not None:
+            reservation_block = {
+                "id": res.id, "reservation_number": getattr(res, "reservation_number", None),
+                "status": getattr(res, "status", None),
+                "customer": (str(res.customer) if (res.customer_id and can_pii)
+                             else (f"Client #{res.customer_id}" if res.customer_id else None)),
+                "reserved_price": money(getattr(res, "reserved_price", None)),
+                "reservation_date": (res.reservation_date.isoformat()
+                                     if getattr(res, "reservation_date", None) else None),
+            }
+
+        return Response({
+            "parcel": ParcelSerializer(parcel, context={"request": request}).data,
+            "has_geometry": geom_present(),
+            "customer": customer_block,
+            "sale": sale_block,
+            "idcp": idcp_block,
+            "payments": payment_rows,
+            "reservation": reservation_block,
+            "construction": {"tracked": construction_tracked, "progress_pct": con_pct},
+            "can_view_financial": can_fin,
+        })
+
 
 class _NotesMaskMixin:
     """Masque `notes` (PII potentiel) sans `view_patient_data` — parité avec
