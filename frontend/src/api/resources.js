@@ -41,6 +41,11 @@ export function getCustomerSummary(id, { signal } = {}) {
   return request(`${BASE}/customers/${id}/summary/`, { signal })
 }
 
+// Vue détail d'une parcelle : client rattaché, vente, paiements, IDCP.
+export function getParcelSummary(id, { signal } = {}) {
+  return request(`${BASE}/parcels/${id}/summary/`, { signal })
+}
+
 export function getDashboard({ signal } = {}) {
   return request('/api/dashboard/', { signal })
 }

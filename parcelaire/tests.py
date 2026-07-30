@@ -1595,3 +1595,61 @@ class CustomerSummaryAPITestCase(TestCase):
         self.assertEqual(data["sales"][0]["net_price"], "Masqué")
         self.assertEqual(data["sales"][0]["payment_pct"], 206.4)   # ratio non masqué
         self.assertTrue(data["sales"][0]["overpaid"])
+
+
+class ParcelSummaryAPITestCase(TestCase):
+    """Vue détail parcelle : /api/crud/parcels/<id>/summary/ (client + paiements)."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from parcelaire.models import (
+            ConstructionProject, Customer, Parcel, ParcelDataset, Payment, SaleFile,
+        )
+        cls.viewer = User.objects.create_user("pviewer", password="pwd")
+        cls.fin = User.objects.create_user("pfin", password="pwd")
+        cls.fin.user_permissions.add(Permission.objects.get(
+            content_type__app_label="parcelaire", codename="view_financial_data"))
+        cls.pii = User.objects.create_user("ppii", password="pwd")
+        cls.pii.user_permissions.add(*Permission.objects.filter(
+            content_type__app_label="parcelaire",
+            codename__in=["view_financial_data", "view_patient_data"]))
+        cls.country = Country.objects.create(nom="Côte d'Ivoire", code="CI")
+        cls.project = ProjetImmobilier.objects.create(code="PP", nom="Projet", country=cls.country)
+        cls.program = RealEstateProgram.objects.create(
+            code="PRGP", name="Jardins d'Ahoué", slug="jardins", country=cls.country, project=cls.project)
+        cls.ds = ParcelDataset.objects.create(name="DS", program=cls.program)
+        cls.parcel = Parcel.objects.create(program=cls.program, dataset=cls.ds,
+                                           lot_number="1141", official_area_m2=419)
+        ConstructionProject.objects.create(parcel=cls.parcel, code="CPP", title="C", progress_percent=20)
+        cls.customer = Customer.objects.create(
+            customer_type="INDIVIDUAL", first_name="Awa", last_name="Koné", phone="0102030405")
+        cls.sale = SaleFile.objects.create(
+            sale_number="V-P-1", program=cls.program, customer=cls.customer, parcel=cls.parcel,
+            agreed_price=100_000_000, net_price=100_000_000, status="OPEN")
+        Payment.objects.create(payment_number="PP-1", sale_file=cls.sale, amount=60_000_000,
+                               status="CONFIRMED", payment_method="BANK",
+                               payment_date=date(2026, 1, 10))
+        cls.url = f"/api/crud/parcels/{cls.parcel.id}/summary/"
+
+    def test_requires_auth(self):
+        self.assertEqual(self.client.get(self.url).status_code, 403)
+
+    def test_shows_customer_and_payments_masked_pii_and_money(self):
+        self.client.force_login(self.viewer)  # ni financier ni PII
+        d = self.client.get(self.url).json()
+        self.assertEqual(d["parcel"]["lot_number"], "1141")
+        self.assertIsNotNone(d["customer"])
+        self.assertEqual(d["customer"]["display_name"], f"Client #{self.customer.id}")  # PII masquée
+        self.assertEqual(d["sale"]["paid"], "Masqué")                                    # montant masqué
+        self.assertEqual(d["idcp"]["payment_pct"], 60.0)                                 # ratio visible
+        self.assertEqual(d["idcp"]["construction_pct"], 20.0)
+        self.assertEqual(d["idcp"]["idcp"], 40.0)
+        self.assertEqual(d["idcp"]["level"], "CRITIQUE")
+        self.assertEqual(len(d["payments"]), 1)
+
+    def test_full_access_reveals_name_and_amounts(self):
+        self.client.force_login(self.pii)
+        d = self.client.get(self.url).json()
+        self.assertIn("Koné", d["customer"]["display_name"])
+        self.assertNotEqual(d["sale"]["paid"], "Masqué")
+        self.assertEqual(d["customer"]["phone"], "0102030405")
