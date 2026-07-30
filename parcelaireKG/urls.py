@@ -38,7 +38,8 @@ from parcelaire.views import HomeView, MapView, ParcellaireDashboardView, Projet
     PropertyAssetDetailView, PropertyAssetUpdateView, MapCommercialView, \
     OrthophotoListView, OrthophotoCreateView, OrthophotoDetailView, OrthophotoStatusAPIView, \
     OrthophotoRetryView, OrthophotoSetCurrentView, OrthophotoDeleteTilesView, OrthophotoDownloadLogsView, \
-    OrthophotoUploadInitView, OrthophotoUploadCompleteView, OrthophotoUploadAbortView
+    OrthophotoUploadInitView, OrthophotoUploadCompleteView, OrthophotoUploadAbortView, \
+    OrthophotoUploadPartUrlView
 
 from django.contrib.auth.decorators import login_required
 from django.views.generic import RedirectView
@@ -211,6 +212,7 @@ urlpatterns = [
                   path("orthophotos/upload/init/", OrthophotoUploadInitView.as_view(), name="orthophoto_upload_init"),
                   path("orthophotos/upload/complete/", OrthophotoUploadCompleteView.as_view(), name="orthophoto_upload_complete"),
                   path("orthophotos/upload/abort/", OrthophotoUploadAbortView.as_view(), name="orthophoto_upload_abort"),
+                  path("orthophotos/upload/part-url/", OrthophotoUploadPartUrlView.as_view(), name="orthophoto_upload_part_url"),
               ]
 
 # -------------------------------------------------------------------

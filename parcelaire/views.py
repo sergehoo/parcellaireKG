@@ -1954,3 +1954,45 @@ class OrthophotoUploadAbortView(_OrthophotoAddPermMixin, _OrthophotoBaseMixin, V
         ortho.error_message = "Upload annulé par l'utilisateur."
         ortho.save(update_fields=["status", "error_message", "updated_at"])
         return JsonResponse({"ok": True})
+
+
+@method_decorator(require_POST, name="dispatch")
+class OrthophotoUploadPartUrlView(_OrthophotoAddPermMixin, _OrthophotoBaseMixin, View):
+    """
+    POST /orthophotos/upload/part-url/  {orthophoto_id, part_number}
+    Renvoie une URL signée FRAÎCHE pour une part donnée. Permet au navigateur de
+    ré-essayer une part après une erreur réseau ou une URL expirée, sans tout
+    relancer (résilience de l'upload multipart).
+    """
+
+    def post(self, request, *args, **kwargs):
+        try:
+            payload = _json.loads(request.body.decode("utf-8") or "{}")
+        except _json.JSONDecodeError as exc:
+            return JsonResponse({"error": f"JSON invalide : {exc}"}, status=400)
+
+        ortho = ProgramOrthophoto.objects.filter(pk=payload.get("orthophoto_id")).first()
+        if not ortho:
+            return JsonResponse({"error": "Orthophoto introuvable."}, status=404)
+
+        meta = (ortho.metadata or {}).get("s3_upload") or {}
+        if not (meta.get("key") and meta.get("upload_id")):
+            return JsonResponse({"error": "Aucun upload en cours pour cette orthophoto."},
+                                status=409)
+        if meta.get("finalized_at"):
+            return JsonResponse({"error": "Upload déjà finalisé."}, status=409)
+
+        try:
+            part_number = int(payload.get("part_number"))
+        except (TypeError, ValueError):
+            return JsonResponse({"error": "part_number invalide."}, status=400)
+        nb_parts = int(meta.get("nb_parts") or 0)
+        if part_number < 1 or (nb_parts and part_number > nb_parts):
+            return JsonResponse({"error": "part_number hors plage."}, status=400)
+
+        try:
+            url = _s3.presign_part_url(meta["key"], meta["upload_id"], part_number)
+        except Exception as exc:  # noqa: BLE001
+            _logger_orth.exception("Re-presign part %s KO pour ortho %s", part_number, ortho.pk)
+            return JsonResponse({"error": f"Signature indisponible : {exc}"}, status=502)
+        return JsonResponse({"part_number": part_number, "url": url})

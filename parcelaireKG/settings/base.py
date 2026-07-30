@@ -184,9 +184,10 @@ S3_REGION = os.environ.get("S3_REGION", "us-east-1")
 S3_PRESIGNED_EXPIRY = int(os.environ.get("S3_PRESIGNED_EXPIRY", "7200"))  # 2 h
 
 # Taille d'une "part" multipart S3 (max 5 GiB, min 5 MiB).
-# 50 MiB est un bon compromis : assez gros pour limiter le nb de PUT,
-# assez petit pour passer sous tous les proxies.
-S3_MULTIPART_PART_SIZE = int(os.environ.get("S3_MULTIPART_PART_SIZE", str(50 * 1024 * 1024)))
+# 16 MiB : des PUT plus courts (moins d'expositions aux timeouts/coupures des
+# proxies), des retries moins coûteux et un meilleur pipelining (plus de parts
+# en parallèle) → upload plus rapide ET plus résilient. Ajustable par env.
+S3_MULTIPART_PART_SIZE = int(os.environ.get("S3_MULTIPART_PART_SIZE", str(16 * 1024 * 1024)))
 
 # =====================================================================
 # Content Security Policy (django-csp 4.x)
