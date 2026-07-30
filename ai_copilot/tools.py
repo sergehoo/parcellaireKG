@@ -609,10 +609,23 @@ def _tool_customers_by_payment_ratio(user, args, context):
         min_pct = float(args.get("min_percent") or 70)
     except (TypeError, ValueError):
         min_pct = 70.0
-    sales = (SaleFile.objects.filter(is_active=True)
-             .values("customer").annotate(total=Sum("net_price")))
-    paid = (Payment.objects.filter(is_active=True, status="CONFIRMED")
-            .values("sale_file__customer").annotate(paid=Sum("amount")))
+
+    # Filtre programme optionnel : scope À LA FOIS les ventes et les paiements sur
+    # ce programme (« soldé sur Kotibe » = ventes Kotibe entièrement payées).
+    program = None
+    if args.get("program_id") or (args.get("program") or "").strip():
+        program = _resolve_program(args.get("program_id"), (args.get("program") or "").strip())
+        if program is None:
+            return ToolResult(content={"error": "Programme introuvable."})
+
+    sales_qs = SaleFile.objects.filter(is_active=True)
+    pay_qs = Payment.objects.filter(is_active=True, status="CONFIRMED")
+    if program is not None:
+        sales_qs = sales_qs.filter(program=program)
+        pay_qs = pay_qs.filter(sale_file__program=program)
+
+    sales = sales_qs.values("customer").annotate(total=Sum("net_price"))
+    paid = pay_qs.values("sale_file__customer").annotate(paid=Sum("amount"))
     paid_map = {r["sale_file__customer"]: (r["paid"] or 0) for r in paid}
     rows = []
     for r in sales:
@@ -628,7 +641,9 @@ def _tool_customers_by_payment_ratio(user, args, context):
     cust = {c.id: c for c in Customer.objects.filter(id__in=[cid for cid, _ in rows])}
     results = [{"customer": (str(cust[cid]) if can_pii and cid in cust else f"Client #{cid}"),
                 "paid_percent": ratio} for cid, ratio in rows]
-    return ToolResult(content={"min_percent": min_pct, "count": len(results), "results": results})
+    return ToolResult(content={"program": program.name if program else "tous",
+                               "min_percent": min_pct, "settled": min_pct >= 100,
+                               "count": len(results), "results": results})
 
 
 # =====================================================================
@@ -890,12 +905,19 @@ def register_builtins():
     ))
     register(ToolSpec(
         name="customers_by_payment_ratio",
-        description="Clients ayant payé au moins X % de leurs ventes. Ex. « clients "
-                    "ayant payé plus de 70 % ». Réservé au droit financier.",
+        description="Clients ayant payé au moins X % de leurs ventes, éventuellement "
+                    "sur un PROGRAMME donné. Pour « clients ayant SOLDÉ » (paiement "
+                    "complet), utiliser min_percent=100. Ex. « clients ayant soldé leurs "
+                    "paiements sur Kotibe » → program=Kotibe, min_percent=100. "
+                    "Réservé au droit financier.",
         parameters={
             "type": "object",
-            "properties": {"min_percent": {"type": "number",
-                           "description": "Seuil de paiement en % (défaut 70)."}},
+            "properties": {
+                "min_percent": {"type": "number",
+                                "description": "Seuil de paiement en % (défaut 70 ; 100 = soldé)."},
+                "program": {"type": "string", "description": "Restreindre à un programme (nom)."},
+                "program_id": {"type": "integer"},
+            },
         },
         permission="parcelaire.view_financial_data",
         handler=_tool_customers_by_payment_ratio,
