@@ -21,6 +21,7 @@ from django.views.decorators.csrf import csrf_protect
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
 from rest_framework import serializers, viewsets
+from rest_framework.decorators import action
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated, SAFE_METHODS
@@ -223,6 +224,107 @@ class CustomerViewSet(BaseCrudViewSet):
     filterset_fields = ["customer_type", "country"]
     ordering_fields = ["last_name", "company_name", "created_at"]
     ordering = ["-created_at"]
+
+    @action(detail=True, methods=["get"])
+    def summary(self, request, pk=None):
+        """Vue 360° d'un client : dossiers de vente + lots, réservations,
+        historique des paiements, totaux financiers. Montants masqués sans
+        `view_financial_data` ; PII de contact masquée sans `view_patient_data`."""
+        from decimal import Decimal
+
+        from django.db.models import Q, Sum
+        from django.db.models.functions import Coalesce
+
+        from parcelaire.models import Payment
+
+        customer = self.get_object()
+        user = request.user
+        can_fin = user_can_view_financial_data(user)
+
+        def money(v):
+            return fmt_money(v) if can_fin else MASKED
+
+        # --- Dossiers de vente + lots ---
+        sales = (customer.sales.filter(is_active=True)
+                 .select_related("program", "parcel")
+                 .annotate(paid=Coalesce(Sum("payments__amount",
+                                             filter=Q(payments__status="CONFIRMED")), Decimal("0")))
+                 .order_by("-sale_date", "-id"))
+        tot_agreed = tot_net = tot_paid = Decimal("0")
+        sale_rows = []
+        for s in sales:
+            net = s.net_price or Decimal("0")
+            paid = s.paid or Decimal("0")
+            tot_agreed += s.agreed_price or Decimal("0")
+            tot_net += net
+            tot_paid += paid
+            pay_pct = round(float(paid) / float(net) * 100, 1) if net else 0.0
+            sale_rows.append({
+                "id": s.id,
+                "sale_number": s.sale_number,
+                "program": s.program.name if s.program_id else None,
+                "lot": ((s.parcel.lot_number or s.parcel.parcel_code or f"#{s.parcel_id}")
+                        if s.parcel_id else None),
+                "parcel_id": s.parcel_id,
+                "status": getattr(s, "status", None),
+                "agreed_price": money(s.agreed_price),
+                "net_price": money(net),
+                "paid": money(paid),
+                "payment_pct": pay_pct,
+                "overpaid": bool(net and paid > net),  # signal qualité de données
+                "sale_date": s.sale_date.isoformat() if s.sale_date else None,
+            })
+
+        # --- Réservations ---
+        reservations = []
+        for r in (customer.reservations.filter(is_active=True)
+                  .select_related("program", "parcel").order_by("-reservation_date", "-id")):
+            reservations.append({
+                "id": r.id,
+                "reservation_number": getattr(r, "reservation_number", None),
+                "program": r.program.name if r.program_id else None,
+                "lot": ((r.parcel.lot_number or r.parcel.parcel_code or f"#{r.parcel_id}")
+                        if getattr(r, "parcel_id", None) else None),
+                "status": getattr(r, "status", None),
+                "reserved_price": money(getattr(r, "reserved_price", None)),
+                "reservation_date": (r.reservation_date.isoformat()
+                                     if getattr(r, "reservation_date", None) else None),
+                "expiry_date": (r.expiry_date.isoformat()
+                                if getattr(r, "expiry_date", None) else None),
+            })
+
+        # --- Historique des paiements (tous dossiers du client) ---
+        payments = (Payment.objects.filter(sale_file__customer=customer, is_active=True)
+                    .select_related("sale_file").order_by("-payment_date", "-id")[:100])
+        payment_rows = [{
+            "id": p.id,
+            "date": p.payment_date.isoformat() if p.payment_date else None,
+            "amount": money(p.amount),
+            "method": p.get_payment_method_display(),
+            "status": p.status,
+            "sale_number": p.sale_file.sale_number if p.sale_file_id else None,
+        } for p in payments]
+
+        balance = tot_net - tot_paid
+        totals = {
+            "sales_count": len(sale_rows),
+            "reservations_count": len(reservations),
+            "payments_count": len(payment_rows),
+            "documents_count": customer.documents.count() if hasattr(customer, "documents") else 0,
+            "total_agreed": money(tot_agreed),
+            "total_net": money(tot_net),
+            "total_paid": money(tot_paid),
+            "balance": money(balance),
+            "payment_pct": round(float(tot_paid) / float(tot_net) * 100, 1) if tot_net else 0.0,
+        }
+        return Response({
+            "customer": CustomerSerializer(customer, context={"request": request}).data,
+            "totals": totals,
+            "sales": sale_rows,
+            "reservations": reservations,
+            "payments": payment_rows,
+            "can_view_financial": can_fin,
+        })
 
 
 # =====================================================================

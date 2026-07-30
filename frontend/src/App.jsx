@@ -8,6 +8,7 @@ import AtRiskPage from './pages/AtRiskPage'
 import NotificationCenter from './pages/NotificationCenter'
 import ResourceListPage from './pages/ResourceListPage'
 import ResourceDetailPage from './pages/ResourceDetailPage'
+import CustomerDetailPage from './pages/CustomerDetailPage'
 import ResourceFormPage from './pages/ResourceFormPage'
 import OrthophotoList from './pages/OrthophotoList'
 import OrthophotoUpload from './pages/OrthophotoUpload'
@@ -40,6 +41,7 @@ export default function App() {
             {/* CRUD générique piloté par le registre config/resources.js */}
             <Route path="/r/:resource" element={<ResourceListPage />} />
             <Route path="/r/:resource/new" element={<ResourceFormPage />} />
+            <Route path="/r/customers/:id" element={<CustomerDetailPage />} />
             <Route path="/r/:resource/:id" element={<ResourceDetailPage />} />
             <Route path="/r/:resource/:id/edit" element={<ResourceFormPage />} />
 

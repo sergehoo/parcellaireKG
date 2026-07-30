@@ -25,6 +25,19 @@ def build_context_summary(user, client_context) -> str:
             label = pc.lot_number or pc.parcel_code or f"#{pc.id}"
             parts.append(f"parcelle sélectionnée='{label}' (id={pc.id})")
 
+    customer_id = client_context.get("customer_id")
+    if customer_id:
+        from parcelaire.api.views import user_can_view_patient_data
+        from parcelaire.models import Customer
+        cu = Customer.objects.filter(is_active=True, pk=customer_id).first()
+        if cu:
+            # Le nom du client n'est révélé qu'avec le droit PII ; sinon on
+            # signale seulement qu'une fiche client est ouverte (id).
+            if user_can_view_patient_data(user):
+                parts.append(f"client sélectionné='{cu}' (id={cu.id})")
+            else:
+                parts.append(f"fiche client ouverte (id={cu.id}, nom masqué)")
+
     # bbox/layers viennent du client : on NORMALISE avant d'interpoler dans le
     # prompt système (jamais de texte libre client dans le prompt de plus haute
     # priorité — évite un self-jailbreak du ton de l'assistant).

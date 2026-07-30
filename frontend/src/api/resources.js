@@ -35,6 +35,12 @@ export function getOptions() {
   return request(`${BASE}/options/`)
 }
 
+// Vue 360° d'un client : dossiers/lots, réservations, historique de paiements,
+// totaux (montants masqués côté serveur selon les droits).
+export function getCustomerSummary(id, { signal } = {}) {
+  return request(`${BASE}/customers/${id}/summary/`, { signal })
+}
+
 export function getDashboard({ signal } = {}) {
   return request('/api/dashboard/', { signal })
 }

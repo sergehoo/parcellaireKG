@@ -33,7 +33,7 @@ class CopilotChatAPIView(APIView):
             client_context = {}
         # Whitelist des clés + borne de taille (anti-amplification de tokens/coût).
         client_context = {k: client_context[k] for k in
-                          ("route", "program_id", "parcel_id", "bbox", "layers")
+                          ("route", "program_id", "parcel_id", "customer_id", "bbox", "layers")
                           if k in client_context}
         if len(json.dumps(client_context, default=str)) > 4000:
             client_context = {"route": str(client_context.get("route", ""))[:200]}

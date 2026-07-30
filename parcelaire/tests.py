@@ -1491,3 +1491,61 @@ class AuthApiTests(TestCase):
                              {'username': 'agent', 'password': 'Nouveau!2026x'},
                              content_type='application/json')
         self.assertEqual(r.status_code, 200)
+
+
+class CustomerSummaryAPITestCase(TestCase):
+    """Vue 360° client : /api/crud/customers/<id>/summary/ (agrégats + masquage)."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from django.utils import timezone
+
+        from parcelaire.models import (
+            Customer, Parcel, ParcelDataset, Payment, SaleFile,
+        )
+        cls.viewer = User.objects.create_user("viewer360", password="pwd")  # sans droit financier
+        cls.finuser = User.objects.create_user("fin360", password="pwd")
+        cls.finuser.user_permissions.add(Permission.objects.get(
+            content_type__app_label="parcelaire", codename="view_financial_data"))
+        cls.country = Country.objects.create(nom="Côte d'Ivoire", code="CI")
+        cls.project = ProjetImmobilier.objects.create(code="P360", nom="Projet", country=cls.country)
+        cls.program = RealEstateProgram.objects.create(
+            code="PRG360", name="Bo Reflets", slug="bo-reflets",
+            country=cls.country, project=cls.project)
+        cls.customer = Customer.objects.create(
+            customer_type="INDIVIDUAL", first_name="Esyca", last_name="SCI")
+        ds = ParcelDataset.objects.create(name="DS", program=cls.program)
+        parcel = Parcel.objects.create(dataset=ds, program=cls.program, lot_number="11")
+        cls.sale = SaleFile.objects.create(
+            sale_number="V-360-1", program=cls.program, parcel=parcel, customer=cls.customer,
+            agreed_price=176800000, net_price=176800000, sale_date=timezone.now().date())
+        Payment.objects.create(  # sur-paiement réel observé en prod (206,4 %)
+            payment_number="P-360-1", sale_file=cls.sale, amount=365000000,
+            status="CONFIRMED", payment_method="BANK", payment_date=timezone.now().date())
+        cls.url = f"/api/crud/customers/{cls.customer.id}/summary/"
+
+    def test_requires_authentication(self):
+        self.assertEqual(self.client.get(self.url).status_code, 403)
+
+    def test_summary_financial_user_sees_amounts_and_overpaid_flag(self):
+        self.client.force_login(self.finuser)
+        r = self.client.get(self.url)
+        self.assertEqual(r.status_code, 200)
+        data = r.json()
+        self.assertEqual(data["totals"]["sales_count"], 1)
+        self.assertEqual(data["totals"]["payments_count"], 1)
+        sale = data["sales"][0]
+        self.assertEqual(sale["lot"], "11")
+        self.assertTrue(sale["overpaid"])                 # 365M > 176,8M
+        self.assertEqual(sale["payment_pct"], 206.4)
+        self.assertNotEqual(data["totals"]["total_paid"], "Masqué")
+
+    def test_summary_masks_money_without_financial_permission(self):
+        self.client.force_login(self.viewer)
+        r = self.client.get(self.url)
+        self.assertEqual(r.status_code, 200)
+        data = r.json()
+        self.assertEqual(data["totals"]["total_paid"], "Masqué")
+        self.assertEqual(data["sales"][0]["net_price"], "Masqué")
+        self.assertEqual(data["sales"][0]["payment_pct"], 206.4)   # ratio non masqué
+        self.assertTrue(data["sales"][0]["overpaid"])
