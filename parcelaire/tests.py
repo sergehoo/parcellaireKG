@@ -484,6 +484,7 @@ class UploadInitFlowTests(OrthophotoAPITestCase):
         base.update(over)
         return base
 
+    @override_settings(S3_MULTIPART_PART_SIZE=50 * 1024 * 1024)
     @mock.patch("parcelaire.services.storage.initiate_multipart_upload",
                 return_value="UPLOAD-ID-123")
     def test_init_succes_cree_session(self, initiate, *_):
@@ -493,7 +494,7 @@ class UploadInitFlowTests(OrthophotoAPITestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(data["upload_id"], "UPLOAD-ID-123")
-        self.assertEqual(len(data["parts"]), 3)  # ceil(120/50)
+        self.assertEqual(len(data["parts"]), 3)  # ceil(120/50) avec parts de 50 Mo
         ortho = ProgramOrthophoto.objects.get(pk=data["orthophoto_id"])
         self.assertEqual(ortho.status, "PENDING")
         self.assertEqual(ortho.metadata["s3_upload"]["upload_id"], "UPLOAD-ID-123")
@@ -592,6 +593,35 @@ class UploadCompleteAbortTests(OrthophotoAPITestCase):
         response = self.client.post(
             reverse("orthophoto_upload_abort"),
             {"orthophoto_id": self.uploading.pk},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 403)
+
+    @mock.patch("parcelaire.services.storage.presign_part_url",
+                return_value="https://s3.example/part?sig=fresh")
+    def test_part_url_represigns_active_part(self, presign):
+        response = self.client.post(
+            reverse("orthophoto_upload_part_url"),
+            {"orthophoto_id": self.uploading.pk, "part_number": 1},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["url"], "https://s3.example/part?sig=fresh")
+        presign.assert_called_once_with("orthophotos/sources/50/survol.tif", "UP-9", 1)
+
+    def test_part_url_rejects_out_of_range(self):
+        response = self.client.post(
+            reverse("orthophoto_upload_part_url"),
+            {"orthophoto_id": self.uploading.pk, "part_number": 99},  # nb_parts=1
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_part_url_refuse_sans_permission_add(self):
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse("orthophoto_upload_part_url"),
+            {"orthophoto_id": self.uploading.pk, "part_number": 1},
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 403)

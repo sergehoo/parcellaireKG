@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { uploadAbort, uploadComplete, uploadInit } from '../api/orthophotos'
+import { uploadAbort, uploadComplete, uploadInit, uploadPartUrl } from '../api/orthophotos'
 import { uploadFileMultipart } from '../lib/uploadMultipart'
 import useReferenceData from '../hooks/useReferenceData'
 import FileDropzone from '../components/FileDropzone'
@@ -85,6 +85,11 @@ export default function OrthophotoUpload() {
       const parts = await uploadFileMultipart(file, session, {
         signal: controller.signal,
         onProgress: (sent) => setSentBytes(sent),
+        // Re-signe une part après erreur réseau / URL expirée (résilience).
+        refreshPartUrl: async (partNumber) => {
+          const r = await uploadPartUrl(session.orthophoto_id, partNumber)
+          return r.url
+        },
       })
 
       setPhase('finalizing')

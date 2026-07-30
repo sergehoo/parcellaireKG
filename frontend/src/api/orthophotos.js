@@ -61,3 +61,11 @@ export function uploadAbort(orthophotoId) {
     json: { orthophoto_id: orthophotoId },
   })
 }
+
+// URL signée FRAÎCHE pour une part (retry après erreur réseau / URL expirée).
+export function uploadPartUrl(orthophotoId, partNumber) {
+  return request('/orthophotos/upload/part-url/', {
+    method: 'POST',
+    json: { orthophoto_id: orthophotoId, part_number: partNumber },
+  })
+}
