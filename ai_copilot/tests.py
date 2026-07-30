@@ -285,14 +285,24 @@ class ReportingTests(CopilotBaseTestCase):
     def test_analytics_digest_masks_client_pii_without_permission(self):
         from django.utils import timezone
 
-        from parcelaire.models import Parcel, ParcelDataset, SaleFile
+        from parcelaire.models import (
+            ConstructionProject, Parcel, ParcelDataset, Payment, SaleFile,
+        )
         ds = ParcelDataset.objects.create(name="DS", program=self.program)
         parcel = Parcel.objects.create(dataset=ds, program=self.program, lot_number="L1")
-        SaleFile.objects.create(sale_number="V-PII-1", program=self.program,
-                                customer=self.customer, parcel=parcel,
-                                agreed_price=1000000, net_price=1000000,
-                                sales_agent="Jean Commercial",
-                                sale_date=timezone.now().date())
+        # Chantier suivi à 0 % + 90 % payé ⇒ IDCP +90 ⇒ CRITIQUE (risque RÉEL) :
+        # sans chantier suivi le dossier serait « non suivi » et exclu du top
+        # clients à risque depuis l'assainissement QW1.
+        ConstructionProject.objects.create(parcel=parcel, code="CP-PII", title="Chantier",
+                                           progress_percent=0)
+        sale = SaleFile.objects.create(sale_number="V-PII-1", program=self.program,
+                                       customer=self.customer, parcel=parcel,
+                                       agreed_price=1000000, net_price=1000000,
+                                       sales_agent="Jean Commercial",
+                                       sale_date=timezone.now().date())
+        Payment.objects.create(payment_number="PAY-PII-1", sale_file=sale, amount=900000,
+                               status="CONFIRMED", payment_method="BANK",
+                               payment_date=timezone.now().date())
         # Sans droit PII : aucun nom de client/commercial ne doit fuiter vers le LLM.
         res = executor.run_tool(self.user, "get_analytics_digest", {}, {})
         for r in res.content["clients_at_risk"]:

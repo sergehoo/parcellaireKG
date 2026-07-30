@@ -5,6 +5,9 @@ export const LEVELS = {
   MOYEN: { label: 'Moyen', bg: 'bg-amber-100', text: 'text-amber-700', dot: '#d97706' },
   FAIBLE: { label: 'Faible', bg: 'bg-emerald-100', text: 'text-emerald-700', dot: '#059669' },
   INFO: { label: 'Info', bg: 'bg-sky-100', text: 'text-sky-700', dot: '#0284c7' },
+  // Artefacts de données (hors classement de risque).
+  A_VERIFIER: { label: 'À vérifier', bg: 'bg-fuchsia-100', text: 'text-fuchsia-700', dot: '#c026d3' },
+  NON_SUIVI: { label: 'Non suivi', bg: 'bg-slate-100', text: 'text-slate-600', dot: '#64748b' },
 }
 
 export function levelStyle(key) {

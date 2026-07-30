@@ -121,6 +121,21 @@ def criticality(idcp):
     return ('INFO', 'Construction en avance sur les paiements')
 
 
+def classify_row(idcp, net, overpaid, construction_tracked):
+    """Niveau d'un dossier en séparant le RISQUE réel des artefacts de données.
+    - `A_VERIFIER` : paiements > prix net (paiement groupé mal ventilé / saisie)
+      ou prix net absent → l'IDCP n'est pas un risque mais une anomalie de saisie.
+    - `NON_SUIVI` : aucun avancement chantier renseigné → risque non évaluable.
+    - sinon : bandes IDCP classiques."""
+    if net <= 0:
+        return ('A_VERIFIER', 'Prix net non renseigné — indice non calculable')
+    if overpaid:
+        return ('A_VERIFIER', 'Paiements supérieurs au prix net — à vérifier (paiement groupé ou saisie)')
+    if not construction_tracked:
+        return ('NON_SUIVI', 'Avancement chantier non renseigné — risque non évaluable')
+    return criticality(idcp)
+
+
 def _construction_by_parcel():
     """parcel_id → avancement construction (%) le plus élevé."""
     out = {}
@@ -144,9 +159,11 @@ def _sale_rows(can_fin):
         net = float(s.net_price or 0)
         paid = float(s.paid or 0)
         pay_pct = pct(paid, net)
+        construction_tracked = s.parcel_id in con
         con_pct = round(con.get(s.parcel_id, 0.0), 1)
         idcp = round(pay_pct - con_pct, 1)
-        level, reason = criticality(idcp)
+        overpaid = net > 0 and paid > net
+        level, reason = classify_row(idcp, net, overpaid, construction_tracked)
         rows.append({
             'sale_id': s.id,
             'customer': str(s.customer) if s.customer_id else '—',
@@ -161,6 +178,8 @@ def _sale_rows(can_fin):
             'idcp': idcp,
             'level': level,
             'reason': reason,
+            'overpaid': overpaid,
+            'construction_tracked': construction_tracked,
             'site_manager': (getattr(s.parcel, 'metadata', {}) or {}).get('site_manager') or '—',
             'sales_agent': s.sales_agent or '—',
             'sale_date': s.sale_date.isoformat() if s.sale_date else None,
@@ -287,6 +306,10 @@ def _at_risk_rows(request, can_fin):
         min_idcp = None
     if level:
         rows = [r for r in rows if r['level'] == level]
+    else:
+        # Par défaut, la liste « à risque » exclut les artefacts de données
+        # (sur-paiements, chantiers non suivis) ; on les consulte via level=…
+        rows = [r for r in rows if r['level'] not in ('A_VERIFIER', 'NON_SUIVI')]
     if program:
         rows = [r for r in rows if str(r['program_id']) == str(program)]
     if min_idcp is not None:
@@ -341,6 +364,10 @@ class AnalyticsDashboardAPIView(APIView):
         idcp_avg = round(sum(idcp_vals) / len(idcp_vals), 1) if idcp_vals else 0.0
         crit_count = sum(1 for r in rows if r['level'] == 'CRITIQUE')
         high_count = sum(1 for r in rows if r['level'] == 'ELEVE')
+        # Artefacts de données, séparés du risque réel (cf. sur-paiements type
+        # paiement groupé mal ventilé, et chantiers non suivis).
+        dataq_count = sum(1 for r in rows if r['level'] == 'A_VERIFIER')
+        untracked_count = sum(1 for r in rows if r['level'] == 'NON_SUIVI')
 
         # KPIs stratégiques (dimensions disponibles).
         kpis = {
@@ -356,6 +383,8 @@ class AnalyticsDashboardAPIView(APIView):
             'idcp_moyen': idcp_avg,
             'clients_critiques': crit_count,
             'clients_eleves': high_count,
+            'clients_a_verifier': dataq_count,
+            'clients_non_suivis': untracked_count,
         }
 
         counts = {
@@ -374,7 +403,11 @@ class AnalyticsDashboardAPIView(APIView):
         alerts = self._alerts(rows, parcels, sales)
 
         # Top clients à risque.
-        top_risk = sorted(rows, key=lambda r: (-r['idcp']))[:8]
+        # Top « à risque » = risque RÉEL uniquement (on exclut les artefacts de
+        # données A_VERIFIER/NON_SUIVI qui, non filtrés, trustaient le haut du
+        # classement avec des taux > 100 %).
+        genuine = [r for r in rows if r['level'] in ('CRITIQUE', 'ELEVE', 'MOYEN')]
+        top_risk = sorted(genuine, key=lambda r: (-r['idcp']))[:8]
 
         return {
             'can_view_financial': can_fin,
@@ -385,6 +418,8 @@ class AnalyticsDashboardAPIView(APIView):
             'alerts': alerts,
             'clients_at_risk': top_risk,
             'at_risk_total': sum(1 for r in rows if r['level'] in ('CRITIQUE', 'ELEVE')),
+            'data_quality_count': dataq_count,
+            'untracked_count': untracked_count,
         }
 
     def _programs_health(self, can_fin):

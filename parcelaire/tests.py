@@ -838,6 +838,52 @@ class AnalyticsAPITests(TestCase):
         self.assertEqual(top['payment_pct'], 70.0)
         self.assertEqual(top['construction_pct'], 30.0)
 
+    def test_overpaid_dossier_is_data_quality_not_risk(self):
+        # Sur-paiement (paiement groupé mal ventilé / saisie) : classé « à
+        # vérifier », exclu du risque et du haut du classement.
+        p2 = Parcel.objects.create(program=self.program, dataset=self.dataset, lot_number='L2')
+        ConstructionProject.objects.create(parcel=p2, code='CP2', title='C2', progress_percent=0)
+        c2 = Customer.objects.create(customer_type='INDIVIDUAL', last_name='SCI Groupe')
+        s2 = SaleFile.objects.create(sale_number='S-2', program=self.program, customer=c2,
+                                     parcel=p2, agreed_price=100_000_000, net_price=100_000_000,
+                                     status='OPEN')
+        Payment.objects.create(payment_number='P-2', sale_file=s2, amount=206_000_000,
+                               status='CONFIRMED', payment_method='BANK', payment_date=date(2026, 1, 20))
+        self.client.force_login(self.fin)
+        d = self.client.get('/api/analytics/dashboard/').json()
+        self.assertEqual(d['kpis']['clients_a_verifier'], 1)
+        self.assertEqual(d['data_quality_count'], 1)
+        self.assertEqual(d['at_risk_total'], 1)  # seul le dossier CRITIQUE réel
+        self.assertNotIn(206.0, [r['payment_pct'] for r in d['clients_at_risk']])
+
+    def test_untracked_construction_excluded_from_risk(self):
+        p3 = Parcel.objects.create(program=self.program, dataset=self.dataset, lot_number='L3')
+        c3 = Customer.objects.create(customer_type='INDIVIDUAL', last_name='NonSuivi')
+        s3 = SaleFile.objects.create(sale_number='S-3', program=self.program, customer=c3,
+                                     parcel=p3, agreed_price=100_000_000, net_price=100_000_000,
+                                     status='OPEN')
+        Payment.objects.create(payment_number='P-3', sale_file=s3, amount=90_000_000,
+                               status='CONFIRMED', payment_method='BANK', payment_date=date(2026, 1, 20))
+        self.client.force_login(self.fin)
+        d = self.client.get('/api/analytics/dashboard/').json()
+        self.assertEqual(d['untracked_count'], 1)
+        self.assertNotIn(90.0, [r['payment_pct'] for r in d['clients_at_risk']])
+
+    def test_at_risk_list_default_excludes_data_quality(self):
+        p4 = Parcel.objects.create(program=self.program, dataset=self.dataset, lot_number='L4')
+        ConstructionProject.objects.create(parcel=p4, code='CP4', title='C4', progress_percent=0)
+        c4 = Customer.objects.create(customer_type='INDIVIDUAL', last_name='Surpaye')
+        s4 = SaleFile.objects.create(sale_number='S-4', program=self.program, customer=c4,
+                                     parcel=p4, agreed_price=100_000_000, net_price=100_000_000,
+                                     status='OPEN')
+        Payment.objects.create(payment_number='P-4', sale_file=s4, amount=300_000_000,
+                               status='CONFIRMED', payment_method='BANK', payment_date=date(2026, 1, 20))
+        self.client.force_login(self.fin)
+        default = self.client.get('/api/analytics/at-risk/').json()
+        self.assertNotIn('A_VERIFIER', [r['level'] for r in default['results']])
+        flagged = self.client.get('/api/analytics/at-risk/?level=A_VERIFIER').json()
+        self.assertTrue(flagged['results'] and all(r['level'] == 'A_VERIFIER' for r in flagged['results']))
+
     def test_dashboard_masks_finance(self):
         self.client.force_login(self.reader)
         d = self.client.get('/api/analytics/dashboard/').json()
