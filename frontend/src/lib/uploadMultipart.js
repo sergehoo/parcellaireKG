@@ -4,8 +4,10 @@
  * Le backend (POST /orthophotos/upload/init/) fournit une URL signée PUT par
  * part ; on découpe le fichier et on PUT chaque tranche en parallèle. Résilience :
  *  - retries avec backoff exponentiel + jitter (une coupure réseau transitoire
- *    ne tue plus les 3 essais instantanément) ;
- *  - timeout par part (une part figée est ré-essayée, pas bloquée) ;
+ *    ne tue plus les essais instantanément) ;
+ *  - timeout de STALL, pas de durée totale : on n'échoue que si AUCUN octet ne
+ *    progresse pendant STALL_TIMEOUT_MS. Un upload lent (uplink limité, plusieurs
+ *    parts en parallèle) n'est donc jamais coupé tant qu'il avance ;
  *  - re-signature de la part sur échec réseau/expiration (refreshPartUrl) →
  *    l'URL peut être périmée ou la connexion coupée : on repart d'une URL fraîche.
  *
@@ -13,12 +15,14 @@
  * indispensable pour des TIFF de plusieurs Go.
  */
 
-// Plus de parts en parallèle = upload plus rapide (dans la limite de l'uplink).
-const CONCURRENCY = 5
+// Concurrence modérée : sur un uplink limité, trop de parts en parallèle se
+// partagent la bande passante et ralentissent CHAQUE part (sans gagner de débit
+// total). 3 = bon compromis débit/latence.
+const CONCURRENCY = 3
 const RETRIES_PER_PART = 4
-// Timeout par tentative de part : proportionnel à la taille (min 60 s).
-const MIN_PART_TIMEOUT_MS = 60_000
-const TIMEOUT_MS_PER_MB = 4_000
+// On échoue une part uniquement si elle N'AVANCE PLUS pendant ce délai
+// (connexion réellement morte) — pas parce qu'elle est simplement lente.
+const STALL_TIMEOUT_MS = 45_000
 
 function delay(ms, signal) {
   return new Promise((resolve, reject) => {
@@ -32,16 +36,28 @@ function delay(ms, signal) {
   })
 }
 
-function putPart({ url, blob, signal, timeoutMs, onProgress }) {
+function putPart({ url, blob, signal, onProgress }) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
     xhr.open('PUT', url)
-    xhr.timeout = timeoutMs
 
+    // Timeout de STALL : réarmé à chaque octet envoyé ; ne se déclenche que si
+    // le transfert cesse de progresser (≠ transfert lent mais vivant).
+    let stalled = false
+    let stallTimer = null
+    const armStall = () => {
+      if (stallTimer) clearTimeout(stallTimer)
+      stallTimer = setTimeout(() => { stalled = true; xhr.abort() }, STALL_TIMEOUT_MS)
+    }
+    const clearStall = () => { if (stallTimer) { clearTimeout(stallTimer); stallTimer = null } }
+
+    xhr.upload.onloadstart = armStall
     xhr.upload.onprogress = (event) => {
+      armStall()
       if (event.lengthComputable) onProgress(event.loaded)
     }
     xhr.onload = () => {
+      clearStall()
       if (xhr.status >= 200 && xhr.status < 300) {
         // Nécessite ExposeHeaders: ETag dans la config CORS du bucket
         // (posée par storage.ensure_bucket_and_cors côté Django).
@@ -61,16 +77,21 @@ function putPart({ url, blob, signal, timeoutMs, onProgress }) {
       }
     }
     xhr.onerror = () => {
+      clearStall()
       const err = new Error('Erreur réseau pendant l’upload de la part')
       err.retryable = true
       reject(err)
     }
-    xhr.ontimeout = () => {
-      const err = new Error('Délai dépassé pendant l’upload de la part')
-      err.retryable = true
-      reject(err)
+    xhr.onabort = () => {
+      clearStall()
+      if (stalled) {
+        const err = new Error('Transfert bloqué (aucune progression) pendant l’upload de la part')
+        err.retryable = true
+        reject(err)
+      } else {
+        reject(new DOMException('Upload annulé', 'AbortError'))
+      }
     }
-    xhr.onabort = () => reject(new DOMException('Upload annulé', 'AbortError'))
 
     if (signal) {
       if (signal.aborted) {
@@ -117,8 +138,6 @@ export async function uploadFileMultipart(file, session, options = {}) {
       let url = parts[index].url
       const start = (partNumber - 1) * partSize
       const blob = file.slice(start, Math.min(start + partSize, file.size))
-      const timeoutMs = Math.max(MIN_PART_TIMEOUT_MS,
-        Math.ceil((blob.size / (1024 * 1024)) * TIMEOUT_MS_PER_MB))
 
       let lastError = null
       for (let attempt = 0; attempt <= RETRIES_PER_PART; attempt += 1) {
@@ -127,7 +146,6 @@ export async function uploadFileMultipart(file, session, options = {}) {
             url,
             blob,
             signal,
-            timeoutMs,
             onProgress: (loaded) => { sentByPart[index] = loaded; reportProgress() },
           })
           results[index] = { PartNumber: partNumber, ETag: etag }
