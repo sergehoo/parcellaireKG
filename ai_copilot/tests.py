@@ -177,6 +177,50 @@ class BusinessQueryTests(CopilotBaseTestCase):
         self.assertIn("count", ok.content)
 
 
+class SettledCustomersTests(CopilotBaseTestCase):
+    def setUp(self):
+        from django.utils import timezone
+
+        from parcelaire.models import Customer, Payment, RealEstateProgram, SaleFile
+        self.kotibe = RealEstateProgram.objects.create(
+            code="KOT", name="Kotibe", slug="kotibe",
+            country=self.country, project=self.project)
+        self.custB = Customer.objects.create(customer_type="INDIVIDUAL",
+                                             first_name="Ben", last_name="Traoré")
+        # Client A : 100 % soldé sur Kotibe.
+        sa = SaleFile.objects.create(sale_number="V-K-A", program=self.kotibe,
+                                     customer=self.customer, agreed_price=1000000, net_price=1000000)
+        Payment.objects.create(payment_number="P-K-A", sale_file=sa, amount=1000000,
+                               status="CONFIRMED", payment_method="CASH",
+                               payment_date=timezone.now().date())
+        # Client B : 50 % sur Kotibe.
+        sb = SaleFile.objects.create(sale_number="V-K-B", program=self.kotibe,
+                                     customer=self.custB, agreed_price=1000000, net_price=1000000)
+        Payment.objects.create(payment_number="P-K-B", sale_file=sb, amount=500000,
+                               status="CONFIRMED", payment_method="CASH",
+                               payment_date=timezone.now().date())
+        # Client A : 0 % sur Callisto (pour vérifier l'isolation par programme).
+        SaleFile.objects.create(sale_number="V-C-A", program=self.program,
+                                customer=self.customer, agreed_price=1000000, net_price=1000000)
+
+    def test_settled_in_program_isolates_by_program(self):
+        res = executor.run_tool(self.finuser, "customers_by_payment_ratio",
+                                {"program": "Kotibe", "min_percent": 100}, {})
+        self.assertEqual(res.content["program"], "Kotibe")
+        self.assertTrue(res.content["settled"])
+        self.assertEqual(res.content["count"], 1)                 # seul A a soldé
+        self.assertIn(100.0, {r["paid_percent"] for r in res.content["results"]})
+        # Sur Callisto, A n'a rien payé → aucun soldé.
+        res_c = executor.run_tool(self.finuser, "customers_by_payment_ratio",
+                                  {"program": "Callisto", "min_percent": 100}, {})
+        self.assertEqual(res_c.content["count"], 0)
+
+    def test_unknown_program_errors(self):
+        res = executor.run_tool(self.finuser, "customers_by_payment_ratio",
+                                {"program": "Zzz", "min_percent": 100}, {})
+        self.assertIn("error", res.content)
+
+
 class SqlAgentTests(CopilotBaseTestCase):
     @classmethod
     def setUpTestData(cls):
