@@ -99,6 +99,7 @@ INSTALLED_APPS = [
     'parcelaire',
     'ai_construction',
     'ai_copilot',
+    'alerting',
 ]
 
 # Backends d'authentification (audit H8) : allauth n'était pas enregistré,
