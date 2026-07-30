@@ -9,6 +9,17 @@ import { useToast } from '../components/Toasts'
 
 const MAX_BYTES = 8 * 1024 * 1024 * 1024 // 8 Go, aligné sur ORTHOPHOTO_MAX_BYTES
 
+function formatDuration(seconds) {
+  if (!Number.isFinite(seconds) || seconds < 0) return '—'
+  const s = Math.round(seconds)
+  if (s < 60) return `${s} s`
+  const m = Math.floor(s / 60)
+  const rest = s % 60
+  if (m < 60) return rest ? `${m} min ${rest} s` : `${m} min`
+  const h = Math.floor(m / 60)
+  return `${h} h ${m % 60} min`
+}
+
 const initialForm = {
   project: '',
   program: '',
@@ -31,10 +42,42 @@ export default function OrthophotoUpload() {
   const [file, setFile] = useState(null)
   const [phase, setPhase] = useState('idle') // idle | uploading | finalizing
   const [sentBytes, setSentBytes] = useState(0)
+  const [rate, setRate] = useState(0)              // débit lissé (octets/s)
+  const [etaSeconds, setEtaSeconds] = useState(null)
   const [error, setError] = useState(null)
   const [conflict, setConflict] = useState(null)
   const abortRef = useRef(null)
   const orthoIdRef = useRef(null)
+  // Mesure du débit : EMA sur les échantillons de progression.
+  const rateRef = useRef(null)
+  const lastSampleRef = useRef(null)
+  const lastDisplayRef = useRef(0)
+
+  function resetRate() {
+    rateRef.current = null
+    lastSampleRef.current = null
+    lastDisplayRef.current = 0
+    setRate(0)
+    setEtaSeconds(null)
+  }
+
+  // Échantillonne la progression → débit lissé (EMA) + ETA, rafraîchis ~2×/s.
+  function sampleProgress(sent, total) {
+    const now = Date.now()
+    const prev = lastSampleRef.current
+    if (!prev) { lastSampleRef.current = { t: now, bytes: sent }; return }
+    const dt = (now - prev.t) / 1000
+    const db = sent - prev.bytes
+    if (dt < 0.25 || db <= 0) return  // trop tôt / recul (part réessayée) : on ignore
+    const inst = db / dt
+    rateRef.current = rateRef.current == null ? inst : 0.3 * inst + 0.7 * rateRef.current
+    lastSampleRef.current = { t: now, bytes: sent }
+    if (now - lastDisplayRef.current >= 500) {
+      lastDisplayRef.current = now
+      setRate(rateRef.current)
+      setEtaSeconds(rateRef.current > 0 ? (total - sent) / rateRef.current : null)
+    }
+  }
 
   const programs = useMemo(() => {
     if (!refData) return []
@@ -61,6 +104,7 @@ export default function OrthophotoUpload() {
     setError(null)
     setConflict(null)
     setSentBytes(0)
+    resetRate()
     setPhase('uploading')
 
     const controller = new AbortController()
@@ -84,7 +128,7 @@ export default function OrthophotoUpload() {
 
       const parts = await uploadFileMultipart(file, session, {
         signal: controller.signal,
-        onProgress: (sent) => setSentBytes(sent),
+        onProgress: (sent) => { setSentBytes(sent); sampleProgress(sent, file.size) },
         // Re-signe une part après erreur réseau / URL expirée (résilience).
         refreshPartUrl: async (partNumber) => {
           const r = await uploadPartUrl(session.orthophoto_id, partNumber)
@@ -315,6 +359,14 @@ export default function OrthophotoUpload() {
                 style={{ width: `${phase === 'finalizing' ? 100 : percent}%` }}
               />
             </div>
+            {phase === 'uploading' && (
+              <div className="mt-1.5 flex justify-between text-xs text-slate-500">
+                <span>{rate > 0 ? `${formatBytes(rate)}/s` : 'Mesure du débit…'}</span>
+                <span>
+                  {etaSeconds != null ? `Temps restant estimé ~${formatDuration(etaSeconds)}` : ''}
+                </span>
+              </div>
+            )}
           </div>
         )}
 
