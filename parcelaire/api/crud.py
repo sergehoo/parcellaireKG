@@ -185,6 +185,83 @@ class ProgramViewSet(BaseCrudViewSet):
     ordering_fields = ["name", "code", "launch_date", "created_at"]
     ordering = ["name"]
 
+    @action(detail=True, methods=["get"])
+    def summary(self, request, pk=None):
+        """Vue détaillée d'un programme : statistiques commerciales (statut RÉEL
+        des lots déduit des ventes/réservations, plus fiable que commercial_status),
+        finance (masquée sans droit), et la GRILLE de tous les lots."""
+        from collections import Counter
+        from decimal import Decimal
+
+        from django.db.models import Sum
+        from django.db.models.functions import Coalesce
+
+        from parcelaire.api.analytics import pct
+        from parcelaire.models import Payment, Reservation, SaleFile
+
+        program = self.get_object()
+        can_fin = user_can_view_financial_data(request.user)
+
+        def money(v):
+            return fmt_money(v) if can_fin else MASKED
+
+        parcels = program.parcels.filter(is_active=True)
+        # Statut réel : les ventes/réservations priment sur commercial_status
+        # (resté « AVAILABLE » malgré des ventes — cf. note du dashboard).
+        sold_ids = set(SaleFile.objects.filter(is_active=True, program=program, parcel__isnull=False)
+                       .values_list("parcel_id", flat=True))
+        reserved_ids = set(Reservation.objects.filter(is_active=True, program=program, parcel__isnull=False)
+                           .values_list("parcel_id", flat=True))
+        geo_ids = set(parcels.filter(geometry__isnull=False).values_list("id", flat=True))
+
+        counter = Counter()
+        lots = []
+        for p in parcels.only("id", "lot_number", "parcel_code", "commercial_status",
+                              "official_area_m2").order_by("lot_number", "id"):
+            if p.id in sold_ids:
+                eff = "SOLD"
+            elif p.id in reserved_ids:
+                eff = "RESERVED"
+            else:
+                eff = p.commercial_status or "AVAILABLE"
+            counter[eff] += 1
+            lots.append({
+                "id": p.id,
+                "lot": p.lot_number or p.parcel_code or f"#{p.id}",
+                "status": eff,
+                "area": float(p.official_area_m2) if p.official_area_m2 else None,
+                "mapped": p.id in geo_ids,
+            })
+
+        total = len(lots)
+        ca = (SaleFile.objects.filter(is_active=True, program=program)
+              .aggregate(s=Coalesce(Sum("net_price"), Decimal("0")))["s"])
+        paid = (Payment.objects.filter(status="CONFIRMED", sale_file__program=program, is_active=True)
+                .aggregate(s=Coalesce(Sum("amount"), Decimal("0")))["s"])
+        stats = {
+            "total_parcels": total,
+            "mapped_parcels": len(geo_ids),
+            "by_status": dict(counter),
+            "sold": counter.get("SOLD", 0),
+            "reserved": counter.get("RESERVED", 0),
+            "available": counter.get("AVAILABLE", 0),
+            "commercialization_pct": pct(counter.get("SOLD", 0), total),
+            "reservation_pct": pct(counter.get("RESERVED", 0), total),
+            "sales_count": SaleFile.objects.filter(is_active=True, program=program).count(),
+            "ca_total": money(ca),
+            "encaisse": money(paid),
+            "reste": money(ca - paid),
+            "encaissement_pct": pct(float(paid), float(ca)) if ca else 0.0,
+            "has_orthophoto": program.orthophotos.filter(is_current=True).exists()
+            if hasattr(program, "orthophotos") else False,
+        }
+        return Response({
+            "program": ProgramSerializer(program, context={"request": request}).data,
+            "stats": stats,
+            "lots": lots,
+            "can_view_financial": can_fin,
+        })
+
 
 class CustomerSerializer(serializers.ModelSerializer):
     display_name = serializers.SerializerMethodField()
