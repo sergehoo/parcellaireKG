@@ -299,8 +299,14 @@ def _tool_geocode_place(user, args, context):
 
 def _tool_programs_near_place(user, args, context):
     """Urbanisme : programmes à moins de N km d'un lieu (école, hôpital, voie…).
-    Géocode le lieu puis mesure la distance aux centroïdes des programmes."""
-    from parcelaire.models import RealEstateProgram
+    Source de vérité = les PARCELLES géolocalisées (un programme est « proche »
+    s'il a au moins une parcelle dans le rayon), avec repli sur le centroïde du
+    programme pour ceux qui n'ont pas de parcelle géométrique."""
+    from django.contrib.gis.db.models.functions import Distance
+    from django.contrib.gis.geos import Point
+    from django.contrib.gis.measure import D
+    from parcelaire.models import Parcel, RealEstateProgram
+
     place = (args.get("place") or "").strip()
     if not place:
         return ToolResult(content={"error": "Lieu non précisé."})
@@ -312,14 +318,28 @@ def _tool_programs_near_place(user, args, context):
     center, label = _geocode(place)
     if center is None:
         return ToolResult(content={"error": label})
-    near = []
-    for p in RealEstateProgram.objects.filter(is_active=True):
-        c = _program_center(p)
-        if c is None:
-            continue
-        d = _haversine_km(c, center)
-        if d <= radius:
-            near.append({"program": p.name, "distance_km": d})
+
+    pt = Point(center[1], center[0], srid=4326)  # Point(lng, lat)
+    seen = {}
+    # Programmes ayant au moins une parcelle dans le rayon (distance = parcelle
+    # la plus proche). On parcourt par distance croissante → 1re occurrence = min.
+    parcels = (Parcel.objects.filter(is_active=True, geometry__isnull=False,
+                                     program__isnull=False)
+               .annotate(dist=Distance("geometry", pt))
+               .filter(dist__lte=D(km=radius))
+               .select_related("program")
+               .order_by("dist")[:5000])
+    for pc in parcels:
+        if pc.program_id not in seen:
+            seen[pc.program_id] = {"program": pc.program.name,
+                                   "distance_km": round(pc.dist.m / 1000, 2)}
+    near = list(seen.values())
+    # Repli : programmes sans parcelle géométrique mais dont le centroïde tombe
+    # dans le rayon (sinon ils seraient invisibles).
+    for prog in RealEstateProgram.objects.filter(is_active=True).exclude(pk__in=seen.keys()):
+        c = _program_center(prog)
+        if c is not None and _haversine_km(c, center) <= radius:
+            near.append({"program": prog.name, "distance_km": _haversine_km(c, center)})
     near.sort(key=lambda x: x["distance_km"])
     return ToolResult(
         content={"place": label, "radius_km": radius, "count": len(near), "programs": near},
@@ -371,6 +391,102 @@ def _tool_parcels_near_place(user, args, context):
                  "parcels": parcels},
         action={"type": "map.circle", "center": center, "radius_m": radius * 1000,
                 "name": f"{label} — parcelles ≤ {radius} km"})
+
+
+def _tool_count_parcels_in_program(user, args, context):
+    """Nombre de parcelles/lots d'un programme, avec répartition par statut."""
+    from django.db.models import Count
+    from parcelaire.models import Parcel
+    program = _resolve_program(args.get("program_id"),
+                               (args.get("program") or args.get("program_name") or "").strip())
+    if program is None:
+        return ToolResult(content={"error": "Programme introuvable."})
+    qs = Parcel.objects.filter(is_active=True, program=program)
+    by_status = dict(qs.values_list("commercial_status")
+                     .annotate(n=Count("id")).values_list("commercial_status", "n"))
+    return ToolResult(content={
+        "program": program.name,
+        "total_parcels": qs.count(),
+        "with_geometry": qs.filter(geometry__isnull=False).count(),
+        "by_status": by_status,
+    })
+
+
+def _find_lot(program, value):
+    """Résout une parcelle par numéro de lot / code / id, dans un programme si fourni."""
+    from parcelaire.models import Parcel
+    v = str(value or "").strip()
+    if not v:
+        return None
+    qs = Parcel.objects.filter(is_active=True, geometry__isnull=False)
+    if program is not None:
+        qs = qs.filter(program=program)
+    return (qs.filter(lot_number__iexact=v).first()
+            or qs.filter(parcel_code__iexact=v).first()
+            or (qs.filter(pk=int(v)).first() if v.isdigit() else None))
+
+
+def _tool_distance_between_parcels(user, args, context):
+    """Distance entre deux parcelles/lots (au bord, PostGIS) + tracé sur la carte."""
+    from django.contrib.gis.db.models.functions import Distance
+    from parcelaire.models import Parcel
+    program = _resolve_program(args.get("program_id"),
+                               (args.get("program") or args.get("program_name") or "").strip())
+    a = _find_lot(program, args.get("lot_a") or args.get("parcel_a"))
+    b = _find_lot(program, args.get("lot_b") or args.get("parcel_b"))
+    if a is None or b is None:
+        return ToolResult(content={"error": "Parcelle(s) introuvable(s) ou sans géométrie."})
+    d = (Parcel.objects.filter(pk=a.pk)
+         .annotate(x=Distance("geometry", b.geometry)).values_list("x", flat=True).first())
+    dist_m = round(d.m, 1) if d is not None else None
+    ca, cb = a.geometry.centroid, b.geometry.centroid
+    la = a.lot_number or a.parcel_code or f"#{a.pk}"
+    lb = b.lot_number or b.parcel_code or f"#{b.pk}"
+    return ToolResult(
+        content={"lot_a": la, "lot_b": lb, "distance_m": dist_m,
+                 "distance_km": round(dist_m / 1000, 2) if dist_m is not None else None},
+        action={"type": "map.line", "points": [[ca.y, ca.x], [cb.y, cb.x]],
+                "label": f"{la} ↔ {lb} : {dist_m} m"})
+
+
+def _tool_distance_to_place(user, args, context):
+    """Distance entre un programme et un lieu (école, aéroport…), mesurée à la
+    parcelle la plus proche (PostGIS), AVEC tracé de la ligne sur la carte."""
+    from django.contrib.gis.db.models.functions import Distance
+    from django.contrib.gis.geos import Point
+    from parcelaire.models import Parcel
+    program = _resolve_program(args.get("program_id"),
+                               (args.get("program") or args.get("program_name") or "").strip())
+    place = (args.get("place") or "").strip()
+    if program is None:
+        return ToolResult(content={"error": "Programme introuvable."})
+    if not place:
+        return ToolResult(content={"error": "Lieu non précisé."})
+    center, label = _geocode(place)
+    if center is None:
+        return ToolResult(content={"error": label})
+    pt = Point(center[1], center[0], srid=4326)
+    nearest = (Parcel.objects.filter(is_active=True, program=program, geometry__isnull=False)
+               .annotate(dist=Distance("geometry", pt)).order_by("dist").first())
+    if nearest is None:
+        c = _program_center(program)
+        if c is None:
+            return ToolResult(content={
+                "error": f"« {program.name} » n'a aucune parcelle ni centroïde géolocalisé."})
+        dk = _haversine_km(c, center)
+        return ToolResult(
+            content={"program": program.name, "place": label, "distance_km": dk,
+                     "note": "Distance au centroïde du programme (aucune parcelle géolocalisée)."},
+            action={"type": "map.line", "points": [c, center],
+                    "label": f"{program.name} ↔ {label} : {dk} km"})
+    cc = nearest.geometry.centroid
+    dist_m = round(nearest.dist.m, 1)
+    lot = nearest.lot_number or nearest.parcel_code or f"#{nearest.pk}"
+    return ToolResult(
+        content={"program": program.name, "place": label, "nearest_lot": lot,
+                 "distance_m": dist_m, "distance_km": round(dist_m / 1000, 2)},
+        action={"type": "map.line", "points": [[cc.y, cc.x], center],
+                "label": f"{program.name} (lot {lot}) ↔ {label} : {round(dist_m / 1000, 2)} km"})
 
 
 def _tool_get_analytics_digest(user, args, context):
@@ -853,6 +969,52 @@ def register_builtins():
             "required": ["place"],
         },
         handler=_tool_parcels_near_place,
+    ))
+    register(ToolSpec(
+        name="count_parcels_in_program",
+        description="Nombre de parcelles/lots d'un programme (+ répartition par statut). "
+                    "Ex. « Combien de lots dans Callisto ? ».",
+        parameters={
+            "type": "object",
+            "properties": {
+                "program": {"type": "string", "description": "Nom du programme."},
+                "program_id": {"type": "integer"},
+            },
+        },
+        handler=_tool_count_parcels_in_program,
+    ))
+    register(ToolSpec(
+        name="distance_between_parcels",
+        description="Distance entre DEUX parcelles/lots (au bord, PostGIS) et trace la "
+                    "ligne sur la carte. Ex. « Distance entre le lot 34 et le lot 49 de "
+                    "Callisto ». Préciser le programme si les numéros de lot ne sont pas uniques.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "lot_a": {"type": "string", "description": "1er lot (numéro/code)."},
+                "lot_b": {"type": "string", "description": "2e lot (numéro/code)."},
+                "program": {"type": "string", "description": "Programme (recommandé)."},
+                "program_id": {"type": "integer"},
+            },
+            "required": ["lot_a", "lot_b"],
+        },
+        handler=_tool_distance_between_parcels,
+    ))
+    register(ToolSpec(
+        name="distance_to_place",
+        description="Distance entre un PROGRAMME et un LIEU (école, aéroport, hôpital…), "
+                    "mesurée à la parcelle la plus proche, AVEC tracé de la ligne sur la "
+                    "carte. Ex. « Distance entre Callisto et l'aéroport d'Abidjan ».",
+        parameters={
+            "type": "object",
+            "properties": {
+                "program": {"type": "string", "description": "Nom du programme."},
+                "program_id": {"type": "integer"},
+                "place": {"type": "string", "description": "Lieu à localiser."},
+            },
+            "required": ["place"],
+        },
+        handler=_tool_distance_to_place,
     ))
     register(ToolSpec(
         name="get_analytics_digest",

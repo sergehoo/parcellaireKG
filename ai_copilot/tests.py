@@ -354,6 +354,69 @@ class ParcelProximityTests(CopilotBaseTestCase):
         self.assertLess(near["distance_m"], 1000)
 
 
+class GeoToolsTests(CopilotBaseTestCase):
+    def _geo(self, lat, lng):
+        fake = mock.Mock(status_code=200)
+        fake.json.return_value = [{"lat": str(lat), "lon": str(lng), "display_name": "Lieu"}]
+        return fake
+
+    @staticmethod
+    def _square(lng0, lat0, d=0.0002):
+        from django.contrib.gis.geos import MultiPolygon, Polygon
+        ring = ((lng0 - d, lat0 - d), (lng0 + d, lat0 - d), (lng0 + d, lat0 + d),
+                (lng0 - d, lat0 + d), (lng0 - d, lat0 - d))
+        return MultiPolygon(Polygon(ring), srid=4326)
+
+    def setUp(self):
+        from parcelaire.models import Parcel, ParcelDataset, RealEstateProgram
+        # Programme SANS centroïde, mais dont les parcelles SONT géolocalisées
+        # (cas réel de « Callisto » qui faisait échouer programs_near_place).
+        self.prog_nogeo = RealEstateProgram.objects.create(
+            code="NOGEO", name="SansCentroide", slug="sanscentroide",
+            country=self.country, project=self.project)
+        # Le dataset doit appartenir AU MÊME programme que ses parcelles.
+        self.ds = ParcelDataset.objects.create(name="DS", program=self.prog_nogeo)
+        Parcel.objects.create(dataset=self.ds, program=self.prog_nogeo,
+                              lot_number="34", geometry=self._square(-4.0005, 5.3505))
+        Parcel.objects.create(dataset=self.ds, program=self.prog_nogeo,
+                              lot_number="49", geometry=self._square(-4.0100, 5.3600))
+
+    def test_programs_near_place_finds_program_via_its_parcels(self):
+        # Bug corrigé : le programme n'a pas de centroïde mais ses parcelles sont
+        # dans le rayon → il doit être trouvé (source de vérité = parcelles).
+        with mock.patch("requests.get", return_value=self._geo(5.35, -4.00)):
+            res = executor.run_tool(self.user, "programs_near_place",
+                                    {"place": "aéroport", "radius_km": 5}, {})
+        names = [p["program"] for p in res.content["programs"]]
+        self.assertIn("SansCentroide", names)
+
+    def test_count_parcels_in_program(self):
+        res = executor.run_tool(self.user, "count_parcels_in_program",
+                                {"program": "SansCentroide"}, {})
+        self.assertEqual(res.content["total_parcels"], 2)
+        self.assertEqual(res.content["with_geometry"], 2)
+
+    def test_distance_between_parcels_draws_line(self):
+        res = executor.run_tool(self.user, "distance_between_parcels",
+                                {"program": "SansCentroide", "lot_a": "34", "lot_b": "49"}, {})
+        self.assertEqual(res.action["type"], "map.line")
+        self.assertEqual(len(res.action["points"]), 2)
+        self.assertGreater(res.content["distance_m"], 0)
+
+    def test_distance_between_parcels_unknown_lot(self):
+        res = executor.run_tool(self.user, "distance_between_parcels",
+                                {"program": "SansCentroide", "lot_a": "34", "lot_b": "999"}, {})
+        self.assertIn("error", res.content)
+
+    def test_distance_to_place_draws_line(self):
+        with mock.patch("requests.get", return_value=self._geo(5.35, -4.00)):
+            res = executor.run_tool(self.user, "distance_to_place",
+                                    {"program": "SansCentroide", "place": "aéroport"}, {})
+        self.assertEqual(res.action["type"], "map.line")
+        self.assertEqual(res.content["nearest_lot"], "34")  # la plus proche
+        self.assertGreater(res.content["distance_m"], 0)
+
+
 class SideEffectActionTests(CopilotBaseTestCase):
     @classmethod
     def setUpTestData(cls):

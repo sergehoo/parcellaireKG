@@ -15,7 +15,7 @@ from . import executor, gateway
 from . import tools as registry
 from .models import CopilotMessage
 
-MAX_STEPS = 4
+MAX_STEPS = 8
 HISTORY_LIMIT = 10
 
 
