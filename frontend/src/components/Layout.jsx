@@ -11,6 +11,8 @@ const CARTE = { to: '/', label: 'Carte', end: true }
 const GROUPS = [
   { label: 'Pilotage', items: [
     { to: '/dashboard', label: 'Tableau de bord' },
+    { to: '/pilotage/risques', label: 'Clients à risque' },
+    { to: '/alertes', label: 'Centre des alertes' },
     { to: '/notifications', label: 'Notifications', notif: true },
   ] },
   { label: 'Patrimoine', items: [
