@@ -11,6 +11,7 @@ import ResourceDetailPage from './pages/ResourceDetailPage'
 import CustomerDetailPage from './pages/CustomerDetailPage'
 import ParcelDetailPage from './pages/ParcelDetailPage'
 import ProgramDetailPage from './pages/ProgramDetailPage'
+import AlertsCenterPage from './pages/AlertsCenterPage'
 import ResourceFormPage from './pages/ResourceFormPage'
 import OrthophotoList from './pages/OrthophotoList'
 import OrthophotoUpload from './pages/OrthophotoUpload'
@@ -37,6 +38,7 @@ export default function App() {
             <Route path="/carte" element={<MapView />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/pilotage/risques" element={<AtRiskPage />} />
+            <Route path="/alertes" element={<AlertsCenterPage />} />
             <Route path="/notifications" element={<NotificationCenter />} />
             <Route path="/profile" element={<ProfilePage />} />
 
