@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<style>
+  @page {
+    size: A4; margin: 1.6cm 1.4cm 1.8cm 1.4cm;
+    @bottom-center { content: "Système d'alertes Parcellaire KAYDAN — {{ report_id }}"; font-size: 8px; color: #94a3b8; }
+    @bottom-right { content: "Page " counter(page) " / " counter(pages); font-size: 8px; color: #94a3b8; }
+  }
+  * { box-sizing: border-box; }
+  body { font-family: Helvetica, Arial, sans-serif; color: #1e293b; font-size: 10.5px; margin: 0; }
+  h1 { font-size: 22px; margin: 0 0 4px; color: #0f172a; }
+  h2 { font-size: 14px; margin: 22px 0 8px; color: #0f172a; border-bottom: 2px solid #ea580c; padding-bottom: 3px; }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .logo { width: 40px; height: 40px; border-radius: 8px; background: #ea580c; color: #fff; font-weight: 700;
+          font-size: 18px; display: flex; align-items: center; justify-content: center; }
+  .muted { color: #64748b; }
+  .cover { padding: 40px 0 24px; border-bottom: 1px solid #e2e8f0; }
+  .cover .meta { margin-top: 18px; }
+  .cover .meta div { margin: 3px 0; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 9px; font-weight: 600; }
+  .b-crit { background: #ffe4e6; color: #be123c; } .b-imp { background: #ffedd5; color: #c2410c; }
+  .b-vig { background: #fef3c7; color: #b45309; } .b-info { background: #dbeafe; color: #1d4ed8; }
+  .kpis { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+  .kpi { flex: 1 1 120px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px; }
+  .kpi .lbl { font-size: 8.5px; text-transform: uppercase; letter-spacing: .04em; color: #64748b; }
+  .kpi .val { font-size: 15px; font-weight: 700; color: #0f172a; margin-top: 2px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+  th { text-align: left; font-size: 8.5px; text-transform: uppercase; color: #64748b; border-bottom: 1px solid #cbd5e1; padding: 5px 6px; }
+  td { padding: 5px 6px; border-bottom: 1px solid #eef2f7; }
+  .num { text-align: right; }
+  .var-up { color: #059669; } .var-down { color: #e11d48; }
+  .analysis { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; margin-top: 8px; }
+  ul.reco { margin: 6px 0; padding-left: 16px; } ul.reco li { margin: 3px 0; }
+  .chart { margin: 8px 0; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="brand"><div class="logo">K</div>
+    <div><strong style="font-size:13px;">KAYDAN</strong><br><span class="muted">Parcellaire</span></div>
+  </div>
+  <h1 style="margin-top:24px;">Rapport de suivi — Paiement, Construction & Commercialisation</h1>
+  <div class="meta">
+    <div><strong>Période analysée :</strong> du {{ period_start }} au {{ period_end }} ({{ window_days }} jours)</div>
+    <div><strong>Généré le :</strong> {{ generated_at|default:"—" }}</div>
+    <div><strong>Programmes concernés :</strong> {% for m in programs %}{{ m.program }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</div>
+    <div><strong>Confidentialité :</strong> {{ confidentiality }}</div>
+    <div class="muted"><strong>Auteur :</strong> {{ author }} — Réf. {{ report_id }}</div>
+  </div>
+</div>
+
+<h2>Résumé exécutif</h2>
+<div class="kpis">
+  <div class="kpi"><div class="lbl">Programmes</div><div class="val">{{ summary.programs_count }}</div></div>
+  <div class="kpi"><div class="lbl">Lots analysés</div><div class="val">{{ summary.total_lots }}</div></div>
+  <div class="kpi"><div class="lbl">Encaissé</div><div class="val">{{ summary.paid_total }}</div></div>
+  <div class="kpi"><div class="lbl">Commercialisation</div><div class="val">{{ summary.commercialization_avg }}%</div></div>
+  <div class="kpi"><div class="lbl">Construction moy.</div><div class="val">{{ summary.construction_avg }}%</div></div>
+  <div class="kpi"><div class="lbl">Paiement moy.</div><div class="val">{{ summary.payment_avg }}%</div></div>
+  <div class="kpi"><div class="lbl">Alertes critiques</div><div class="val">{{ summary.critical_count }}</div></div>
+  <div class="kpi"><div class="lbl">Clients sensibles</div><div class="val">{{ summary.sensitive_clients }}</div></div>
+</div>
+
+<h2>Paiement vs construction par programme</h2>
+<div class="chart">{{ charts.payment_vs_construction|safe }}</div>
+
+<h2>Synthèse du portefeuille</h2>
+<table>
+  <thead><tr>
+    <th>Programme</th><th class="num">Lots</th><th class="num">Vendus</th>
+    <th class="num">Commerc.</th><th class="num">Paiement</th><th class="num">Construction</th><th class="num">Écart</th>
+  </tr></thead>
+  <tbody>
+  {% for m in programs %}
+    <tr>
+      <td>{{ m.program }}</td>
+      <td class="num">{{ m.total_lots }}</td>
+      <td class="num">{{ m.sold }}</td>
+      <td class="num">{{ m.commercialization.current|default:"—" }}%{% if m.commercialization.variation_points != None %} <span class="{% if m.commercialization.variation_points >= 0 %}var-up{% else %}var-down{% endif %}">({{ m.commercialization.variation_points|stringformat:"+.1f" }})</span>{% endif %}</td>
+      <td class="num">{{ m.payment.current|default:"—" }}%{% if m.payment.variation_points != None %} <span class="{% if m.payment.variation_points >= 0 %}var-up{% else %}var-down{% endif %}">({{ m.payment.variation_points|stringformat:"+.1f" }})</span>{% endif %}</td>
+      <td class="num">{% if m.construction.current == None %}<span class="muted">non suivi</span>{% else %}{{ m.construction.current }}%{% if m.construction.variation_points != None %} <span class="{% if m.construction.variation_points >= 0 %}var-up{% else %}var-down{% endif %}">({{ m.construction.variation_points|stringformat:"+.1f" }})</span>{% endif %}{% endif %}</td>
+      <td class="num">{% if m.gap_points != None %}{{ m.gap_points|stringformat:"+.1f" }} pts{% else %}—{% endif %}</td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="7" class="muted">Aucun programme dans le périmètre.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<h2>Clients dont les paiements sont en avance sur les constructions</h2>
+<table>
+  <thead><tr>
+    <th>Client</th><th>Programme</th><th>Lot</th><th class="num">Paiement</th>
+    <th class="num">Construction</th><th class="num">Écart</th><th class="num">Montant payé</th><th>Priorité</th>
+  </tr></thead>
+  <tbody>
+  {% for c in priority_clients %}
+    <tr>
+      <td>{{ c.customer }}</td><td>{{ c.program }}</td><td>{{ c.lot }}</td>
+      <td class="num">{{ c.payment }}%</td><td class="num">{{ c.construction }}%</td>
+      <td class="num">{{ c.gap|stringformat:"+.0f" }} pts</td><td class="num">{{ c.paid }}</td>
+      <td><span class="badge {% if c.severity == 'CRITICAL' %}b-crit{% elif c.severity == 'IMPORTANT' %}b-imp{% elif c.severity == 'VIGILANCE' %}b-vig{% else %}b-info{% endif %}">{{ c.severity_label }}</span></td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="8" class="muted">Aucun écart significatif détecté.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<h2>Répartition des sévérités</h2>
+<div class="chart">{{ charts.severity|safe }}</div>
+
+<h2>Recommandations</h2>
+<div class="analysis">
+  {% if recommendations %}
+  <ul class="reco">{% for r in recommendations %}<li>{{ r }}</li>{% endfor %}</ul>
+  {% else %}<span class="muted">Aucune action prioritaire pour la période.</span>{% endif %}
+</div>
+
+</body>
+</html>
