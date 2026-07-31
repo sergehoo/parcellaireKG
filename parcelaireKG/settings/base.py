@@ -455,6 +455,23 @@ CELERY_BEAT_SCHEDULE = {
         "task": "parcelaire.tasks.generate_alerts_task",
         "schedule": crontab(minute=0),
     },
+    # Module d'alertes automatisées (app alerting).
+    "alerting-capture-daily-snapshots": {
+        "task": "alerting.tasks.capture_daily_snapshots",
+        "schedule": crontab(hour=1, minute=30),   # historisation quotidienne
+    },
+    "alerting-evaluate-configurations-hourly": {
+        "task": "alerting.tasks.evaluate_alert_configurations",
+        "schedule": crontab(minute=5),            # traite les envois échus
+    },
+    "alerting-retry-failed-dispatches": {
+        "task": "alerting.tasks.retry_failed_alert_dispatches",
+        "schedule": crontab(hour="*/6", minute=15),
+    },
+    "alerting-cleanup-old-reports": {
+        "task": "alerting.tasks.cleanup_old_generated_reports",
+        "schedule": crontab(hour=3, minute=0),
+    },
 }
 
 CELERY_BROKER_URL = "redis://127.0.0.1:6379/0"
