@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+<body style="margin:0;background:#f1f5f9;font-family:Helvetica,Arial,sans-serif;color:#1e293b;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:24px 0;">
+<tr><td align="center">
+  <table role="presentation" width="600" cellpadding="0" cellspacing="0"
+         style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0;">
+    <tr><td style="background:#0f172a;padding:18px 24px;color:#fff;">
+      <span style="display:inline-block;width:30px;height:30px;background:#ea580c;border-radius:7px;text-align:center;line-height:30px;font-weight:700;">K</span>
+      <span style="font-size:16px;font-weight:700;vertical-align:middle;margin-left:8px;">KAYDAN</span>
+      <span style="color:#94a3b8;vertical-align:middle;"> · Parcellaire</span>
+    </td></tr>
+    <tr><td style="padding:24px;">
+      <p style="margin:0 0 12px;">Bonjour,</p>
+      <p style="margin:0 0 16px;">Veuillez trouver ci-joint le rapport périodique de suivi des paiements,
+      de la commercialisation et de l'évolution des constructions
+      (période du <strong>{{ period_start }}</strong> au <strong>{{ period_end }}</strong>).</p>
+
+      {% for m in programs %}
+      <table role="presentation" width="100%" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;margin:0 0 10px;">
+        <tr><td style="padding:12px 14px;">
+          <strong style="font-size:14px;">{{ m.program }}</strong>
+          <table role="presentation" width="100%" style="margin-top:8px;font-size:13px;color:#334155;">
+            <tr>
+              <td>Construction : <strong>{{ m.construction.current|default:"—" }}%</strong>{% if m.construction.variation_points != None %} ({{ m.construction.variation_points|stringformat:"+.1f" }} pts){% endif %}</td>
+              <td>Paiement : <strong>{{ m.payment.current|default:"—" }}%</strong>{% if m.payment.variation_points != None %} ({{ m.payment.variation_points|stringformat:"+.1f" }} pts){% endif %}</td>
+              <td>Commerc. : <strong>{{ m.commercialization.current|default:"—" }}%</strong>{% if m.commercialization.variation_points != None %} ({{ m.commercialization.variation_points|stringformat:"+.1f" }} pts){% endif %}</td>
+            </tr>
+          </table>
+        </td></tr>
+      </table>
+      {% endfor %}
+
+      <p style="margin:14px 0 6px;"><strong>{{ summary.sensitive_clients }}</strong> client(s) présentent un écart important entre paiement et avancement des constructions.</p>
+      <p style="margin:0 0 16px;"><strong>{{ summary.critical_count }}</strong> alerte(s) critique(s) et <strong>{{ summary.important_count }}</strong> alerte(s) importante(s) détectées.</p>
+
+      {% if recommendations %}
+      <p style="margin:0 0 4px;font-weight:600;">Points d'attention :</p>
+      <ul style="margin:0 0 16px;padding-left:18px;color:#334155;">{% for r in recommendations %}<li style="margin:3px 0;">{{ r }}</li>{% endfor %}</ul>
+      {% endif %}
+
+      <p style="margin:0 0 18px;">Le rapport détaillé est disponible en pièce jointe.</p>
+
+      <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+        {% if dashboard_url %}<td style="padding-right:8px;"><a href="{{ dashboard_url }}" style="background:#0f172a;color:#fff;text-decoration:none;padding:9px 14px;border-radius:8px;font-size:13px;">Consulter le tableau de bord</a></td>{% endif %}
+        {% if alerts_url %}<td><a href="{{ alerts_url }}" style="background:#e11d48;color:#fff;text-decoration:none;padding:9px 14px;border-radius:8px;font-size:13px;">Voir les alertes critiques</a></td>{% endif %}
+      </tr></table>
+
+      <p style="margin:20px 0 0;color:#64748b;font-size:12px;">Cordialement,<br>Système d'alertes — Parcellaire KAYDAN<br>Réf. rapport : {{ report_id }}</p>
+    </td></tr>
+    <tr><td style="background:#f8fafc;padding:12px 24px;color:#94a3b8;font-size:11px;border-top:1px solid #e2e8f0;">
+      Message automatique — {{ confidentiality }}. Ne pas répondre.
+    </td></tr>
+  </table>
+</td></tr>
+</table>
+</body>
+</html>

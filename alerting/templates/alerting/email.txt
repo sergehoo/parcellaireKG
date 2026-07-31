@@ -1,0 +1,20 @@
+Bonjour,
+
+Veuillez trouver ci-joint le rapport périodique de suivi des paiements,
+de la commercialisation et de l'évolution des constructions
+(période du {{ period_start }} au {{ period_end }}).
+
+Résumé de la période :
+{% for m in programs %}- {{ m.program }} : construction {{ m.construction.current|default:"—" }}%{% if m.construction.variation_points != None %} ({{ m.construction.variation_points|stringformat:"+.1f" }} pts){% endif %}, paiement {{ m.payment.current|default:"—" }}%{% if m.payment.variation_points != None %} ({{ m.payment.variation_points|stringformat:"+.1f" }} pts){% endif %}, commercialisation {{ m.commercialization.current|default:"—" }}%{% if m.commercialization.variation_points != None %} ({{ m.commercialization.variation_points|stringformat:"+.1f" }} pts){% endif %}
+{% endfor %}
+{{ summary.sensitive_clients }} client(s) présentent un écart important entre paiement et avancement.
+{{ summary.critical_count }} alerte(s) critique(s) et {{ summary.important_count }} alerte(s) importante(s) détectées.
+{% if recommendations %}
+Points d'attention :
+{% for r in recommendations %}- {{ r }}
+{% endfor %}{% endif %}
+Le rapport détaillé est disponible en pièce jointe.
+
+Cordialement,
+Système d'alertes — Parcellaire KAYDAN
+Réf. rapport : {{ report_id }}
