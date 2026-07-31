@@ -68,6 +68,7 @@ def _spa(hash_url):
 urlpatterns = [
                   path('admin/', admin.site.urls),
                   path("api/", include("parcelaire.api.urls")),
+                  path("api/alerts/", include("alerting.api.urls")),
                   path("api/copilot/", include("ai_copilot.urls")),
                   path("ai/", include("ai_construction.urls")),
 

@@ -33,9 +33,10 @@ def resolve_recipients(configuration):
 
 
 def run_configuration(configuration, reference_date=None, window_days=7, preview=False,
-                      recipients_override=None, can_fin=True):
+                      recipients_override=None, can_fin=True, reschedule=True):
     """Exécute une configuration → AlertDispatch (persisté). `preview` génère sans
-    envoyer. Recalcule `next_send_at` après un envoi réel."""
+    envoyer. Recalcule `next_send_at` après un envoi réel (sauf `reschedule=False`,
+    p.ex. une génération MANUELLE qui ne doit pas décaler la cadence planifiée)."""
     now = timezone.now()
     reference_date = reference_date or now.date()
     period_start = reference_date - timedelta(days=window_days)
@@ -88,7 +89,8 @@ def run_configuration(configuration, reference_date=None, window_days=7, preview
             dispatch.error_message = "Aucun destinataire actif pour cette configuration."
             dispatch.completed_at = timezone.now()
             dispatch.save()
-            _reschedule(configuration)
+            if reschedule:
+                _reschedule(configuration)
             return dispatch
 
         dispatch.status = DispatchStatus.SENDING
@@ -116,7 +118,8 @@ def run_configuration(configuration, reference_date=None, window_days=7, preview
         dispatch.completed_at = timezone.now()
         dispatch.save()
 
-        _reschedule(configuration)
+        if reschedule:
+            _reschedule(configuration)
         return dispatch
 
     except Exception as exc:  # noqa: BLE001
