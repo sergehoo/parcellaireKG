@@ -3,8 +3,10 @@ import json
 from datetime import date
 from decimal import Decimal, InvalidOperation
 
+from django.contrib.gis.db.models import GeometryField
+from django.contrib.gis.db.models.functions import AsGeoJSON
 from django.contrib.gis.geos import Polygon
-from django.db.models import Q, Sum, F, Prefetch
+from django.db.models import Func, Q, Sum, F, Prefetch, Value
 from django.db.models.functions import Coalesce
 from drf_spectacular.utils import (
     OpenApiParameter,
@@ -55,6 +57,13 @@ def user_can_view_construction_data(user):
 #     ]
 # 
 
+
+
+class _SimplifyPreserveTopology(Func):
+    """Wrapper PostGIS ST_SimplifyPreserveTopology (absent de GeoDjango en
+    Django 4.2) : simplifie une géométrie sans créer d'anneaux invalides."""
+    function = "ST_SimplifyPreserveTopology"
+    output_field = GeometryField()
 
 
 @extend_schema_view(get=extend_schema(
@@ -297,6 +306,33 @@ class RealEstateMapAPIView(APIView):
 
     def should_include_geometry(self, zoom):
         return zoom >= 14
+
+    def geometry_simplify_tolerance(self, zoom):
+        """Tolérance de simplification (en degrés) selon le zoom. Plus le zoom
+        est faible, plus on simplifie (moins de sommets → payload plus léger et
+        sérialisation plus rapide). None = pas de simplification (plein détail)."""
+        if zoom >= 18:
+            return None
+        if zoom >= 17:
+            return 0.0000015   # ~0,15 m
+        if zoom >= 15:
+            return 0.000006    # ~0,6 m
+        if zoom >= 14:
+            return 0.00002     # ~2 m
+        return 0.00005
+
+    def annotate_map_geojson(self, queryset, zoom):
+        """Fait calculer par PostGIS le GeoJSON (simplifié + précision bornée) de
+        chaque géométrie → attribut `_map_geojson`. Évite, côté Python, la
+        double sérialisation GEOS + l'arrondi récursif pour ~1500 polygones."""
+        if not self.should_include_geometry(zoom):
+            return queryset
+        precision = self.get_geometry_precision_from_zoom(zoom) or 6
+        tol = self.geometry_simplify_tolerance(zoom)
+        geom_expr = F("geometry")
+        if tol:
+            geom_expr = _SimplifyPreserveTopology(F("geometry"), Value(tol))
+        return queryset.annotate(_map_geojson=AsGeoJSON(geom_expr, precision=precision))
 
     def should_include_images(self, zoom):
         return zoom >= 16
@@ -800,6 +836,15 @@ class RealEstateMapAPIView(APIView):
 
         if not self.should_include_geometry(zoom):
             return None
+
+        # Voie rapide : GeoJSON déjà simplifié + arrondi par PostGIS (annotation
+        # `_map_geojson`). Un seul parse, pas de travail GEOS/arrondi en Python.
+        raw = getattr(parcel, "_map_geojson", None)
+        if raw:
+            try:
+                return json.loads(raw)
+            except (ValueError, TypeError):
+                pass
 
         try:
             geometry = parcel.geometry
@@ -2810,6 +2855,8 @@ class RealEstateMapAPIView(APIView):
             .order_by("lot_number", "id")
         )
         parcel_queryset = self.apply_common_filters_parcels(parcel_queryset, params)
+        # Géométrie simplifiée par PostGIS (voie rapide de sérialisation).
+        parcel_queryset = self.annotate_map_geojson(parcel_queryset, params["zoom"])
 
         # On matérialise les assets *après* avoir appliqué la limite, afin que
         # l'exclusion des parcelles déjà rattachées soit cohérente avec ce qui
