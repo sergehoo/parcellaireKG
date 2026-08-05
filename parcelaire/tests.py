@@ -1705,3 +1705,27 @@ class ProgramSummaryAPITestCase(TestCase):
         self.client.force_login(self.fin)
         d = self.client.get(self.url).json()
         self.assertNotEqual(d["stats"]["ca_total"], "Masqué")
+
+
+class OrthophotoLongPathTests(TestCase):
+    """Régression : le pipeline écrivait des chemins de fichiers > 100 caractères
+    dans des FileField restés en varchar(100) par défaut → « value too long for
+    type character varying(100) ». Les FileField sont désormais en max_length=255."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.country = Country.objects.create(nom="Côte d'Ivoire", code="CI")
+        cls.project = ProjetImmobilier.objects.create(code="PLP", nom="Projet", country=cls.country)
+        cls.program = RealEstateProgram.objects.create(
+            code="AHOUE", name="Résidences Les Jardins d'Ahoué",
+            slug="residences-les-jardins-dahoue", country=cls.country, project=cls.project)
+
+    def test_long_processed_path_saves(self):
+        long_rel = ("orthophotos/processed/residences-les-jardins-dahoue/2026/04/"
+                    "residences-les-jardins-dahoue-avril-2026-reprojected-cog.tif")
+        self.assertGreater(len(long_rel), 100)  # > ancien varchar(100)
+        ortho = ProgramOrthophoto.objects.create(program=self.program, name="Avril 2026")
+        ortho.processed_file.name = long_rel
+        ortho.save(update_fields=["processed_file"])
+        ortho.refresh_from_db()
+        self.assertEqual(ortho.processed_file.name, long_rel)  # chemin conservé intégralement
