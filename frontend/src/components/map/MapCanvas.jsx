@@ -83,9 +83,11 @@ export default function MapCanvas({
   basemap = 'standard', layerStyle = 'polygones',
   orthoLayer = null, orthoOpacity = 1,
   alertLevels = null, showAlerts = false,
-  onReady, onMeasure, onCursor,
+  onReady, onMeasure, onCursor, onViewChange,
 }) {
   const containerRef = useRef(null)
+  const onViewChangeRef = useRef(onViewChange)
+  onViewChangeRef.current = onViewChange
   const mapRef = useRef(null)
   const baseRef = useRef(null)
   const featureLayerRef = useRef(null)
@@ -145,7 +147,16 @@ export default function MapCanvas({
     map.on('mouseout', () => { if (cursorOnRef.current) onCursorRef.current?.(null) })
 
     // Étiquettes « Noms lots » : réévaluées au déplacement/zoom (viewport).
-    map.on('moveend zoomend', () => applyLabelsRef.current())
+    map.on('moveend zoomend', () => {
+      applyLabelsRef.current()
+      if (onViewChangeRef.current) {
+        const b = map.getBounds()
+        onViewChangeRef.current({
+          bbox: [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()],
+          zoom: map.getZoom(),
+        })
+      }
+    })
 
     // API impérative pour le rail de contrôle.
     const api = {
@@ -178,6 +189,7 @@ export default function MapCanvas({
       toggleMinimap: (on) => toggleMinimap(on),
       // Emprise visible [ouest, sud, est, nord] — pour le contexte du Copilot IA.
       bbox: () => { const b = map.getBounds(); return [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()] },
+      getZoom: () => map.getZoom(),
       flyTo: (latlng, zoom) => { if (Array.isArray(latlng)) map.flyTo(latlng, zoom || 16, { duration: 0.9 }) },
       fitGeoJson: (geojson) => {
         try {
