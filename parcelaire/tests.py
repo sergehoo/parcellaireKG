@@ -1765,6 +1765,21 @@ class MapDataPerfTests(TestCase):
         self.assertIn(g.get("type"), ("Polygon", "MultiPolygon"))
         self.assertIn("coordinates", g)
 
+    def test_geom_bbox_gates_geometry_but_keeps_all_features(self):
+        self.client.force_login(self.user)
+        inview = "-4.01,5.34,-3.99,5.36"   # minLng,minLat,maxLng,maxLat couvrant les parcelles
+        r = self.client.get("/api/map/assets/", {"zoom": 16, "limit": 100, "geom_bbox": inview})
+        self.assertEqual(r.status_code, 200)
+        assets = r.json()["assets"]
+        n = len(assets)
+        self.assertTrue(any(a.get("geometry") for a in assets))
+        # Emprise ailleurs : aucune géométrie, MAIS toutes les entités restent
+        # renvoyées (les cartouches/summaries restent sur tout le filtre).
+        out = self.client.get("/api/map/assets/",
+                              {"zoom": 16, "limit": 100, "geom_bbox": "10,10,10.1,10.1"}).json()["assets"]
+        self.assertEqual(len(out), n)
+        self.assertTrue(all(a.get("geometry") is None for a in out))
+
     def test_map_low_zoom_omits_geometry(self):
         self.client.force_login(self.user)
         r = self.client.get("/api/map/assets/", {"zoom": 12, "limit": 100})

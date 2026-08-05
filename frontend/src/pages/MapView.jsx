@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { getMapAssets } from '../api/map'
@@ -91,17 +91,57 @@ export default function MapView() {
 
   const fitToken = useMemo(() => FILTER_KEYS.map((k) => filters[k]).join('|'), [filters])
 
-  const load = useCallback(() => {
-    setLoading(true)
+  // Cache client + requête en vol : le chargement carto est « slippy map »
+  // (vue d'ensemble légère, puis géométrie par emprise débouncée).
+  const cacheRef = useRef(new Map())
+  const inflightRef = useRef(null)
+  const debounceRef = useRef(null)
+
+  const fetchAssets = useCallback((extra = {}) => {
+    const params = { ...filters, limit: 11200, ...extra }
+    const key = JSON.stringify(params)
+    const cached = cacheRef.current.get(key)
+    if (cached) { setData(cached); setError(null); return }
+    if (inflightRef.current) inflightRef.current.abort()
     const controller = new AbortController()
-    getMapAssets({ ...filters, zoom: 15, limit: 11200 }, { signal: controller.signal })
-      .then((payload) => { setData(payload); setError(null) })
+    inflightRef.current = controller
+    setLoading(true)
+    getMapAssets(params, { signal: controller.signal })
+      .then((payload) => {
+        setData(payload); setError(null)
+        cacheRef.current.set(key, payload)
+        if (cacheRef.current.size > 40) cacheRef.current.delete(cacheRef.current.keys().next().value)
+      })
       .catch((err) => { if (err.name !== 'AbortError') setError(err) })
       .finally(() => setLoading(false))
-    return () => controller.abort()
   }, [filters])
 
-  useEffect(() => load(), [load])
+  // Changement de filtre → vue d'ensemble (marqueurs + cartouches, sans géométrie).
+  useEffect(() => {
+    cacheRef.current.clear()
+    fetchAssets({ zoom: 12 })
+  }, [fetchAssets])
+
+  // Déplacement/zoom → charge la géométrie de l'emprise (débouncé, marge 15 %).
+  const onViewChange = useCallback(({ bbox, zoom }) => {
+    if (zoom < 14) return  // vue large : marqueurs seuls, rien de plus à charger
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      const [w, s, e, n] = bbox
+      const dx = (e - w) * 0.15
+      const dy = (n - s) * 0.15
+      const gb = [w - dx, s - dy, e + dx, n + dy].map((v) => v.toFixed(3)).join(',')
+      fetchAssets({ geom_bbox: gb, zoom: Math.round(zoom) })
+    }, 350)
+  }, [fetchAssets])
+
+  // 1er chargement d'emprise dès que la carte est prête (si déjà zoomée).
+  useEffect(() => {
+    if (api?.bbox && api?.getZoom) {
+      const z = api.getZoom()
+      if (z >= 14) onViewChange({ bbox: api.bbox(), zoom: z })
+    }
+  }, [api, onViewChange])
   useEffect(() => { if (api) api.toggleMinimap(minimapOn) }, [api, minimapOn])
 
   // Contexte LIVE pour le Copilot IA : programme filtré, parcelle sélectionnée,
@@ -228,6 +268,7 @@ export default function MapView() {
         alertLevels={alertLevels}
         showAlerts={showAlerts}
         onReady={setApi}
+        onViewChange={onViewChange}
         onMeasure={setMeasure}
         onCursor={setCursor}
       />

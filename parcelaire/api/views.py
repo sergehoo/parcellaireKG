@@ -321,10 +321,12 @@ class RealEstateMapAPIView(APIView):
             return 0.00002     # ~2 m
         return 0.00005
 
-    def annotate_map_geojson(self, queryset, zoom):
+    def annotate_map_geojson(self, queryset, zoom, geom_bbox=None):
         """Fait calculer par PostGIS le GeoJSON (simplifié + précision bornée) de
         chaque géométrie → attribut `_map_geojson`. Évite, côté Python, la
-        double sérialisation GEOS + l'arrondi récursif pour ~1500 polygones."""
+        double sérialisation GEOS + l'arrondi récursif pour ~1500 polygones.
+        Si `geom_bbox` est fourni, la géométrie n'est calculée QUE pour les
+        entités visibles (charge géométrique bornée à l'emprise)."""
         if not self.should_include_geometry(zoom):
             return queryset
         precision = self.get_geometry_precision_from_zoom(zoom) or 6
@@ -332,7 +334,14 @@ class RealEstateMapAPIView(APIView):
         geom_expr = F("geometry")
         if tol:
             geom_expr = _SimplifyPreserveTopology(F("geometry"), Value(tol))
-        return queryset.annotate(_map_geojson=AsGeoJSON(geom_expr, precision=precision))
+        gj = AsGeoJSON(geom_expr, precision=precision)
+        if geom_bbox is not None:
+            from django.db.models import Case, TextField, When
+            gj = Case(
+                When(geometry__intersects=geom_bbox, then=gj),
+                default=Value(None), output_field=TextField(),
+            )
+        return queryset.annotate(_map_geojson=gj)
 
     def should_include_images(self, zoom):
         return zoom >= 16
@@ -360,6 +369,9 @@ class RealEstateMapAPIView(APIView):
             "tag": (request.GET.get("tag") or "").strip(),
             "search": (request.GET.get("search") or "").strip(),
             "bbox": self.parse_bbox(request.GET.get("bbox")),
+            # Emprise viewport : ne calcule la GÉOMÉTRIE que pour les entités
+            # visibles (les cartouches/summaries restent, eux, sur tout le filtre).
+            "geom_bbox": self.parse_bbox(request.GET.get("geom_bbox")),
             "zoom": zoom,
             "limit": limit,
         }
@@ -839,12 +851,16 @@ class RealEstateMapAPIView(APIView):
 
         # Voie rapide : GeoJSON déjà simplifié + arrondi par PostGIS (annotation
         # `_map_geojson`). Un seul parse, pas de travail GEOS/arrondi en Python.
-        raw = getattr(parcel, "_map_geojson", None)
-        if raw:
+        # Si l'annotation est PRÉSENTE (queryset carto), elle fait autorité :
+        # None = entité hors emprise → pas de géométrie (on ne recalcule pas).
+        if hasattr(parcel, "_map_geojson"):
+            raw = parcel._map_geojson
+            if not raw:
+                return None
             try:
                 return json.loads(raw)
             except (ValueError, TypeError):
-                pass
+                return None
 
         try:
             geometry = parcel.geometry
@@ -2855,8 +2871,9 @@ class RealEstateMapAPIView(APIView):
             .order_by("lot_number", "id")
         )
         parcel_queryset = self.apply_common_filters_parcels(parcel_queryset, params)
-        # Géométrie simplifiée par PostGIS (voie rapide de sérialisation).
-        parcel_queryset = self.annotate_map_geojson(parcel_queryset, params["zoom"])
+        # Géométrie simplifiée par PostGIS (voie rapide), bornée à l'emprise si fournie.
+        parcel_queryset = self.annotate_map_geojson(
+            parcel_queryset, params["zoom"], params.get("geom_bbox"))
 
         # On matérialise les assets *après* avoir appliqué la limite, afin que
         # l'exclusion des parcelles déjà rattachées soit cohérente avec ce qui
