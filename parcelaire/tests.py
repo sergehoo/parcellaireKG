@@ -1729,3 +1729,45 @@ class OrthophotoLongPathTests(TestCase):
         ortho.save(update_fields=["processed_file"])
         ortho.refresh_from_db()
         self.assertEqual(ortho.processed_file.name, long_rel)  # chemin conservé intégralement
+
+
+class MapDataPerfTests(TestCase):
+    """La carte sérialise les géométries via PostGIS (simplification + AsGeoJSON,
+    annotation `_map_geojson`) au lieu de GEOS/arrondi en Python."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from django.contrib.gis.geos import MultiPolygon, Polygon
+        cls.user = User.objects.create_user("mapper", password="pwd")
+        cls.country = Country.objects.create(nom="Côte d'Ivoire", code="CI")
+        cls.project = ProjetImmobilier.objects.create(code="MAP", nom="Projet", country=cls.country)
+        cls.program = RealEstateProgram.objects.create(
+            code="MPRG", name="Prog carte", slug="prog-carte", country=cls.country, project=cls.project)
+        cls.ds = ParcelDataset.objects.create(name="DS", program=cls.program)
+
+        def sq(lng0, lat0, d=0.0003):
+            r = ((lng0 - d, lat0 - d), (lng0 + d, lat0 - d), (lng0 + d, lat0 + d),
+                 (lng0 - d, lat0 + d), (lng0 - d, lat0 - d))
+            return MultiPolygon(Polygon(r), srid=4326)
+        for i in range(5):
+            Parcel.objects.create(program=cls.program, dataset=cls.ds, lot_number=str(i),
+                                  geometry=sq(-4.0 + i * 0.001, 5.35))
+
+    def test_map_returns_geojson_geometry(self):
+        self.client.force_login(self.user)
+        r = self.client.get("/api/map/assets/", {"zoom": 17, "limit": 100})
+        self.assertEqual(r.status_code, 200)
+        assets = r.json().get("assets", [])
+        self.assertTrue(assets)
+        geoms = [a.get("geometry") for a in assets if a.get("geometry")]
+        self.assertTrue(geoms, "au moins une entité doit porter une géométrie")
+        g = geoms[0]
+        self.assertIn(g.get("type"), ("Polygon", "MultiPolygon"))
+        self.assertIn("coordinates", g)
+
+    def test_map_low_zoom_omits_geometry(self):
+        self.client.force_login(self.user)
+        r = self.client.get("/api/map/assets/", {"zoom": 12, "limit": 100})
+        self.assertEqual(r.status_code, 200)
+        assets = r.json().get("assets", [])
+        self.assertTrue(all(a.get("geometry") is None for a in assets))
