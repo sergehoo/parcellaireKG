@@ -341,6 +341,7 @@ class ProgramOrthophoto(TimeStampedModel):
 
     source_file = models.FileField(
         upload_to="orthophotos/sources/",
+        max_length=255,  # défaut Django = 100 → trop court pour les chemins longs
         blank=True,
         null=True,
         verbose_name="Fichier source"
@@ -427,12 +428,14 @@ class ProgramOrthophoto(TimeStampedModel):
     # =====================================================
     processed_file = models.FileField(
         upload_to="orthophotos/processed/",
+        max_length=255,  # chemin = orthophotos/processed/<slug>/AAAA/MM/<slug>-...cog.tif (>100)
         blank=True,
         null=True,
         verbose_name="GeoTIFF reprojeté (EPSG:3857)"
     )
     vrt_file = models.FileField(
         upload_to="orthophotos/processed/",
+        max_length=255,
         blank=True,
         null=True,
         verbose_name="VRT RGBA (si palette)"
