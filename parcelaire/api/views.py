@@ -1109,31 +1109,33 @@ class RealEstateMapAPIView(APIView):
         return first_day, last_day
 
     def get_parcel_tags_payload(self, parcel):
+        # Utilise la relation PRÉFETCHÉE (parcel.tags.all()) + filtre en Python :
+        # tout .filter()/.order_by() ici relancerait une requête PAR parcelle (N+1).
         try:
-            return [
-                self.serialize_tag(tag)
-                for tag in parcel.tags.filter(
-                    is_active=True,
-                    program_id=parcel.program_id,
-                ).select_related("program", "program__project").order_by("name")
+            tags = [
+                t for t in parcel.tags.all()
+                if getattr(t, "is_active", True) and t.program_id == parcel.program_id
             ]
+            tags.sort(key=lambda t: (t.name or ""))
+            return [self.serialize_tag(t) for t in tags]
         except Exception:
             return []
+
     def get_parcel_or_asset_construction_project(self, parcel=None, asset=None):
+        # Sélection du chantier le plus récent depuis la relation préfetchée
+        # (pas de requête par entité).
+        def latest(obj):
+            projects = list(obj.construction_projects.all())
+            return max(projects, key=lambda p: p.created_at) if projects else None
+
         if asset:
-            qs = asset.construction_projects.all().order_by("-created_at")
-            project = qs.first()
+            project = latest(asset)
             if project:
                 return project
-
         if parcel:
-            qs = parcel.construction_projects.all().order_by("-created_at")
-            return qs.first()
-
+            return latest(parcel)
         if asset and getattr(asset, "parcel", None):
-            qs = asset.parcel.construction_projects.all().order_by("-created_at")
-            return qs.first()
-
+            return latest(asset.parcel)
         return None
 
     def get_monthly_progress_value(self, construction_project, year, month):
@@ -1142,15 +1144,19 @@ class RealEstateMapAPIView(APIView):
 
         start_date, end_date = self.month_range(year, month)
 
-        update = (
-            construction_project.updates
-            .filter(report_date__gte=start_date, report_date__lte=end_date, is_active=True)
-            .order_by("-report_date", "-created_at")
-            .first()
-        )
-        if update and update.progress_percent is not None:
+        # Relevés PRÉFETCHÉS (construction_project.updates.all()) filtrés en Python.
+        best = None
+        for u in construction_project.updates.all():
+            if not getattr(u, "is_active", True):
+                continue
+            rd = getattr(u, "report_date", None)
+            if rd is None or rd < start_date or rd > end_date:
+                continue
+            if best is None or (u.report_date, u.created_at) > (best.report_date, best.created_at):
+                best = u
+        if best and best.progress_percent is not None:
             try:
-                return float(update.progress_percent)
+                return float(best.progress_percent)
             except Exception:
                 return 0
         return 0
@@ -2860,7 +2866,10 @@ class RealEstateMapAPIView(APIView):
                 "block",
             )
             .prefetch_related(
-                "tags",
+                # select_related sur le tag → évite un SELECT program PAR tag
+                # dans serialize_tag (N+1).
+                Prefetch("tags", queryset=ParcelTag.objects.filter(is_active=True)
+                         .select_related("program", "program__project")),
                 "documents",
                 "construction_projects__photos",
                 "construction_projects__updates",
