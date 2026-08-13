@@ -1780,6 +1780,23 @@ class MapDataPerfTests(TestCase):
         self.assertEqual(len(out), n)
         self.assertTrue(all(a.get("geometry") is None for a in out))
 
+    def test_bulk_is_light_and_detail_is_full(self):
+        self.client.force_login(self.user)
+        r = self.client.get("/api/map/assets/", {"zoom": 16, "limit": 100}).json()
+        a = r["assets"][0]
+        self.assertTrue(a["light"])                       # réponse allégée
+        self.assertNotIn("financial_stats", a)            # champs lourds retirés
+        self.assertNotIn("timeline", a)
+        # Détail au clic : fiche complète.
+        d = self.client.get("/api/map/assets/", {"uid": a["uid"]}).json()
+        self.assertIn("financial_stats", d)
+        self.assertIn("timeline", d)
+        self.assertEqual(d["uid"], a["uid"])
+
+    def test_detail_unknown_uid_404(self):
+        self.client.force_login(self.user)
+        self.assertEqual(self.client.get("/api/map/assets/", {"uid": "parcel-999999"}).status_code, 404)
+
     def test_map_low_zoom_omits_geometry(self):
         self.client.force_login(self.user)
         r = self.client.get("/api/map/assets/", {"zoom": 12, "limit": 100})

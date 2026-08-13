@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
-import { getMapAssets } from '../api/map'
+import { getMapAssets, getMapFeatureDetail } from '../api/map'
 import { getAlertMap } from '../api/analytics'
 import { getTheme } from '../lib/theme'
 import useReferenceData from '../hooks/useReferenceData'
@@ -27,7 +27,27 @@ export default function MapView() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [selected, setSelected] = useState(null)
+  const [selected, setSelectedRaw] = useState(null)
+  const detailCacheRef = useRef(new Map())
+
+  // Sélection « hydratante » : la fiche allégée s'affiche immédiatement, puis le
+  // détail complet (financier/chantier/timeline/images) est chargé via ?uid=.
+  const setSelected = useCallback((f) => {
+    setSelectedRaw(f)
+    if (!f || !f.light || !f.uid) return
+    const cached = detailCacheRef.current.get(f.uid)
+    if (cached) { setSelectedRaw(cached); return }
+    getMapFeatureDetail(f.uid)
+      .then((full) => {
+        detailCacheRef.current.set(f.uid, full)
+        if (detailCacheRef.current.size > 60) {
+          detailCacheRef.current.delete(detailCacheRef.current.keys().next().value)
+        }
+        // N'hydrate que si l'utilisateur regarde toujours la même entité.
+        setSelectedRaw((cur) => (cur && cur.uid === f.uid ? full : cur))
+      })
+      .catch(() => { /* la fiche allégée reste affichée */ })
+  }, [])
 
   // Fond de carte : suit le thème par défaut (sombre → fond « sombre »).
   const [basemap, setBasemap] = useState(() => (getTheme() === 'dark' ? 'sombre' : 'standard'))

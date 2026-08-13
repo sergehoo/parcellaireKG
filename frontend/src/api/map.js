@@ -23,3 +23,9 @@ export function getMapAssets(params = {}, { signal } = {}) {
   const qs = query.toString()
   return request(`/api/map/assets/${qs ? `?${qs}` : ''}`, { signal })
 }
+
+// Fiche COMPLÈTE d'une entité (financier, chantier, timeline, images, unités…)
+// chargée à la sélection — la liste bulk ne porte plus que les champs de rendu.
+export function getMapFeatureDetail(uid, { signal } = {}) {
+  return request(`/api/map/assets/?uid=${encodeURIComponent(uid)}`, { signal })
+}
