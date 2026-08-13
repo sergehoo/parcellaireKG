@@ -134,3 +134,57 @@ class AlertsAPITests(TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertTrue(r.json()["ok"])
         self.assertEqual(len(mail.outbox), 1)
+
+
+@override_settings(MEDIA_ROOT=TMP_MEDIA)
+class ManualSendAPITests(AlertsAPITests):
+    """Envoi manuel : les destinataires explicites de la modale sont honorés.
+    (Hérite du fixture ; les tests parents re-tournent, sans effet de bord.)"""
+
+    def test_generate_and_send_with_explicit_recipients(self):
+        from django.core import mail
+        self.staff.user_permissions.add(perm("send_alertreport"))
+        self.client.force_login(self.staff)
+        r = self.client.post("/api/alerts/reports/generate/",
+                             {"preview": False, "period_days": 7,
+                              "recipients": ["dg@kaydan.tech", "tech@kaydan.tech"]},
+                             "application/json")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["status"], "SENT")
+        self.assertEqual(r.json()["email_count"], 2)
+        self.assertEqual(len(mail.outbox), 2)
+
+    def test_send_without_recipients_fails_clearly(self):
+        self.staff.user_permissions.add(perm("send_alertreport"))
+        self.client.force_login(self.staff)
+        r = self.client.post("/api/alerts/reports/generate/",
+                             {"preview": False, "period_days": 7}, "application/json")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["status"], "FAILED")
+        self.assertIn("destinataire", r.json()["error_message"])
+
+
+@override_settings(MEDIA_ROOT=TMP_MEDIA,
+                   EMAIL_BACKEND="django.core.mail.backends.dummy.EmailBackend")
+class DummyBackendTests(TestCase):
+    """EMAIL_HOST absent (backend dummy) : le KPI et le test SMTP disent la vérité.
+    Classe AUTONOME (ne pas hériter d'AlertsAPITests : ses tests d'envoi
+    échoueraient légitimement sous backend dummy)."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.admin = User.objects.create_superuser("dummy-admin", "d@a.co", "pwd")
+
+    def test_dashboard_flags_email_not_configured(self):
+        self.client.force_login(self.admin)
+        d = self.client.get("/api/alerts/dashboard/").json()
+        self.assertFalse(d["email_service_ok"])
+
+    def test_smtp_test_reports_not_configured(self):
+        from django.contrib.auth.models import User
+        u = User.objects.create_user("al-mgr2", password="pwd")
+        u.user_permissions.add(perm("manage_alertrecipient"))
+        self.client.force_login(u)
+        r = self.client.post("/api/alerts/smtp/test/", {"email": "x@y.z"}, "application/json")
+        self.assertEqual(r.status_code, 502)
+        self.assertIn("EMAIL_HOST", r.json()["error"])

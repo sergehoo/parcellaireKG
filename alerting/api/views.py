@@ -262,7 +262,14 @@ class AlertDashboardAPIView(APIView):
                            if monitored is None else len(monitored))
 
         backend = getattr(settings, "EMAIL_BACKEND", "")
-        email_ok = "smtp" not in backend or bool(getattr(settings, "EMAIL_HOST", ""))
+        # dummy = AUCUN envoi tenté (EMAIL_HOST absent en prod) ; smtp sans hôte
+        # = non configuré. console/locmem (dev/tests) considérés fonctionnels.
+        if "dummy" in backend:
+            email_ok = False
+        elif "smtp" in backend:
+            email_ok = bool(getattr(settings, "EMAIL_HOST", ""))
+        else:
+            email_ok = True
 
         data = {
             "active_alerts": AlertDetection.objects.filter(status=AlertDetection.Status.NEW).count(),
@@ -293,6 +300,14 @@ class SmtpTestAPIView(APIView):
         to = (request.data or {}).get("email")
         if not to:
             raise ValidationError("Adresse e-mail de test requise.")
+        backend = getattr(settings, "EMAIL_BACKEND", "")
+        if "dummy" in backend:
+            return Response({
+                "ok": False,
+                "error": "Service e-mail NON configuré : EMAIL_HOST est vide, aucun envoi "
+                         "n'est tenté (backend dummy). Renseigner EMAIL_HOST / EMAIL_HOST_USER / "
+                         "EMAIL_HOST_PASSWORD / DEFAULT_FROM_EMAIL dans l'environnement.",
+            }, status=502)
         try:
             sent = send_mail(
                 subject="[TEST] Parcellaire KAYDAN — service d'alertes",
