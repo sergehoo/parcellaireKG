@@ -846,12 +846,9 @@ class RealEstateMapAPIView(APIView):
         if not parcel or not getattr(parcel, "geometry", None):
             return None
 
-        if not self.should_include_geometry(zoom):
-            return None
-
-        # Voie rapide : GeoJSON déjà simplifié + arrondi par PostGIS (annotation
-        # `_map_geojson`). Un seul parse, pas de travail GEOS/arrondi en Python.
-        # Si l'annotation est PRÉSENTE (queryset carto), elle fait autorité :
+        # L'annotation PostGIS `_map_geojson` fait AUTORITÉ (présente = géométrie
+        # demandée au vrai zoom) — indépendante du `zoom` passé aux builders, qui
+        # peut être bridé pour éviter de construire les champs lourds inutiles.
         # None = entité hors emprise → pas de géométrie (on ne recalcule pas).
         if hasattr(parcel, "_map_geojson"):
             raw = parcel._map_geojson
@@ -862,15 +859,16 @@ class RealEstateMapAPIView(APIView):
             except (ValueError, TypeError):
                 return None
 
+        # Fallback (entités non annotées, ex. actifs) : gate sur le VRAI zoom.
+        geom_zoom = getattr(self, "_geometry_zoom", zoom)
+        if not self.should_include_geometry(geom_zoom):
+            return None
         try:
             geometry = parcel.geometry
-            precision = self.get_geometry_precision_from_zoom(zoom)
-
+            precision = self.get_geometry_precision_from_zoom(geom_zoom)
             if precision is not None:
-                geojson = geometry.geojson
-                data = json.loads(geojson)
+                data = json.loads(geometry.geojson)
                 return self.round_geojson_coordinates(data, precision)
-
             return json.loads(geometry.geojson)
         except Exception:
             return None
@@ -2826,11 +2824,75 @@ class RealEstateMapAPIView(APIView):
             qs = qs.filter(program_id__in=program_ids)
 
         return [self.serialize_tag(tag) for tag in qs.order_by("name")]
+    # Champs conservés dans la réponse carte allégée (rendu + info de base).
+    # Le détail lourd (financier/chantier/timeline/images/unités…) est chargé
+    # à la sélection via `?uid=` — divise le payload par ~10 et fiabilise le
+    # transfert (une réponse de 5 Mo était tronquée par le proxy en prod).
+    MAP_LIGHT_KEEP = frozenset({
+        "uid", "id", "parcel_id", "entity_type", "name", "program", "program_id",
+        "status", "statusKey", "statusBadge", "color", "fillOpacity", "center", "geometry",
+    })
+
+    def _light_feature(self, feature):
+        out = {k: v for k, v in feature.items() if k in self.MAP_LIGHT_KEEP}
+        out["light"] = True
+        return out
+
+    def _feature_detail(self, request, params, uid, ortho_prefetch):
+        """Fiche COMPLÈTE d'une seule entité (chargée au clic). Réutilise les
+        builders existants sur un queryset d'un élément."""
+        from django.http import Http404
+        try:
+            entity_id = int(uid.rsplit("-", 1)[-1])
+        except (ValueError, IndexError):
+            raise Http404("uid invalide")
+        detail_params = dict(params)
+        detail_params["zoom"] = max(params["zoom"], 17)  # plein détail (images, timeline…)
+        self._geometry_zoom = detail_params["zoom"]
+
+        if uid.startswith("asset-"):
+            qs = (PropertyAsset.objects.select_related(
+                    "program", "program__project", "phase", "parcel",
+                    "property_type", "asset_category")
+                  .prefetch_related(
+                    "photos", "updates", "parcel__documents", "parcel__tags", "units",
+                    "units__unit_type", "construction_projects",
+                    "construction_projects__updates", "construction_projects__photos",
+                    ortho_prefetch)
+                  .filter(is_active=True, id=entity_id))
+            items = self._build_from_assets(list(qs[:1]), detail_params).get("assets", [])
+        else:  # parcel-{id} ou parcel-crm-{id}
+            qs = (Parcel.objects.select_related("program", "program__project", "phase", "block")
+                  .prefetch_related(
+                    Prefetch("tags", queryset=ParcelTag.objects.filter(is_active=True)
+                             .select_related("program", "program__project")),
+                    "documents", "construction_projects__photos",
+                    "construction_projects__updates", ortho_prefetch)
+                  .filter(is_active=True, id=entity_id))
+            qs = self.annotate_map_geojson(qs, detail_params["zoom"])
+            items = self._build_from_parcels(list(qs[:1]), detail_params).get("assets", [])
+
+        if not items:
+            raise Http404("entité introuvable")
+        return Response(items[0])
+
     def get(self, request, *args, **kwargs):
         self.user_rights = self.get_user_rights(request)
         params = self.normalize_query(request)
 
         ortho_prefetch = self.orthophotos_prefetch()
+
+        # Chargement du détail d'UNE entité (au clic) → fiche complète.
+        detail_uid = (request.GET.get("uid") or "").strip()
+        if detail_uid:
+            return self._feature_detail(request, params, detail_uid, ortho_prefetch)
+
+        # Géométrie décidée au VRAI zoom ; mais les builders tournent à un zoom
+        # BRIDÉ pour NE PAS construire les champs lourds (images/timeline/unités/
+        # ventes) qui sont de toute façon retirés de la réponse allégée.
+        self._geometry_zoom = params["zoom"]
+        build_params = dict(params)
+        build_params["zoom"] = min(params["zoom"], 13)
 
         asset_queryset = (
             PropertyAsset.objects.select_related(
@@ -2893,7 +2955,7 @@ class RealEstateMapAPIView(APIView):
         limited_parcels = list(parcel_queryset[: params["limit"]])
 
         asset_data = (
-            self._build_from_assets(limited_assets, params) if limited_assets else {
+            self._build_from_assets(limited_assets, build_params) if limited_assets else {
                 "source": "property_assets",
                 "assets": [],
                 "summaries": [],
@@ -2901,7 +2963,7 @@ class RealEstateMapAPIView(APIView):
         )
 
         parcel_data = (
-            self._build_from_parcels(limited_parcels, params) if limited_parcels else {
+            self._build_from_parcels(limited_parcels, build_params) if limited_parcels else {
                 "source": "parcels",
                 "assets": [],
                 "summaries": [],
@@ -2962,9 +3024,14 @@ class RealEstateMapAPIView(APIView):
             len(limited_assets) >= params["limit"] or len(limited_parcels) >= params["limit"]
         )
 
+        # Réponse allégée : on ne renvoie que les champs de rendu (le détail
+        # complet est chargé au clic via ?uid=). Les summaries ci-dessus ont déjà
+        # été calculés sur les fiches COMPLÈTES → restent justes.
+        light_assets = [self._light_feature(f) for f in combined_assets]
+
         return Response({
             "source": "mixed",
-            "assets": combined_assets,
+            "assets": light_assets,
             "summaries": summaries,
             "filters": self.FILTERS,
             "tag_filters": tag_filters,
