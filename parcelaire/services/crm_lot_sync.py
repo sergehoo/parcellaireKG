@@ -408,6 +408,27 @@ class KaydanCRMLotSyncService:
     # CRM PAYLOAD BUILDERS
     # =========================================================
 
+    def normalize_versements(self, item: dict) -> List[Dict[str, Any]]:
+        """Historique de paiements CRM (`versements[]`), normalisé et dédupliqué
+        par id_versement, trié par date. Remplace le cumul `versement_client`
+        (déprécié côté API — on ne s'en sert plus qu'en repli)."""
+        out: Dict[str, Dict[str, Any]] = {}
+        for v in item.get("versements") or []:
+            if not isinstance(v, dict):
+                continue
+            vid = self._safe_str(v.get("id_versement"))
+            montant = self._safe_decimal_2(v.get("montant"))
+            if not vid or montant <= 0:
+                continue
+            out[vid] = {
+                "id_versement": vid,
+                "montant": self._decimal_to_str(montant),
+                "date_versement": self._safe_str(v.get("date_versement")),
+                "mode_paiement": self._safe_str(v.get("mode_paiement")),
+                "date_update": self._safe_str(v.get("date_update")),
+            }
+        return sorted(out.values(), key=lambda x: (x["date_versement"], x["id_versement"]))
+
     def build_single_unit_payload(
         self,
         *,
@@ -420,8 +441,17 @@ class KaydanCRMLotSyncService:
         valeur_hypothecaire = self._safe_decimal_2(item.get("valeur_hypothecaire"))
         avancement_travaux_mois = self._safe_float(item.get("avancement_travaux_mois"))
         cout_actif = self._safe_decimal_2(item.get("cout_actif"))
-        versement_client = self._safe_decimal_2(item.get("versement_client"))
         ecart_status = self._safe_decimal_2(item.get("ecart_status"))
+
+        # Payé = somme de l'HISTORIQUE `versements` (source de vérité depuis la
+        # mise à jour de l'API) ; le cumul `versement_client` n'est qu'un repli
+        # pour les payloads sans historique.
+        versements = self.normalize_versements(item)
+        if versements:
+            versement_client = sum(
+                (self._safe_decimal_2(v["montant"]) for v in versements), Decimal("0.00"))
+        else:
+            versement_client = self._safe_decimal_2(item.get("versement_client"))
 
         nom = self._safe_str(item.get("nom"))
         prenom = self._safe_str(item.get("prenom"))
@@ -444,6 +474,7 @@ class KaydanCRMLotSyncService:
             "client_nom_complet": client_nom_complet,
             "cout_actif": self._decimal_to_str(cout_actif),
             "versement_client": self._decimal_to_str(versement_client),
+            "versements": versements,
             "valeur_hypothecaire": self._decimal_to_str(valeur_hypothecaire),
             "avancement_travaux_mois": avancement_travaux_mois,
             "ecart_status": self._decimal_to_str(ecart_status),
@@ -506,7 +537,9 @@ class KaydanCRMLotSyncService:
             units.append(unit_payload)
 
             sum_unit_hypo += self._safe_decimal_2(item.get("valeur_hypothecaire"))
-            sum_unit_paid += self._safe_decimal_2(item.get("versement_client"))
+            # Payé de l'unité : déjà recalculé depuis l'historique `versements`
+            # dans build_single_unit_payload (repli cumul sinon).
+            sum_unit_paid += self._safe_decimal_2(unit_payload.get("versement_client"))
             sum_unit_cost += self._safe_decimal_2(item.get("cout_actif"))
             avg_progress_source.append(self._safe_float(item.get("avancement_travaux_mois")))
 
@@ -514,7 +547,11 @@ class KaydanCRMLotSyncService:
                 customers.append(client_label)
 
         total_hypo = parent_hypo if parent_hypo > 0 else sum_unit_hypo
-        total_paid = parent_paid if parent_paid > 0 else sum_unit_paid
+        # Si au moins une unité porte l'historique `versements`, la somme des
+        # unités fait foi (le cumul parent `unitaire_versement_client` est
+        # déprécié) ; sinon comportement historique.
+        has_history = any(u.get("versements") for u in units)
+        total_paid = sum_unit_paid if has_history else (parent_paid if parent_paid > 0 else sum_unit_paid)
         total_cost = sum_unit_cost
         total_progress = parent_progress if parent_progress > 0 else (
             sum(avg_progress_source) / len(avg_progress_source) if avg_progress_source else 0.0
