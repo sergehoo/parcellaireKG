@@ -531,6 +531,120 @@ class ParcelCRMProjectionService:
         return payment, created
 
     # =========================================================
+    # HISTORIQUE RÉEL DES VERSEMENTS (API CRM mise à jour)
+    # =========================================================
+
+    # Libellés CRM → choix Payment.payment_method.
+    PAYMENT_MODE_MAP = {
+        "cheque": "CHEQUE",
+        "virement": "BANK",
+        "especes": "CASH",
+        "mobile money": "MOBILE_MONEY",
+        "carte": "CARD",
+    }
+
+    def _map_payment_method(self, label) -> str:
+        import unicodedata
+        raw = self._safe_str(label).strip().lower()
+        # Sans accents : « Chèque » → « cheque », « Espèces » → « especes ».
+        flat = unicodedata.normalize("NFKD", raw).encode("ascii", "ignore").decode()
+        return self.PAYMENT_MODE_MAP.get(flat, "OTHER")
+
+    def _parse_versement_date(self, value):
+        from datetime import datetime
+        try:
+            return datetime.strptime(self._safe_str(value)[:10], "%Y-%m-%d").date()
+        except (ValueError, TypeError):
+            return None
+
+    def _collect_versements(self, crm: dict) -> List[dict]:
+        """Historique `versements[]` de toutes les unités du payload, dédupliqué
+        par id_versement et trié par date."""
+        out: Dict[str, dict] = {}
+        sources = list(self._units_data(crm) or [])
+        if not sources:
+            sources = [crm]
+        for unit in sources:
+            for v in (unit or {}).get("versements") or []:
+                if not isinstance(v, dict):
+                    continue
+                vid = self._safe_str(v.get("id_versement"))
+                if vid:
+                    out[vid] = v
+        return sorted(out.values(), key=lambda v: (self._safe_str(v.get("date_versement")),
+                                                   self._safe_str(v.get("id_versement"))))
+
+    def _retire_legacy_cumulative_payments(self, sale_file: SaleFile) -> int:
+        """Annule les paiements synthétiques « delta de cumul » (référence
+        CRM_CUMUL_*) : l'historique réel les remplace. Sans cette annulation,
+        les montants seraient comptés en double (cumul + versements)."""
+        cancelled = 0
+        for payment in Payment.objects.filter(
+                sale_file=sale_file, reference__startswith="CRM_CUMUL_").exclude(status="CANCELLED"):
+            payment.status = "CANCELLED"
+            payment.is_active = False
+            payment.notes = ((payment.notes or "") +
+                             "\nAnnulé : remplacé par l'historique réel des versements CRM.").strip()
+            payment.save(update_fields=["status", "is_active", "notes", "updated_at"])
+            cancelled += 1
+        return cancelled
+
+    def _sync_versements(self, sale_file: SaleFile, versements: List[dict]):
+        """Crée/realigne un Payment par versement CRM (idempotent : numéro
+        PAY-CRM-V-<id_versement>, unique). Le CRM fait foi pour SES écritures :
+        montant/date/mode sont réalignés s'ils ont changé côté CRM."""
+        created = updated = 0
+        total = Decimal("0.00")
+        for v in versements:
+            vid = self._safe_str(v.get("id_versement"))
+            montant = self._quantize_2(v.get("montant"))
+            if not vid or montant <= 0:
+                continue
+            total += montant
+            pay_date = self._parse_versement_date(v.get("date_versement")) or timezone.localdate()
+            method = self._map_payment_method(v.get("mode_paiement"))
+
+            payment, was_created = Payment.objects.get_or_create(
+                payment_number=f"PAY-CRM-V-{vid}",
+                defaults={
+                    "sale_file": sale_file,
+                    "installment": None,
+                    "payment_date": pay_date,
+                    "amount": montant,
+                    "payment_method": method,
+                    "reference": f"CRM_VERSEMENT_{vid}",
+                    "status": self.CRM_PAYMENT_STATUS,
+                    "received_by": self.UPDATE_RECORDED_BY,
+                    "notes": (f"Versement importé de l'historique CRM "
+                              f"(id_versement={vid}, mode={self._safe_str(v.get('mode_paiement')) or '—'})."),
+                },
+            )
+            if was_created:
+                created += 1
+                continue
+            fields = []
+            if payment.amount != montant:
+                payment.amount = montant
+                fields.append("amount")
+            if payment.payment_date != pay_date:
+                payment.payment_date = pay_date
+                fields.append("payment_date")
+            if payment.payment_method != method:
+                payment.payment_method = method
+                fields.append("payment_method")
+            if payment.sale_file_id != sale_file.id:
+                payment.sale_file = sale_file
+                fields.append("sale_file")
+            if not payment.is_active or payment.status != self.CRM_PAYMENT_STATUS:
+                payment.is_active = True
+                payment.status = self.CRM_PAYMENT_STATUS
+                fields.extend(["is_active", "status"])
+            if fields:
+                payment.save(update_fields=fields + ["updated_at"])
+                updated += 1
+        return created, updated, total
+
+    # =========================================================
     # MAIN PROJECTION
     # =========================================================
 
@@ -648,16 +762,31 @@ class ParcelCRMProjectionService:
         )
 
         previous_cumulative = self._previous_cumulative_paid(project)
-        payment_delta = versement_client - previous_cumulative
+        versements = self._collect_versements(crm)
+        legacy_cancelled = 0
+        versements_created = versements_updated = 0
 
-        if payment_delta < 0:
+        if versements:
+            # API mise à jour : l'HISTORIQUE `versements[]` fait foi. On annule
+            # les paiements synthétiques « delta de cumul » (double comptage
+            # sinon) puis on synchronise chaque versement réel (daté, idempotent).
+            legacy_cancelled = self._retire_legacy_cumulative_payments(sale_file)
+            versements_created, versements_updated, versements_total = self._sync_versements(
+                sale_file, versements)
+            payment_obj = None
+            payment_created = versements_created > 0
             payment_delta = Decimal("0.00")
-
-        payment_obj, payment_created = self._create_payment_from_delta(
-            sale_file=sale_file,
-            payment_delta=payment_delta,
-            cumulative_paid=versement_client,
-        )
+            versement_client = versements_total  # cumul suivi = somme de l'historique
+        else:
+            # Payload sans historique (ancien format) : delta de cumul, comme avant.
+            payment_delta = versement_client - previous_cumulative
+            if payment_delta < 0:
+                payment_delta = Decimal("0.00")
+            payment_obj, payment_created = self._create_payment_from_delta(
+                sale_file=sale_file,
+                payment_delta=payment_delta,
+                cumulative_paid=versement_client,
+            )
 
         project_updated = False
         project_fields = []
@@ -710,6 +839,8 @@ class ParcelCRMProjectionService:
             },
             "crm_payment_tracking": {
                 "last_cumulative_paid": str(versement_client),
+                "mode": "versements_history" if versements else "cumulative_delta",
+                "versements_count": len(versements),
                 "updated_at": now.isoformat(),
             },
         }
@@ -774,6 +905,10 @@ class ParcelCRMProjectionService:
             "payment_delta": str(payment_delta),
             "previous_cumulative": str(previous_cumulative),
             "new_cumulative": str(versement_client),
+            "payment_mode": "versements_history" if versements else "cumulative_delta",
+            "versements_created": versements_created,
+            "versements_updated": versements_updated,
+            "legacy_payments_cancelled": legacy_cancelled,
             "skipped": False,
         }
 
