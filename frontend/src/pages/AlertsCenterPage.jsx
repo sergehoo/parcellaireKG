@@ -230,7 +230,14 @@ export default function AlertsCenterPage() {
                 {history.map((h) => (
                   <tr key={h.id}>
                     <td className={td}>{dt(h.created_at)}</td>
-                    <td className={td}>{h.subject || '—'}{h.is_preview && <span className="ml-1 text-xs text-slate-400">(aperçu)</span>}</td>
+                    <td className={td}>
+                      {h.subject || '—'}{h.is_preview && <span className="ml-1 text-xs text-slate-400">(aperçu)</span>}
+                      {h.status === 'FAILED' && h.error_message && (
+                        <div className="mt-0.5 max-w-md truncate text-xs text-rose-600 dark:text-rose-400" title={h.error_message}>
+                          {h.error_message}
+                        </div>
+                      )}
+                    </td>
                     <td className={td}>{h.period_start} → {h.period_end}</td>
                     <td className={td}><span className={pill(STATUS, h.status)}>{h.status_display}</span></td>
                     <td className={td}>{h.email_count}</td>
@@ -252,7 +259,8 @@ export default function AlertsCenterPage() {
       )}
 
       {showGen && (
-        <GenerateModal programs={refData?.programs || []} onClose={() => setShowGen(false)} toast={toast}
+        <GenerateModal programs={refData?.programs || []} recipients={recipients}
+          onClose={() => setShowGen(false)} toast={toast}
           onDone={() => { setShowGen(false); loadHistory(); loadDash() }} />
       )}
 
@@ -310,16 +318,23 @@ function RecipientsTab({ recipients, groups, onChange, toast }) {
   )
 }
 
-function GenerateModal({ programs, onClose, onDone, toast }) {
+function GenerateModal({ programs, recipients, onClose, onDone, toast }) {
+  const activeEmails = recipients.filter((r) => r.receive_email !== false).map((r) => r.email)
   const [f, setF] = useState({ period_days: 7, minimum_severity: 'VIGILANCE', include_pdf: true, program_ids: [], preview: true })
+  // Destinataires de l'envoi manuel : tous les actifs par défaut.
+  const [emails, setEmails] = useState(activeEmails)
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState(null)
   const set = (k, v) => setF((c) => ({ ...c, [k]: v }))
   const inputC = 'w-full rounded-lg border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100'
   async function run(preview) {
+    if (!preview && !emails.length) {
+      toast('Sélectionne au moins un destinataire pour envoyer.', 'error')
+      return
+    }
     setBusy(true)
     try {
-      const r = await generateReport({ ...f, preview })
+      const r = await generateReport({ ...f, preview, recipients: preview ? undefined : emails })
       setResult(r)
       toast(preview ? 'Aperçu généré.' : `Rapport envoyé (${r.email_count} e-mail(s)).`, 'success')
       if (!preview) onDone()
@@ -337,6 +352,21 @@ function GenerateModal({ programs, onClose, onDone, toast }) {
           <select multiple className={`${inputC} h-24`} value={f.program_ids.map(String)}
             onChange={(e) => set('program_ids', Array.from(e.target.selectedOptions).map((o) => Number(o.value)))}>
             {programs.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
+            Destinataires de l'envoi ({emails.length}/{activeEmails.length})
+          </label>
+          {activeEmails.length ? (
+            <select multiple className={`${inputC} h-24`} value={emails}
+              onChange={(e) => setEmails(Array.from(e.target.selectedOptions).map((o) => o.value))}>
+              {recipients.map((r) => <option key={r.id} value={r.email}>{r.display_name} — {r.email}</option>)}
+            </select>
+          ) : (
+            <p className="rounded-lg bg-amber-50 p-2 text-xs text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
+              Aucun destinataire — ajoute-en un dans l'onglet « Destinataires » avant d'envoyer.
+            </p>
+          )}
+        </div>
         {result?.report && (
           <div className="rounded-lg bg-emerald-50 p-3 text-sm dark:bg-emerald-900/20">
             Aperçu prêt — <a href={downloadReportUrl(result.report.id)} className="font-medium text-orange-600 hover:underline">télécharger le PDF</a>
