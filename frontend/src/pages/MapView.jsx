@@ -234,8 +234,17 @@ export default function MapView() {
   // Recentrer la carte sur l'orthophoto affichée (sinon elle peut être hors
   // champ quand un projet multi-programmes est sélectionné). Le centroïde
   // n'est pas toujours renseigné → repli sur l'emprise (bounds).
+  // IMPORTANT : recentrage UNE SEULE FOIS par orthophoto (id stable). L'objet
+  // `orthoLayer` est recréé à chaque rafraîchissement de données, et le
+  // chargement par emprise rafraîchit après CHAQUE déplacement : recadrer sur
+  // l'identité de l'objet créait une boucle (mouvement → fetch → re-recadrage
+  // → mouvement…) où la carte dézoomait toute seule.
+  const lastOrthoFocusRef = useRef(null)
   useEffect(() => {
-    if (!orthoOn || !orthoLayer || !api) return
+    if (!orthoOn) { lastOrthoFocusRef.current = null; return }
+    if (!orthoLayer || !api) return
+    if (lastOrthoFocusRef.current === orthoLayer.id) return
+    lastOrthoFocusRef.current = orthoLayer.id
     if (Array.isArray(orthoLayer.centroid)) api.flyTo(orthoLayer.centroid, 16)
     else if (orthoLayer.bounds) api.fitGeoJson(orthoLayer.bounds)
   }, [orthoOn, orthoLayer, api])
