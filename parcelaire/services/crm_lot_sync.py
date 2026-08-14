@@ -62,6 +62,20 @@ class KaydanCRMLotSyncService:
         Lit une variable obligatoire (settings ou env) et lève
         `ImproperlyConfigured` si elle est manquante.
         """
+        # Variante blindée : `<NAME>_B64` (valeur encodée en base64) prime sur
+        # la valeur en clair. Indispensable quand le secret contient des
+        # caractères que les fichiers d'environnement mutilent : `#` (début de
+        # commentaire → valeur TRONQUÉE), `$` (interpolé par Docker Compose),
+        # guillemets… Le base64 n'utilise aucun de ces caractères.
+        b64 = (getattr(settings, f"{name}_B64", None) or os.getenv(f"{name}_B64") or "").strip()
+        if b64:
+            import base64
+            try:
+                return base64.b64decode(b64).decode("utf-8").strip()
+            except Exception as exc:
+                raise ImproperlyConfigured(
+                    f"La variable {name}_B64 doit contenir la valeur encodée en base64 : {exc}"
+                )
         value = getattr(settings, name, None) or os.getenv(name)
         if not value:
             raise ImproperlyConfigured(

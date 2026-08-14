@@ -181,3 +181,31 @@ class ProjectionVersementsTests(TestCase):
         p = Payment.objects.get(payment_number="PAY-CRM-V-2478286")
         self.assertEqual(p.amount, Decimal("1750000.00"))
         self.assertEqual(self.confirmed_total(parcel), Decimal("8750000.00"))
+
+
+class EnvB64Tests(TestCase):
+    """Les secrets CRM peuvent être fournis en base64 (<NAME>_B64) pour survivre
+    aux caractères spéciaux (#, $, guillemets) mutilés par les fichiers d'env."""
+
+    def test_b64_variant_takes_precedence(self):
+        import base64
+        env = dict(_FAKE_CRM_ENV)
+        real_password = "D@motdepasse#45#"  # contient # → intransportable en clair
+        env["EXTERNAL_LOTS_API_PASSWORD"] = "tronque-sans-diese"
+        env["EXTERNAL_LOTS_API_PASSWORD_B64"] = base64.b64encode(real_password.encode()).decode()
+        with mock.patch.dict(os.environ, env):
+            svc = KaydanCRMLotSyncService()
+        self.assertEqual(svc.api_password, real_password)
+
+    def test_plain_value_still_works(self):
+        with mock.patch.dict(os.environ, _FAKE_CRM_ENV):
+            svc = KaydanCRMLotSyncService()
+        self.assertEqual(svc.api_password, _FAKE_CRM_ENV["EXTERNAL_LOTS_API_PASSWORD"])
+
+    def test_invalid_b64_raises_clear_error(self):
+        from django.core.exceptions import ImproperlyConfigured
+        env = dict(_FAKE_CRM_ENV)
+        env["EXTERNAL_LOTS_API_PASSWORD_B64"] = "pas-du-base64-!!!"
+        with mock.patch.dict(os.environ, env):
+            with self.assertRaises(ImproperlyConfigured):
+                KaydanCRMLotSyncService()
