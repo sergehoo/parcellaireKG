@@ -303,6 +303,14 @@ services:
   #   MINIO_S3_HOST       (default s3-parcelaire.${DOMAIN})
   #   MINIO_CONSOLE_HOST  (default minio-parcelaire.${DOMAIN})
   # =================================================================
+  # ⚠️ IMAGE : MinIO a retiré ses images publiques (Docker Hub supprimé en
+  # 2026, quay.io passé en accès authentifié). Ce tag N'EST PLUS TÉLÉCHARGEABLE :
+  # le service ne tourne que grâce au cache local de l'hôte, protégé du prune
+  # tant que le conteneur tourne. AVANT toute migration de serveur ou `docker
+  # rmi`, sauvegarder l'image vers un registre à soi :
+  #   docker tag minio/minio:RELEASE.2024-10-13T13-34-11Z ghcr.io/<user>/minio:RELEASE.2024-10-13T13-34-11Z
+  #   docker push ghcr.io/<user>/minio:RELEASE.2024-10-13T13-34-11Z   # (après docker login ghcr.io)
+  # puis pointer `image:` vers cette copie.
   parcelaire-orthos3:
     image: minio/minio:RELEASE.2024-10-13T13-34-11Z
     hostname: parcelaire-orthos3
@@ -331,26 +339,12 @@ services:
       - default
       - dokploy-network
 
-  # Bootstrap : crée le bucket et configure la policy au premier démarrage.
-  parcelaire-orthos3-init:
-    image: minio/mc:RELEASE.2024-10-08T09-37-26Z
-    depends_on:
-      - parcelaire-orthos3
-    networks:
-      - default
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-      MINIO_BUCKET: ${MINIO_BUCKET:-parcelaire-orthophotos}
-    entrypoint: >
-      /bin/sh -c "
-      sleep 5;
-      mc alias set parc http://parcelaire-orthos3:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD;
-      mc mb --ignore-existing parc/$$MINIO_BUCKET;
-      mc anonymous set none parc/$$MINIO_BUCKET || true;
-      echo 'MinIO bucket prêt (privé) : '$$MINIO_BUCKET;
-      "
-    restart: "no"
+  # NB : l'ancien conteneur d'init `minio/mc` (création du bucket) a été
+  # SUPPRIMÉ — l'image n'est plus téléchargeable (cf. note ci-dessus) et il
+  # était redondant : Django crée le bucket s'il manque et y applique la CORS
+  # à chaque initialisation d'upload (`ensure_bucket_and_cors()` dans
+  # parcelaire/services/storage.py, appelée par la vue d'init multipart).
+  # Un bucket MinIO est privé par défaut : aucune policy anonyme à poser.
 
 volumes:
   postgres_data:
