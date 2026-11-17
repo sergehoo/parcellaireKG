@@ -18,8 +18,29 @@ let csrfReady = null
 
 export function ensureCsrf() {
   if (!csrfReady) {
-    csrfReady = fetch('/api/orthophotos/csrf/', { credentials: 'same-origin' })
-      .catch(() => { csrfReady = null })
+    // IMPORTANT : un échec doit REJETER (et ne pas être mis en cache), sinon
+    // le POST suivant part avec un X-CSRFToken vide → 403 CSRF opaque.
+    // fetch() ne rejette pas sur un statut HTTP d'erreur : on vérifie
+    // explicitement response.ok ET la présence réelle du cookie.
+    csrfReady = (async () => {
+      const response = await fetch('/api/orthophotos/csrf/', { credentials: 'same-origin' })
+      if (!response.ok) {
+        throw new ApiError(
+          `Impossible d'obtenir le jeton de sécurité (HTTP ${response.status}).`,
+          { status: response.status },
+        )
+      }
+      if (!getCookie('csrftoken')) {
+        throw new ApiError(
+          "Le jeton de sécurité n'a pas été posé par le navigateur (cookies bloqués ?).",
+          { status: 0 },
+        )
+      }
+      return true
+    })().catch((err) => {
+      csrfReady = null // on retentera au prochain appel
+      throw err
+    })
   }
   return csrfReady
 }

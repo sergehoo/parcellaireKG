@@ -1516,6 +1516,21 @@ class AuthApiTests(TestCase):
                    content_type='application/json')
         self.assertEqual(r.status_code, 403)
 
+    def test_login_verrouillage_axes_renvoie_429(self):
+        # Après AXES_FAILURE_LIMIT échecs, le verrou doit être un 429 explicite
+        # (pas un 400 « identifiants invalides ») — même avec le BON mot de
+        # passe, tant que le refroidissement n'est pas écoulé.
+        from django.conf import settings as dj_settings
+        for _ in range(dj_settings.AXES_FAILURE_LIMIT):
+            self.client.post('/api/auth/login/',
+                             {'username': 'agent', 'password': 'faux'},
+                             content_type='application/json')
+        r = self.client.post('/api/auth/login/',
+                             {'username': 'agent', 'password': 'Motdepasse!2026'},
+                             content_type='application/json')
+        self.assertEqual(r.status_code, 429)
+        self.assertIn('verrouillé', r.json()['detail'])
+
     def test_logout(self):
         self.client.force_login(self.user)
         self.assertEqual(self.client.get('/api/auth/me/').status_code, 200)

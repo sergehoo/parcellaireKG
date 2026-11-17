@@ -901,13 +901,22 @@ class LoginAPIView(APIView):
         if not username or not password:
             return Response(
                 {"detail": "Nom d'utilisateur et mot de passe requis."}, status=400)
+        # Verrou anti-bruteforce : distinguer « compte verrouillé » (429) des
+        # identifiants faux (400) — sinon l'utilisateur retape sans fin un bon
+        # mot de passe sans comprendre pourquoi la connexion échoue.
+        from axes.handlers.proxy import AxesProxyHandler
+        if not AxesProxyHandler.is_allowed(
+                request._request, credentials={"username": username}):
+            return Response(
+                {"detail": "Trop de tentatives : compte temporairement verrouillé. "
+                           "Réessayez dans une quinzaine de minutes."},
+                status=429)
         # `request._request` : django-axes attend le HttpRequest Django (IP,
-        # verrouillage). Un compte verrouillé/identifiants faux → user None.
+        # verrouillage). Identifiants faux → user None.
         user = authenticate(request._request, username=username, password=password)
         if user is None:
             return Response(
-                {"detail": "Identifiants invalides ou compte temporairement "
-                           "verrouillé après trop de tentatives."},
+                {"detail": "Nom d'utilisateur ou mot de passe incorrect."},
                 status=400)
         login(request._request, user)
         return Response(_me_payload(user))
